@@ -8,8 +8,8 @@
       <AdditionalIncludeDirectories>$(OPENFST)\src\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(OPENFSTLIB)/src/lib/Release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>fst.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(OPENFSTLIB)/src/lib/Release;$(OPENFSTLIB)/x64/Release/lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>libfst.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalOptions>  %(AdditionalOptions)</AdditionalOptions>
     </Link>
   </ItemDefinitionGroup>
