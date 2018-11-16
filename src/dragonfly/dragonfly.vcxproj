@@ -58,16 +58,28 @@
   <ImportGroup Label="Shared">
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="..\variables.props" />
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\kaldiwin_win32.props" />
+    <Import Project="..\openfstwin_debug_win32.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="..\variables.props" />
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\kaldiwin_win32.props" />
+    <Import Project="..\openfstwin_release_win32.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="..\variables.props" />
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\kaldiwin.props" />
+    <Import Project="..\openfstwin_debug.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="..\variables.props" />
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\kaldiwin.props" />
+    <Import Project="..\openfstwin_release.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -147,14 +159,14 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="dragonfly.h" />
-    <ClInclude Include="stdafx.h" />
-    <ClInclude Include="targetver.h" />
+    <ClInclude Include="..\..\..\src\dragonfly\dragonfly.h" />
+    <ClInclude Include="..\..\..\src\dragonfly\stdafx.h" />
+    <ClInclude Include="..\..\..\src\dragonfly\targetver.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="dllmain.cpp" />
-    <ClCompile Include="dragonfly.cpp" />
-    <ClCompile Include="stdafx.cpp">
+    <ClCompile Include="..\..\..\src\dragonfly\dllmain.cpp" />
+    <ClCompile Include="..\..\..\src\dragonfly\dragonfly.cpp" />
+    <ClCompile Include="..\..\..\src\dragonfly\stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
@@ -162,11 +174,26 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\kaldiwin_vs2017_OPENBLAS\kaldiwin\kaldi-base\kaldi-base.vcxproj">
+    <ProjectReference Include="..\kaldi-base\kaldi-base.vcxproj">
       <Project>{057042d5-310e-44ec-bcea-bdbf69180bae}</Project>
     </ProjectReference>
-    <ProjectReference Include="..\kaldiwin_vs2017_OPENBLAS\kaldiwin\kaldi-decoder\kaldi-decoder.vcxproj">
+    <ProjectReference Include="..\kaldi-decoder\kaldi-decoder.vcxproj">
       <Project>{9fc04099-309d-4b9e-aceb-62402d558387}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\kaldi-feat\kaldi-feat.vcxproj">
+      <Project>{a5eaeafd-ccc1-4da7-b799-c0c168b333ee}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\kaldi-fstext\kaldi-fstext.vcxproj">
+      <Project>{a871b03c-fe8e-4877-8638-b34ad49ee25a}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\kaldi-gmm\kaldi-gmm.vcxproj">
+      <Project>{02ade497-1e8c-498f-baff-4b7201770095}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\kaldi-lat\kaldi-lat.vcxproj">
+      <Project>{1118c086-eaf0-46c4-a19f-f151248340e2}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\kaldi-online2\kaldi-online2.vcxproj">
+      <Project>{8266fdc8-7bd2-4c10-844b-2f76431d6a35}</Project>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
