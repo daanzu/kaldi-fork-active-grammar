@@ -15,24 +15,18 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="stdafx.h">
+    <ClInclude Include="..\..\..\src\dragonfly\dragonfly.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="targetver.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="dragonfly.h">
+    <ClInclude Include="..\..\..\src\dragonfly\targetver.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="stdafx.cpp">
+    <ClCompile Include="..\..\..\src\dragonfly\dllmain.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="dragonfly.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="dllmain.cpp">
+    <ClCompile Include="..\..\..\src\dragonfly\dragonfly.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
