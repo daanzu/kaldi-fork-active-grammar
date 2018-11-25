@@ -15,7 +15,7 @@ extern "C" {
 #include "lat/lattice-functions.h"
 #include "lat/word-align-lattice-lexicon.h"
 
-#define VERBOSE 1
+#define VERBOSE 0
 
 namespace dragonfly
 {
@@ -240,7 +240,9 @@ namespace dragonfly
 			std::string s = word_syms->Find(words[i]);
 			if (s == "")
 				KALDI_ERR << "Word-id " << words[i] << " not in symbol table.";
-			decoded_string += s + ' ';
+			if (i != 0)
+				decoded_string += ' ';
+			decoded_string += s;
 		}
 	}
 
@@ -273,13 +275,16 @@ bool decode_gmm(void* model_vp, float samp_freq, int32_t num_frames, float* fram
 	return result;
 }
 
-void get_output_gmm(void* model_vp, char* output, int32_t output_length, double* likelihood_p)
+bool get_output_gmm(void* model_vp, char* output, int32_t output_length, double* likelihood_p)
 {
+	if (output_length < 1) return false;
 	GmmOnlineModelWrapper* model = static_cast<GmmOnlineModelWrapper*>(model_vp);
 	std::string decoded_string;
 	double likelihood;
 	model->get_decoded_string(decoded_string, likelihood);
 	const char* cstr = decoded_string.c_str();
 	strncpy(output, cstr, output_length);
+	output[output_length - 1] = 0;
 	*likelihood_p = likelihood;
+	return true;
 }
