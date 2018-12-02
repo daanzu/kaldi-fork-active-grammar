@@ -15,26 +15,28 @@ extern "C" {
 #include "lat/lattice-functions.h"
 #include "lat/word-align-lattice-lexicon.h"
 
-#define VERBOSE 0
+#define VERBOSE 1
 
 namespace dragonfly
 {
 	using namespace kaldi;
+	using namespace fst;
 
-	class GmmOnlineModelWrapper
+	class OtfGmmOnlineModelWrapper
 	{
 	public:
 
-		GmmOnlineModelWrapper(BaseFloat beam, int32 max_active, int32 min_active, BaseFloat lattice_beam,
-			std::string & word_syms_filename, std::string & fst_in_str, std::string & config);
-		~GmmOnlineModelWrapper();
+		OtfGmmOnlineModelWrapper(BaseFloat beam, int32 max_active, int32 min_active, BaseFloat lattice_beam,
+			std::string & word_syms_filename, std::string & config,
+			std::string & hcl_fst_filename, std::vector<std::string> & grammar_fst_filenames);
+		~OtfGmmOnlineModelWrapper();
 
-		bool decode(BaseFloat samp_freq, int32 num_frames, BaseFloat * frames, bool finalize);
+		bool decode(BaseFloat samp_freq, int32 num_frames, BaseFloat * frames, bool finalize, std::vector<bool> grammars_activity);
 
 		void get_decoded_string(std::string & decoded_string, double & likelihood);
 		bool get_word_alignment(std::vector<string>& words, std::vector<int32>& times, std::vector<int32>& lengths);
 
-	private:
+	protected:
 
 		// model
 		fst::SymbolTable *word_syms;
@@ -45,6 +47,8 @@ namespace dragonfly
 		OnlineEndpointConfig endpoint_config;
 		OnlineGmmDecodingModels *gmm_models;
 		fst::Fst<fst::StdArc> *decode_fst;
+		fst::Fst<fst::StdArc> *hcl_fst;
+		std::vector<fst::Fst<fst::StdArc>* > grammar_fsts;
 		std::vector<std::vector<int32> > word_alignment_lexicon;
 
 		// decoder
@@ -57,34 +61,27 @@ namespace dragonfly
 		void free_decoder(void);
 	};
 
-	// struct GmmModel
-	// {
-	//     // model
-	//     fst::SymbolTable *word_syms;
-	//     OnlineGmmDecodingConfig decode_config;
-	//     OnlineFeaturePipelineCommandLineConfig feature_cmdline_config;
-	//     OnlineFeaturePipelineConfig *feature_config;
-	//     OnlineFeaturePipeline *feature_pipeline_prototype;
-	//     OnlineEndpointConfig endpoint_config;
-	//     OnlineGmmDecodingModels *gmm_models;
-	//     fst::Fst<fst::StdArc> *decode_fst;
-	//     std::vector<std::vector<int32> > word_alignment_lexicon;
-	//     // decoder
-	//     OnlineGmmAdaptationState *adaptation_state;
-	//     SingleUtteranceGmmDecoder *decoder;
-	//     int32 tot_frames, tot_frames_decoded;
-	//     CompactLattice best_path_clat;
-	// };
-
-	void silent_log_handler(const LogMessageEnvelope &envelope,
-		const char *message) {
-		// nothing - this handler simply keeps silent
+	ComposeFst<StdArc>* OTFComposeFst(const StdFst &ifst1, const StdFst &ifst2, const CacheOptions& cache_opts = CacheOptions()) {
+		return new ComposeFst<StdArc>(ifst1, ifst2, cache_opts);
 	}
 
-	GmmOnlineModelWrapper::GmmOnlineModelWrapper(BaseFloat beam, int32 max_active, int32 min_active, BaseFloat lattice_beam,
-		std::string & word_syms_filename, std::string & fst_in_str, std::string & config)
+	ComposeFst<StdArc>* OTFLaComposeFst(const StdFst &ifst1, const StdFst &ifst2, const CacheOptions& cache_opts = CacheOptions()) {
+		typedef LookAheadMatcher<StdFst> M;
+		typedef AltSequenceComposeFilter<M> SF;
+		typedef LookAheadComposeFilter<SF, M>  LF;
+		typedef PushWeightsComposeFilter<LF, M> WF;
+		typedef PushLabelsComposeFilter<WF, M> ComposeFilter;
+		typedef M FstMatcher;
+		ComposeFstOptions<StdArc, FstMatcher, ComposeFilter> opts(cache_opts);
+		return new ComposeFst<StdArc>(ifst1, ifst2, opts);
+	}
+
+	OtfGmmOnlineModelWrapper::OtfGmmOnlineModelWrapper(BaseFloat beam, int32 max_active, int32 min_active, BaseFloat lattice_beam,
+		std::string & word_syms_filename, std::string & config,
+		std::string & hcl_fst_filename, std::vector<std::string> & grammar_fst_filenames)
 	{
 #if VERBOSE
+		KALDI_LOG << "word_syms_filename: " << word_syms_filename;
 		KALDI_LOG << "config: " << config;
 #else
 		// silence kaldi output as well
@@ -106,7 +103,16 @@ namespace dragonfly
 		feature_pipeline_prototype = new OnlineFeaturePipeline(*this->feature_config);
 
 		gmm_models = new OnlineGmmDecodingModels(decode_config);
-		decode_fst = fst::ReadFstKaldiGeneric(fst_in_str);
+		hcl_fst = fst::ReadFstKaldiGeneric(hcl_fst_filename);
+
+		grammar_fsts.resize(grammar_fst_filenames.size());
+		for (size_t i = 0; i < grammar_fst_filenames.size(); i++)
+		{
+			grammar_fsts[i] = fst::ReadFstKaldiGeneric(grammar_fst_filenames[i]);
+			// fstdeterminize | fstminimize | fstrmepsilon | fstarcsort --sort_type=ilabel
+		}
+
+		decode_fst = OTFLaComposeFst(*hcl_fst, *grammar_fsts[0]);
 
 		word_syms = NULL;
 		if (word_syms_filename != "")
@@ -130,15 +136,16 @@ namespace dragonfly
 		tot_frames_decoded = 0;
 	}
 
-	GmmOnlineModelWrapper::~GmmOnlineModelWrapper()
+	OtfGmmOnlineModelWrapper::~OtfGmmOnlineModelWrapper()
 	{
 		free_decoder();
 		delete feature_config;
 		delete feature_pipeline_prototype;
 		delete gmm_models;
+		// FIXME
 	}
 
-	void GmmOnlineModelWrapper::start_decoding(void)
+	void OtfGmmOnlineModelWrapper::start_decoding(void)
 	{
 		free_decoder();
 		adaptation_state = new OnlineGmmAdaptationState();
@@ -149,7 +156,7 @@ namespace dragonfly
 			*adaptation_state);
 	}
 
-	void GmmOnlineModelWrapper::free_decoder(void)
+	void OtfGmmOnlineModelWrapper::free_decoder(void)
 	{
 		if (decoder) {
 			delete decoder;
@@ -161,7 +168,8 @@ namespace dragonfly
 		}
 	}
 
-	bool GmmOnlineModelWrapper::decode(BaseFloat samp_freq, int32 num_frames, BaseFloat * frames, bool finalize)
+	bool OtfGmmOnlineModelWrapper::decode(BaseFloat samp_freq, int32 num_frames, BaseFloat * frames, bool finalize,
+		std::vector<bool> grammars_activity)
 	{
 		using fst::VectorFst;
 
@@ -208,7 +216,7 @@ namespace dragonfly
 		return true;
 	}
 
-	void GmmOnlineModelWrapper::get_decoded_string(std::string & decoded_string, double & likelihood)
+	void OtfGmmOnlineModelWrapper::get_decoded_string(std::string & decoded_string, double & likelihood)
 	{
 		Lattice best_path_lat;
 
@@ -246,39 +254,46 @@ namespace dragonfly
 		}
 	}
 
-	bool GmmOnlineModelWrapper::get_word_alignment(std::vector<string>& words, std::vector<int32>& times, std::vector<int32>& lengths)
+	bool OtfGmmOnlineModelWrapper::get_word_alignment(std::vector<string>& words, std::vector<int32>& times, std::vector<int32>& lengths)
 	{
 		return false;
 	}
 }
 
-int test()
-{
-	return 42;
-}
-
 using namespace dragonfly;
 
-void* init_gmm(float beam, int32_t max_active, int32_t min_active, float lattice_beam,
-	char* word_syms_filename_cp, char* fst_in_str_cp, char* config_cp)
+void* init_otf_gmm(float beam, int32_t max_active, int32_t min_active, float lattice_beam,
+	char* word_syms_filename_cp, char* config_cp,
+	char* hcl_fst_filename_cp, char** grammar_fst_filenames_cp, int32_t grammar_fst_filenames_size)
 {
-	std::string word_syms_filename(word_syms_filename_cp), fst_in_str(fst_in_str_cp), config(config_cp);
-	GmmOnlineModelWrapper* model = new GmmOnlineModelWrapper(beam, max_active, min_active, lattice_beam,
-		word_syms_filename, fst_in_str, config);
+	std::string word_syms_filename(word_syms_filename_cp), config(config_cp), hcl_fst_filename(hcl_fst_filename_cp);
+	std::vector<std::string> grammar_fst_filenames(grammar_fst_filenames_size);
+	for (size_t i = 0; i < grammar_fst_filenames_size; i++)
+	{
+		grammar_fst_filenames[i] = grammar_fst_filenames_cp[i];
+	}
+	OtfGmmOnlineModelWrapper* model = new OtfGmmOnlineModelWrapper(beam, max_active, min_active, lattice_beam,
+		word_syms_filename, config, hcl_fst_filename, grammar_fst_filenames);
 	return model;
 }
 
-bool decode_gmm(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize)
+bool decode_otf_gmm(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,
+	bool* grammars_activity_cp, int32_t grammars_activity_cp_size)
 {
-	GmmOnlineModelWrapper* model = static_cast<GmmOnlineModelWrapper*>(model_vp);
-	bool result = model->decode(samp_freq, num_frames, frames, finalize);
+	OtfGmmOnlineModelWrapper* model = static_cast<OtfGmmOnlineModelWrapper*>(model_vp);
+	std::vector<bool> grammars_activity(grammars_activity_cp_size);
+	for (size_t i = 0; i < grammars_activity_cp_size; i++)
+	{
+		grammars_activity[i] = grammars_activity_cp[i];
+	}
+	bool result = model->decode(samp_freq, num_frames, frames, finalize, grammars_activity);
 	return result;
 }
 
-bool get_output_gmm(void* model_vp, char* output, int32_t output_length, double* likelihood_p)
+bool get_output_otf_gmm(void* model_vp, char* output, int32_t output_length, double* likelihood_p)
 {
 	if (output_length < 1) return false;
-	GmmOnlineModelWrapper* model = static_cast<GmmOnlineModelWrapper*>(model_vp);
+	OtfGmmOnlineModelWrapper* model = static_cast<OtfGmmOnlineModelWrapper*>(model_vp);
 	std::string decoded_string;
 	double likelihood;
 	model->get_decoded_string(decoded_string, likelihood);

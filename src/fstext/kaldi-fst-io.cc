@@ -76,13 +76,15 @@ Fst<StdArc> *ReadFstKaldiGeneric(std::string rxfilename, bool throw_on_err) {
     fst = ConstFst<StdArc>::Read(ki.Stream(), ropts);
   } else if (hdr.FstType() == "vector") {
     fst = VectorFst<StdArc>::Read(ki.Stream(), ropts);
+  } else if (hdr.FstType() == "olabel_lookahead") {
+    fst = StdOLabelLookAheadFst::Read(ki.Stream(), ropts);
   }
   if (!fst) {
     if(throw_on_err) {
-     KALDI_ERR << "Could not read fst from "
+     KALDI_ERR << "Could not read fst of type " << hdr.FstType() << " from "
                << kaldi::PrintableRxfilename(rxfilename);
     } else {
-      KALDI_WARN << "Could not read fst from "
+      KALDI_WARN << "Could not read fst of type " << hdr.FstType() << " from "
                  << kaldi::PrintableRxfilename(rxfilename)
                  << ". A NULL pointer is returned.";
       return NULL;
