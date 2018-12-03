@@ -22,6 +22,21 @@ namespace dragonfly
 	using namespace kaldi;
 	using namespace fst;
 
+	ComposeFst<StdArc>* OTFComposeFst(const StdFst &ifst1, const StdFst &ifst2, const CacheOptions& cache_opts = CacheOptions()) {
+		return new ComposeFst<StdArc>(ifst1, ifst2, cache_opts);
+	}
+
+	ComposeFst<StdArc>* OTFLaComposeFst(const StdFst &ifst1, const StdFst &ifst2, const CacheOptions& cache_opts = CacheOptions()) {
+		typedef LookAheadMatcher<StdFst> M;
+		typedef AltSequenceComposeFilter<M> SF;
+		typedef LookAheadComposeFilter<SF, M>  LF;
+		typedef PushWeightsComposeFilter<LF, M> WF;
+		typedef PushLabelsComposeFilter<WF, M> ComposeFilter;
+		typedef M FstMatcher;
+		ComposeFstOptions<StdArc, FstMatcher, ComposeFilter> opts(cache_opts);
+		return new ComposeFst<StdArc>(ifst1, ifst2, opts);
+	}
+
 	class OtfGmmOnlineModelWrapper
 	{
 	public:
@@ -60,21 +75,6 @@ namespace dragonfly
 		void start_decoding(void);
 		void free_decoder(void);
 	};
-
-	ComposeFst<StdArc>* OTFComposeFst(const StdFst &ifst1, const StdFst &ifst2, const CacheOptions& cache_opts = CacheOptions()) {
-		return new ComposeFst<StdArc>(ifst1, ifst2, cache_opts);
-	}
-
-	ComposeFst<StdArc>* OTFLaComposeFst(const StdFst &ifst1, const StdFst &ifst2, const CacheOptions& cache_opts = CacheOptions()) {
-		typedef LookAheadMatcher<StdFst> M;
-		typedef AltSequenceComposeFilter<M> SF;
-		typedef LookAheadComposeFilter<SF, M>  LF;
-		typedef PushWeightsComposeFilter<LF, M> WF;
-		typedef PushLabelsComposeFilter<WF, M> ComposeFilter;
-		typedef M FstMatcher;
-		ComposeFstOptions<StdArc, FstMatcher, ComposeFilter> opts(cache_opts);
-		return new ComposeFst<StdArc>(ifst1, ifst2, opts);
-	}
 
 	OtfGmmOnlineModelWrapper::OtfGmmOnlineModelWrapper(BaseFloat beam, int32 max_active, int32 min_active, BaseFloat lattice_beam,
 		std::string & word_syms_filename, std::string & config,
@@ -120,13 +120,19 @@ namespace dragonfly
 			}
 		}
 
+		//StdVectorFst null_fst;
+		null_fst.AddState();
+		null_fst.SetStart(0);
+		null_fst.SetFinal(0, 0);
+		//null_fst.AddArc(0, StdArc(134433, 0, 0, 0));
+		decode_fst = OTFLaComposeFst(*hcl_fst, null_fst);
+
 		if (grammar_fst_filenames.size() == 1)
 		{
 			decode_fst = OTFLaComposeFst(*hcl_fst, *grammar_fsts[0]);
 		}
 		else if (grammar_fst_filenames.size() == 2) {
 			decode_fst = OTFLaComposeFst(*hcl_fst, UnionFst<StdArc>(*grammar_fsts[0], *grammar_fsts[1]));
-			//decode_fst = UnionFst<StdArc>(OTFLaComposeFst(*hcl_fst, *grammar_fsts[0]), OTFLaComposeFst(*hcl_fst, *grammar_fsts[1]));
 		}
 
 		word_syms = NULL;
