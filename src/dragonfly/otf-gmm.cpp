@@ -83,6 +83,8 @@ namespace dragonfly
 #if VERBOSE
 		KALDI_LOG << "word_syms_filename: " << word_syms_filename;
 		KALDI_LOG << "config: " << config;
+		KALDI_LOG << "hcl_fst_filename: " << hcl_fst_filename;
+		//KALDI_LOG << "grammar_fst_filenames: " << grammar_fst_filenames;
 #else
 		// silence kaldi output as well
 		SetLogHandler(silent_log_handler);
@@ -108,11 +110,24 @@ namespace dragonfly
 		grammar_fsts.resize(grammar_fst_filenames.size());
 		for (size_t i = 0; i < grammar_fst_filenames.size(); i++)
 		{
-			grammar_fsts[i] = fst::ReadFstKaldiGeneric(grammar_fst_filenames[i]);
-			// fstdeterminize | fstminimize | fstrmepsilon | fstarcsort --sort_type=ilabel
+			auto filename = grammar_fst_filenames[i];
+			if (filename.compare(filename.length() - 4, 4, ".txt") == 0)
+			{
+				// fstdeterminize | fstminimize | fstrmepsilon | fstarcsort --sort_type=ilabel
+			}
+			else {
+				grammar_fsts[i] = fst::ReadFstKaldiGeneric(filename);
+			}
 		}
 
-		decode_fst = OTFLaComposeFst(*hcl_fst, *grammar_fsts[0]);
+		if (grammar_fst_filenames.size() == 1)
+		{
+			decode_fst = OTFLaComposeFst(*hcl_fst, *grammar_fsts[0]);
+		}
+		else if (grammar_fst_filenames.size() == 2) {
+			decode_fst = OTFLaComposeFst(*hcl_fst, UnionFst<StdArc>(*grammar_fsts[0], *grammar_fsts[1]));
+			//decode_fst = UnionFst<StdArc>(OTFLaComposeFst(*hcl_fst, *grammar_fsts[0]), OTFLaComposeFst(*hcl_fst, *grammar_fsts[1]));
+		}
 
 		word_syms = NULL;
 		if (word_syms_filename != "")
