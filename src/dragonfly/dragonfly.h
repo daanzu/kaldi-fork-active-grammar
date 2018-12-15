@@ -21,6 +21,7 @@ extern "C" DRAGONFLY_API bool get_output_gmm(void* model_vp, char* output, int32
 extern "C" DRAGONFLY_API void* init_otf_gmm(float beam, int32_t max_active, int32_t min_active, float lattice_beam,
 	char* word_syms_filename_cp, char* config_cp,
 	char* hcl_fst_filename_cp, char** grammar_fst_filenames_cp, int32_t grammar_fst_filenames_len);
+extern "C" DRAGONFLY_API bool add_grammar_fst_otf_gmm(void* model_vp, char* grammar_fst_filename_cp);
 extern "C" DRAGONFLY_API bool decode_otf_gmm(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,
 	bool* grammars_activity, int32_t grammars_activity_size);
 extern "C" DRAGONFLY_API bool get_output_otf_gmm(void* model_vp, char* output, int32_t output_length, double* likelihood_p);
