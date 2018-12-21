@@ -22,12 +22,14 @@ namespace dragonfly
 	using namespace kaldi;
 	using namespace fst;
 
-	ComposeFst<StdArc>* OTFComposeFst(const StdFst &ifst1, const StdFst &ifst2, const CacheOptions& cache_opts = CacheOptions())
+	CacheOptions default_cache_opts(false, 128 * 1024 * 1024);  // default: true, 1 * 1024 * 1024
+
+	ComposeFst<StdArc>* OTFComposeFst(const StdFst &ifst1, const StdFst &ifst2, const CacheOptions& cache_opts = default_cache_opts)
 	{
 		return new ComposeFst<StdArc>(ifst1, ifst2, cache_opts);
 	}
 
-	ComposeFst<StdArc>* OTFLaComposeFst(const StdFst &ifst1, const StdFst &ifst2, const CacheOptions& cache_opts = CacheOptions())
+	ComposeFst<StdArc>* OTFLaComposeFst(const StdFst &ifst1, const StdFst &ifst2, const CacheOptions& cache_opts = default_cache_opts)
 	{
 		typedef LookAheadMatcher<StdFst> M;
 		typedef AltSequenceComposeFilter<M> SF;
