@@ -84,8 +84,10 @@ namespace dragonfly
 		StdFst* read_fst_file(std::string filename);
 		void resize_grammar_fsts(size_t target);
 		StdFst* unionize_fsts(StdFst* left_fst, StdFst* right_fst);
+		StdFst* unionize_fsts(const std::vector<StdFst*> fsts);
 		size_t index_union_fst(size_t index, size_t level);
-		bool rebuild_union_pyramid(std::vector<bool>& grammars_activity, bool force = false, size_t index = 0, size_t level = 0);
+		void build_union_pyramid(const std::vector<bool>& grammars_activity);
+		bool rebuild_union_pyramid(const std::vector<bool>& grammars_activity, bool force = false, size_t index = 0, size_t level = 0);
 
 		void start_decoding(std::vector<bool> grammars_activity);
 		void free_decoder(void);
@@ -211,6 +213,7 @@ namespace dragonfly
 	{
 		auto grammar_fst = read_fst_file(grammar_fst_filename);
 		auto i = grammar_fsts_filled;
+		KALDI_LOG << "#" << i << " 0x" << grammar_fst << " " << grammar_fst_filename;
 		resize_grammar_fsts(i + 1);
 		grammar_fsts[i] = grammar_fst;
 		grammar_fsts_enabled[i] = false;
@@ -230,13 +233,47 @@ namespace dragonfly
 		return null_fst;
 	}
 
+	// intelligently return an online fst that is the union of all given fsts
+	StdFst* OtfGmmOnlineModelWrapper::unionize_fsts(const std::vector<StdFst*> fsts)
+	{
+		if (fsts.size() <= 0)
+			KALDI_ERR << "empty fsts vector";
+		if (fsts.size() == 1)
+			return fsts[0];
+		if (fsts.size() == 2)
+			return new UnionFst<StdArc>(*fsts[0], *fsts[1]);
+		//if (fsts.size() == 3) {
+		//	auto tmp_fst = new UnionFst<StdArc>(*fsts[0], *fsts[1]);
+		//	return new UnionFst<StdArc>(*tmp_fst, *fsts[2]);
+		else {
+			size_t const half_size = fsts.size() / 2;
+			std::vector<StdFst*> split_lo(fsts.begin(), fsts.begin() + half_size);
+			std::vector<StdFst*> split_hi(fsts.begin() + half_size, fsts.end());
+			return new UnionFst<StdArc>(*unionize_fsts(split_lo), *unionize_fsts(split_hi));
+		}
+	}
+
 	inline size_t OtfGmmOnlineModelWrapper::index_union_fst(size_t index, size_t level)
 	{
 		size_t offset = std::pow(2, level) - 1;
 		return index + offset;
 	}
 
-	bool OtfGmmOnlineModelWrapper::rebuild_union_pyramid(std::vector<bool>& grammars_activity,
+	StdFst* build_union_pyramid_recurse(const std::vector<bool>& grammars_activity)
+	{
+	}
+
+	void OtfGmmOnlineModelWrapper::build_union_pyramid(const std::vector<bool>& grammars_activity)
+	{
+		std::vector<StdFst*> fsts(0);
+		for (size_t i = 0; i < grammar_fsts.size(); i++) {
+			if (grammars_activity[i]) fsts.emplace_back(grammar_fsts[i]);
+		}
+		auto fst = unionize_fsts(fsts);
+		decode_fst = OTFLaComposeFst(*hcl_fst, *fst);
+	}
+
+	bool OtfGmmOnlineModelWrapper::rebuild_union_pyramid(const std::vector<bool>& grammars_activity,
 		bool force /* = false */, size_t index /* = 0 */, size_t level /* = 0 */)
 	{
 		if (level == 0) {
@@ -256,6 +293,7 @@ namespace dragonfly
 			if (rebuilt_left || rebuilt_right) {
 				auto left_fst = union_fsts[index_union_fst(i, level + 1)];
 				auto right_fst = union_fsts[index_union_fst(i + 1, level + 1)];
+				//if (union_fsts[index_union_fst(index, level)] != null_fst) delete union_fsts[index_union_fst(index, level)];
 				union_fsts[index_union_fst(index, level)] = unionize_fsts(left_fst, right_fst);
 			} else return false;
 
@@ -282,9 +320,10 @@ namespace dragonfly
 		free_decoder();
 		adaptation_state = new OnlineGmmAdaptationState();
 		grammars_activity.resize(grammar_fsts_enabled.size(), false);
-		if (grammar_fsts_enabled != grammars_activity) {
+		if (grammar_fsts_enabled != grammars_activity || true) {
 			Timer timer(true);
-			rebuild_union_pyramid(grammars_activity);
+			//rebuild_union_pyramid(grammars_activity);
+			build_union_pyramid(grammars_activity);
 			KALDI_LOG << "rebuilt union pyramid" << " in " << (timer.Elapsed() * 1000) << "ms.";
 		}
 		decoder = new SingleUtteranceGmmDecoder(decode_config,
