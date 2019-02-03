@@ -14,6 +14,7 @@ extern "C" {
 #include "fstext/fstext-lib.h"
 #include "lat/lattice-functions.h"
 #include "lat/word-align-lattice-lexicon.h"
+#include "active-union-fst.h"
 
 #define VERBOSE 1
 
@@ -22,33 +23,36 @@ namespace dragonfly
 	using namespace kaldi;
 	using namespace fst;
 
-	CacheOptions default_cache_opts(false, 128 * 1024 * 1024);  // default: true, 1 * 1024 * 1024
+	CacheOptions auf_default_cache_opts(false, 128 * 1024 * 1024);  // default: true, 1 * 1024 * 1024
 
-	ComposeFst<StdArc>* OTFComposeFst(const StdFst &ifst1, const StdFst &ifst2, const CacheOptions& cache_opts = default_cache_opts)
-	{
-		return new ComposeFst<StdArc>(ifst1, ifst2, cache_opts);
-	}
+	ComposeFst<StdArc>* OTFComposeFst(const StdFst &ifst1, const StdFst &ifst2, const CacheOptions& cache_opts = auf_default_cache_opts);
+	ComposeFst<StdArc>* OTFLaComposeFst(const StdFst &ifst1, const StdFst &ifst2, const CacheOptions& cache_opts = auf_default_cache_opts);
 
-	ComposeFst<StdArc>* OTFLaComposeFst(const StdFst &ifst1, const StdFst &ifst2, const CacheOptions& cache_opts = default_cache_opts)
-	{
-		typedef LookAheadMatcher<StdFst> M;
-		typedef AltSequenceComposeFilter<M> SF;
-		typedef LookAheadComposeFilter<SF, M>  LF;
-		typedef PushWeightsComposeFilter<LF, M> WF;
-		typedef PushLabelsComposeFilter<WF, M> ComposeFilter;
-		typedef M FstMatcher;
-		ComposeFstOptions<StdArc, FstMatcher, ComposeFilter> opts(cache_opts);
-		return new ComposeFst<StdArc>(ifst1, ifst2, opts);
-	}
+	// ComposeFst<StdArc>* OTFComposeFst(const StdFst &ifst1, const StdFst &ifst2, const CacheOptions& cache_opts = default_cache_opts)
+	// {
+	// 	return new ComposeFst<StdArc>(ifst1, ifst2, cache_opts);
+	// }
 
-	class OtfGmmOnlineModelWrapper
+	// ComposeFst<StdArc>* OTFLaComposeFst(const StdFst &ifst1, const StdFst &ifst2, const CacheOptions& cache_opts = default_cache_opts)
+	// {
+	// 	typedef LookAheadMatcher<StdFst> M;
+	// 	typedef AltSequenceComposeFilter<M> SF;
+	// 	typedef LookAheadComposeFilter<SF, M>  LF;
+	// 	typedef PushWeightsComposeFilter<LF, M> WF;
+	// 	typedef PushLabelsComposeFilter<WF, M> ComposeFilter;
+	// 	typedef M FstMatcher;
+	// 	ComposeFstOptions<StdArc, FstMatcher, ComposeFilter> opts(cache_opts);
+	// 	return new ComposeFst<StdArc>(ifst1, ifst2, opts);
+	// }
+
+	class AufGmmOnlineModelWrapper
 	{
 	public:
 
-		OtfGmmOnlineModelWrapper(BaseFloat beam, int32 max_active, int32 min_active, BaseFloat lattice_beam,
+		AufGmmOnlineModelWrapper(BaseFloat beam, int32 max_active, int32 min_active, BaseFloat lattice_beam,
 			std::string& word_syms_filename, std::string& config,
 			std::string& hcl_fst_filename, std::vector<std::string>& grammar_fst_filenames);
-		~OtfGmmOnlineModelWrapper();
+		~AufGmmOnlineModelWrapper();
 
 		bool add_grammar_fst(std::string& grammar_fst_filename);
 		bool decode(BaseFloat samp_freq, int32 num_frames, BaseFloat* frames, bool finalize, std::vector<bool>& grammars_activity);
@@ -66,7 +70,7 @@ namespace dragonfly
 		OnlineFeaturePipeline *feature_pipeline_prototype;
 		OnlineEndpointConfig endpoint_config;
 		OnlineGmmDecodingModels *gmm_models;
-		StdFst *decode_fst;
+		StdFst *decode_fst = NULL;
 		StdFst *hcl_fst;
 		StdVectorFst *null_fst;
 		size_t grammar_fsts_filled;
@@ -74,6 +78,7 @@ namespace dragonfly
 		std::map<StdFst*, std::string> grammar_fsts_name_map;
 		std::vector<bool> grammar_fsts_enabled;  // invariant: size is power of 2; grammar_fsts_enabled.size() == grammar_fsts.size()
 		std::vector<UnionFst<StdArc>* > union_fsts;
+		ActiveUnionFst* active_union_fst;
 		std::vector<std::vector<int32> > word_alignment_lexicon;
 
 		// decoder
@@ -94,7 +99,7 @@ namespace dragonfly
 		void free_decoder(void);
 	};
 
-	OtfGmmOnlineModelWrapper::OtfGmmOnlineModelWrapper(BaseFloat beam, int32 max_active, int32 min_active, BaseFloat lattice_beam,
+	AufGmmOnlineModelWrapper::AufGmmOnlineModelWrapper(BaseFloat beam, int32 max_active, int32 min_active, BaseFloat lattice_beam,
 		std::string& word_syms_filename, std::string& config,
 		std::string& hcl_fst_filename, std::vector<std::string>& grammar_fst_filenames)
 	{
@@ -180,7 +185,7 @@ namespace dragonfly
 		tot_frames_decoded = 0;
 	}
 
-	OtfGmmOnlineModelWrapper::~OtfGmmOnlineModelWrapper()
+	AufGmmOnlineModelWrapper::~AufGmmOnlineModelWrapper()
 	{
 		free_decoder();
 		delete feature_config;
@@ -189,7 +194,7 @@ namespace dragonfly
 		// FIXME
 	}
 
-	StdFst* OtfGmmOnlineModelWrapper::read_fst_file(std::string filename)
+	StdFst* AufGmmOnlineModelWrapper::read_fst_file(std::string filename)
 	{
 		if (filename.compare(filename.length() - 4, 4, ".txt") == 0) {
 			// FIXME: fstdeterminize | fstminimize | fstrmepsilon | fstarcsort --sort_type=ilabel
@@ -200,7 +205,7 @@ namespace dragonfly
 		}
 	}
 
-	void OtfGmmOnlineModelWrapper::resize_grammar_fsts(size_t target)
+	void AufGmmOnlineModelWrapper::resize_grammar_fsts(size_t target)
 	{
 		if (target > grammar_fsts.size()) {
 			// ensure grammar_fsts and grammar_fsts_enabled are always a power of 2
@@ -210,7 +215,7 @@ namespace dragonfly
 		}
 	}
 
-	bool OtfGmmOnlineModelWrapper::add_grammar_fst(std::string& grammar_fst_filename)
+	bool AufGmmOnlineModelWrapper::add_grammar_fst(std::string& grammar_fst_filename)
 	{
 		auto grammar_fst = read_fst_file(grammar_fst_filename);
 		auto i = grammar_fsts_filled;
@@ -220,11 +225,15 @@ namespace dragonfly
 		grammar_fsts_enabled[i] = false;
 		grammar_fsts_filled += 1;
 		grammar_fsts_name_map[grammar_fst] = grammar_fst_filename;
+		if (decode_fst) {
+			delete decode_fst;
+			decode_fst = NULL;
+		}
 		return true;
 	}
 
 	// intelligently return an online fst that is the union of 2 given fsts, each of which could be null_fst
-	inline StdFst* OtfGmmOnlineModelWrapper::unionize_fsts(StdFst* left_fst, StdFst* right_fst)
+	inline StdFst* AufGmmOnlineModelWrapper::unionize_fsts(StdFst* left_fst, StdFst* right_fst)
 	{
 		if (left_fst != null_fst && right_fst != null_fst)
 			return new UnionFst<StdArc>(*left_fst, *right_fst);
@@ -236,7 +245,7 @@ namespace dragonfly
 	}
 
 	// intelligently return an online fst that is the union of all given fsts
-	StdFst* OtfGmmOnlineModelWrapper::unionize_fsts(const std::vector<StdFst*>& fsts, std::vector<UnionFst<StdArc>*>& union_fsts_alloced)
+	StdFst* AufGmmOnlineModelWrapper::unionize_fsts(const std::vector<StdFst*>& fsts, std::vector<UnionFst<StdArc>*>& union_fsts_alloced)
 	{
 		if (fsts.size() <= 0) {
 			KALDI_LOG << "empty fsts vector";
@@ -260,28 +269,33 @@ namespace dragonfly
 		}
 	}
 
-	inline size_t OtfGmmOnlineModelWrapper::index_union_fst(size_t index, size_t level)
+	inline size_t AufGmmOnlineModelWrapper::index_union_fst(size_t index, size_t level)
 	{
 		size_t offset = std::pow(2, level) - 1;
 		return index + offset;
 	}
 
-	void OtfGmmOnlineModelWrapper::build_union_pyramid(const std::vector<bool>& grammars_activity)
+	void AufGmmOnlineModelWrapper::build_union_pyramid(const std::vector<bool>& grammars_activity)
 	{
-		std::vector<StdFst*> fsts(0);
-		for (size_t i = 0; i < grammar_fsts.size(); i++) {
-			if (grammars_activity[i]) fsts.emplace_back(grammar_fsts[i]);
-		}
-		for (auto f : union_fsts) delete f;
-		union_fsts.resize(0);
-		auto fst = unionize_fsts(fsts, union_fsts);
-		KALDI_LOG << union_fsts.size() << " union_fsts alloced";
-		delete decode_fst;
-		decode_fst = OTFLaComposeFst(*hcl_fst, *fst);
+		//std::vector<StdFst*> fsts(0);
+		//for (size_t i = 0; i < grammar_fsts.size(); i++) {
+		//	if (grammars_activity[i]) fsts.emplace_back(grammar_fsts[i]);
+		//}
+		//for (auto f : union_fsts) delete f;
+		//union_fsts.resize(0);
+		//auto fst = unionize_fsts(fsts, union_fsts);
+		//KALDI_LOG << union_fsts.size() << " union_fsts alloced";
+		if (decode_fst)
+			delete decode_fst;
+		//std::vector<const Fst<StdArc> *> fsts(0);
+		//std::vector<const Fst<StdArc> *> fsts(grammar_fsts);
+		std::vector<const Fst<StdArc> *> fsts(grammar_fsts.begin(), grammar_fsts.end());
+		auto fst = ActiveUnionFst(fsts);
+		decode_fst = OTFLaComposeFst(*hcl_fst, fst);
 		grammar_fsts_enabled = grammars_activity;
 	}
 
-	bool OtfGmmOnlineModelWrapper::rebuild_union_pyramid(const std::vector<bool>& grammars_activity,
+	bool AufGmmOnlineModelWrapper::rebuild_union_pyramid(const std::vector<bool>& grammars_activity,
 		bool force /* = false */, size_t index /* = 0 */, size_t level /* = 0 */)
 	{
 		if (level == 0) {
@@ -323,7 +337,7 @@ namespace dragonfly
 		return true;
 	}
 
-	void OtfGmmOnlineModelWrapper::start_decoding(std::vector<bool> grammars_activity)
+	void AufGmmOnlineModelWrapper::start_decoding(std::vector<bool> grammars_activity)
 	{
 		free_decoder();
 		adaptation_state = new OnlineGmmAdaptationState();
@@ -341,7 +355,7 @@ namespace dragonfly
 			*adaptation_state);
 	}
 
-	void OtfGmmOnlineModelWrapper::free_decoder(void)
+	void AufGmmOnlineModelWrapper::free_decoder(void)
 	{
 		if (decoder) {
 			delete decoder;
@@ -354,7 +368,7 @@ namespace dragonfly
 	}
 
 	// grammars_activity is ignored once decoding has already started
-	bool OtfGmmOnlineModelWrapper::decode(BaseFloat samp_freq, int32 num_frames, BaseFloat* frames, bool finalize,
+	bool AufGmmOnlineModelWrapper::decode(BaseFloat samp_freq, int32 num_frames, BaseFloat* frames, bool finalize,
 		std::vector<bool>& grammars_activity)
 	{
 		using fst::VectorFst;
@@ -404,7 +418,7 @@ namespace dragonfly
 		return true;
 	}
 
-	void OtfGmmOnlineModelWrapper::get_decoded_string(std::string& decoded_string, double& likelihood)
+	void AufGmmOnlineModelWrapper::get_decoded_string(std::string& decoded_string, double& likelihood)
 	{
 		Lattice best_path_lat;
 
@@ -442,7 +456,7 @@ namespace dragonfly
 		}
 	}
 
-	bool OtfGmmOnlineModelWrapper::get_word_alignment(std::vector<string>& words, std::vector<int32>& times, std::vector<int32>& lengths)
+	bool AufGmmOnlineModelWrapper::get_word_alignment(std::vector<string>& words, std::vector<int32>& times, std::vector<int32>& lengths)
 	{
 		return false;
 	}
@@ -450,7 +464,7 @@ namespace dragonfly
 
 using namespace dragonfly;
 
-void* init_otf_gmm(float beam, int32_t max_active, int32_t min_active, float lattice_beam,
+void* init_auf_gmm(float beam, int32_t max_active, int32_t min_active, float lattice_beam,
 	char* word_syms_filename_cp, char* config_cp,
 	char* hcl_fst_filename_cp, char** grammar_fst_filenames_cp, int32_t grammar_fst_filenames_size)
 {
@@ -460,23 +474,23 @@ void* init_otf_gmm(float beam, int32_t max_active, int32_t min_active, float lat
 	{
 		grammar_fst_filenames[i] = grammar_fst_filenames_cp[i];
 	}
-	OtfGmmOnlineModelWrapper* model = new OtfGmmOnlineModelWrapper(beam, max_active, min_active, lattice_beam,
+	AufGmmOnlineModelWrapper* model = new AufGmmOnlineModelWrapper(beam, max_active, min_active, lattice_beam,
 		word_syms_filename, config, hcl_fst_filename, grammar_fst_filenames);
 	return model;
 }
 
-bool add_grammar_fst_otf_gmm(void* model_vp, char* grammar_fst_filename_cp)
+bool add_grammar_fst_auf_gmm(void* model_vp, char* grammar_fst_filename_cp)
 {
-	OtfGmmOnlineModelWrapper* model = static_cast<OtfGmmOnlineModelWrapper*>(model_vp);
+	AufGmmOnlineModelWrapper* model = static_cast<AufGmmOnlineModelWrapper*>(model_vp);
 	std::string grammar_fst_filename(grammar_fst_filename_cp);
 	bool result = model->add_grammar_fst(grammar_fst_filename);
 	return result;
 }
 
-bool decode_otf_gmm(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,
+bool decode_auf_gmm(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,
 	bool* grammars_activity_cp, int32_t grammars_activity_cp_size)
 {
-	OtfGmmOnlineModelWrapper* model = static_cast<OtfGmmOnlineModelWrapper*>(model_vp);
+	AufGmmOnlineModelWrapper* model = static_cast<AufGmmOnlineModelWrapper*>(model_vp);
 	std::vector<bool> grammars_activity(grammars_activity_cp_size);
 	for (size_t i = 0; i < grammars_activity_cp_size; i++)
 	{
@@ -486,10 +500,10 @@ bool decode_otf_gmm(void* model_vp, float samp_freq, int32_t num_frames, float* 
 	return result;
 }
 
-bool get_output_otf_gmm(void* model_vp, char* output, int32_t output_length, double* likelihood_p)
+bool get_output_auf_gmm(void* model_vp, char* output, int32_t output_length, double* likelihood_p)
 {
 	if (output_length < 1) return false;
-	OtfGmmOnlineModelWrapper* model = static_cast<OtfGmmOnlineModelWrapper*>(model_vp);
+	AufGmmOnlineModelWrapper* model = static_cast<AufGmmOnlineModelWrapper*>(model_vp);
 	std::string decoded_string;
 	double likelihood;
 	model->get_decoded_string(decoded_string, likelihood);

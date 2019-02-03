@@ -159,11 +159,14 @@
   <ItemGroup>
     <ClInclude Include="..\..\..\src\dragonfly\dragonfly.h" />
     <ClInclude Include="..\..\..\src\dragonfly\targetver.h" />
+    <ClInclude Include="..\..\..\src\dragonfly\active-union-fst.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\src\dragonfly\dllmain.cpp" />
     <ClCompile Include="..\..\..\src\dragonfly\gmm.cpp" />
     <ClCompile Include="..\..\..\src\dragonfly\otf-gmm.cpp" />
+    <ClCompile Include="..\..\..\src\dragonfly\auf-gmm.cpp" />
+    <ClCompile Include="..\..\..\src\dragonfly\active-union-fst.cc" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\kaldi-base\kaldi-base.vcxproj">
