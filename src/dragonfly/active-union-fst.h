@@ -106,7 +106,7 @@ class ActiveUnionFst {
 
   typedef Arc::Label Label;
 
-  static const uint32 root_instance_id = 0xffffffffu;
+  static const int32 root_fst_id = INT32_MAX;
 
 
   /**
@@ -145,7 +145,8 @@ class ActiveUnionFst {
       // int32 nonterm_phones_offset,
       // const ConstFst<StdArc> &top_fst,
       // const std::vector<std::pair<int32, const ConstFst<StdArc> *> > &ifsts);
-      const std::vector<const Fst<StdArc> *> &fsts);
+    const Fst<StdArc>& hcl_fst,
+      const std::vector<const Fst<StdArc> *>& fsts);
 
   ///  This constructor should only be used prior to calling Read().
   ActiveUnionFst() { }
@@ -160,33 +161,38 @@ class ActiveUnionFst {
   void Read(std::istream &os, bool binary);
 
   void SetActivity(std::vector<bool>& fsts_activity) {
-	fsts_activity_ = fsts_activity;
-	fsts_activity_true_ = std::count(fsts_activity_.begin(), fsts_activity_.end(), true);
-	root_start_active_arcs_.resize(fsts_activity_true_);
-	size_t j = 0;
-	for (size_t i = 0; i < fsts_activity_.size(); i++) {
-	  if (fsts_activity_[i]) {
-		root_start_active_arcs_[j] = root_start_arcs_[i];
-		j++;
-	  }
-	}
-	KALDI_ASSERT(j == fsts_activity_true_);
+  fsts_activity_ = fsts_activity;
+  fsts_activity_true_ = std::count(fsts_activity_.begin(), fsts_activity_.end(), true);
+  root_start_active_arcs_.resize(fsts_activity_true_);
+  size_t j = 0;
+  for (size_t i = 0; i < fsts_activity_.size(); i++) {
+    if (fsts_activity_[i]) {
+    root_start_active_arcs_[j] = root_start_arcs_[i];
+    j++;
+    }
+  }
+  KALDI_ASSERT(j == fsts_activity_true_);
   }
 
   StateId Start() const {
     // the top 32 bits of the 64-bit state-id will be zero, because the
     // top FST instance has instance-id = 0.
     // return static_cast<StateId>(top_fst_->Start());
-    return 0xffffffff00000000u;
+    // return 0xffffffff00000000u;
+    return BuildStateId(root_fst_id, hcl_fst_->Start());
   }
 
   Weight Final(StateId s) const {
     // If the fst-id (top 32 bits of s) is nonzero, this state is not final,
     // because we need to return to the top-level FST before we can be final.
-    if (s != 0xffffffff00000001u) {
+    // if (s != 0xffffffff00000001u) {
+    int32 fst_id = s >> 32;
+    if (s == root_fst_id) {
       return Weight::Zero();
     } else {
-      return Weight::One();
+      BaseStateId base_state = static_cast<BaseStateId>(s);
+      Weight ans = fsts_[fst_id]->Final(base_state);
+    return ans;
     }
   }
 
@@ -234,6 +240,10 @@ class ActiveUnionFst {
 
   // clears everything.
   void Destroy();
+
+  static inline int64 BuildStateId(int32 fst_id, BaseStateId state_id) {
+  return (static_cast<int64>(fst_id) << 32) | state_id;
+  }
 
   /*
     This utility function sets up a map from "left-context phone", meaning
@@ -468,6 +478,7 @@ class ActiveUnionFst {
   // 'fst' is the corresponding FST.
   // std::vector<std::pair<int32, const ConstFst<StdArc> *> > ifsts_;
 
+  const Fst<StdArc>* hcl_fst_;
   std::vector<const Fst<StdArc> *> fsts_;
 
   // Maps from the user-defined nonterminals like #nonterm:foo as numbered
@@ -520,22 +531,26 @@ class ArcIterator<ActiveUnionFst> {
   // Caution: uses const_cast to evade const rules on ActiveUnionFst.  This is for
   // compatibility with how things work in OpenFst.
   inline ArcIterator(const ActiveUnionFst &fst_in, StateId s) {
-    ActiveUnionFst &fst = const_cast<ActiveUnionFst&>(fst_in);
     // 'instance_id' is the high order bits of the state.
-    int32 instance_id = s >> 32;
+    // int32 instance_id = s >> 32;
     // 'base_state' is low order bits of the state.  It's important to
     // explicitly say int32 below, not BaseStateId == int, which might on some
     // compilers be a 64-bit type.
-    BaseStateId base_state = static_cast<int32>(s);
-    const ActiveUnionFst::FstInstance &instance = fst.instances_[instance_id];
-    const ConstFst<StdArc> *base_fst = instance.fst;
+    // BaseStateId base_state = static_cast<int32>(s);
+    // const ActiveUnionFst::FstInstance &instance = fst.instances_[instance_id];
+    // const ConstFst<StdArc> *base_fst = instance.fst;
     // if (base_fst->Final(base_state).Value() != KALDI_GRAMMAR_FST_SPECIAL_WEIGHT) {
 
+    ActiveUnionFst& aufst = const_cast<ActiveUnionFst&>(fst_in);
+    int32 base_fst_id = s >> 32;
+    BaseStateId base_state = static_cast<int32>(s);
+
     i_ = 0;
-    if (instance_id != ActiveUnionFst::root_instance_id) {
+    if (base_fst_id != ActiveUnionFst::root_fst_id) {
+      const Fst<StdArc>* base_fst = aufst.fsts_[base_fst_id];
       if (base_fst->Final(base_state).Value() == Arc::Weight::Zero()) {
         // A normal, non-final state
-        dest_instance_ = instance_id;
+        dest_fst_id_ = base_fst_id;
         base_fst->InitArcIterator(s, &data_);
       } else {
         // A special, final state
@@ -546,23 +561,33 @@ class ArcIterator<ActiveUnionFst> {
         // never be interrogated.
         // data_.arcs = &(expanded_state->arcs[0]);
         // data_.narcs = expanded_state->arcs.size();
-        data_.arcs = &fst_in.return_to_root_arc;
-        data_.narcs = 1;
-        dest_instance_ = ActiveUnionFst::root_instance_id;
+        // data_.arcs = &fst_in.return_to_root_arc;
+        // data_.narcs = 1;
+        // dest_fst_id_ = ActiveUnionFst::root_fst_id;
+        dest_fst_id_ = base_fst_id;
+        base_fst->InitArcIterator(s, &data_);
+        // FIXME: coalesce!
       }
     } else {
-      if (base_state == 0) {
-		// is_root_start_state = true;
-        // data_.narcs = fst_in.fsts_activity_true_;
-		// root_start_state_degree = std::count(fst.fsts_activity_.begin(), fst.fsts_activity_.end(), true);
-		root_start_state_degree = fst.fsts_activity_true_;
-		root_fst = &fst;
-      } else if (base_state == 1) {
-        data_.arcs = NULL;
-        data_.narcs = 0;
+      const Fst<StdArc>* base_fst = aufst.hcl_fst_;
+      // Root fst
+      if (base_fst->Final(base_state).Value() == Arc::Weight::Zero()) {
+        dest_fst_id_ = base_fst_id;
+        base_fst->InitArcIterator(s, &data_);
       } else {
-        KALDI_ERR << "";
       }
+      // if (base_state == 0) {
+      //   // is_root_start_state = true;
+      //   // data_.narcs = fst_in.fsts_activity_true_;
+      //   // root_start_state_degree = std::count(fst.fsts_activity_.begin(), fst.fsts_activity_.end(), true);
+      //   root_start_state_degree = fst.fsts_activity_true_;
+      //   root_fst = &fst;
+      // } else if (base_state == 1) {
+      //   data_.arcs = NULL;
+      //   data_.narcs = 0;
+      // } else {
+      //   KALDI_ERR << "";
+      // }
     }
 
     // Ideally we want to call CopyArcToTemp() now, but we rely on the fact that
@@ -578,7 +603,7 @@ class ArcIterator<ActiveUnionFst> {
       CopyArcToTemp();
       return false;
     } else if (i_ < root_start_state_degree) {
-	  CopyRootStartArcToTemp();
+    CopyRootStartArcToTemp();
       return false;
     } else {
       return true;
@@ -605,7 +630,7 @@ class ArcIterator<ActiveUnionFst> {
     arc_.ilabel = src.ilabel;
     arc_.olabel = src.olabel;
     arc_.weight = src.weight;
-    arc_.nextstate = (static_cast<int64>(dest_instance_) << 32) | src.nextstate;
+    arc_.nextstate = (static_cast<int64>(dest_fst_id_) << 32) | src.nextstate;
   }
 
   inline void CopyRootStartArcToTemp() {
@@ -622,7 +647,7 @@ class ArcIterator<ActiveUnionFst> {
   ArcIteratorData<StdArc> data_;
 
 
-  int32 dest_instance_;  // The index of the FstInstance that we transition to from
+  int32 dest_fst_id_;  // The index of the FstInstance that we transition to from
                          // this state.
   size_t i_;  // i_ is the index into the 'arcs' pointer.
   // bool is_root_start_state = false;

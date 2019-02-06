@@ -27,10 +27,12 @@ ActiveUnionFst::ActiveUnionFst(
     // int32 nonterm_phones_offset,
     // const ConstFst<StdArc> &top_fst,
     // const std::vector<std::pair<Label, const ConstFst<StdArc> *> > &ifsts):
+	const Fst<StdArc>& hcl_fst,
     const std::vector<const Fst<StdArc> *> &fsts):
     // nonterm_phones_offset_(nonterm_phones_offset),
     // top_fst_(&top_fst),
     // ifsts_(ifsts) {
+	hcl_fst_(&hcl_fst),
     fsts_(fsts) {
   Init();
 }
