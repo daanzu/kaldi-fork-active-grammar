@@ -1,4 +1,4 @@
-// decoder/grammar-fst.h
+// decoder/active-grammar-fst.h
 
 // Copyright    2018  Johns Hopkins University (author: Daniel Povey)
 
@@ -17,8 +17,8 @@
 // See the Apache 2 License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef KALDI_DECODER_GRAMMAR_FST_H_
-#define KALDI_DECODER_GRAMMAR_FST_H_
+#ifndef ACTIVE_GRAMMAR_FST_H_
+#define ACTIVE_GRAMMAR_FST_H_
 
 /**
    For an extended explanation of the framework of which grammar-fsts are a
@@ -34,7 +34,6 @@
 
 #include "fst/fstlib.h"
 #include "fstext/grammar-context-fst.h"
-#include "dragonfly/active-grammar-fst.h"
 
 namespace fst {
 
@@ -46,7 +45,7 @@ namespace fst {
 // Obviously this leads to very high-numbered state indexes, which might be
 // a problem in some circumstances, but the decoder code doesn't store arrays
 // indexed by state, it uses hashes, so this isn't a problem.
-struct GrammarFstArc {
+struct ActiveGrammarFstArc {
   typedef fst::TropicalWeight Weight;
   typedef int Label;  // OpenFst's StdArc uses int; this is for compatibility.
   typedef int64 StateId;
@@ -56,9 +55,9 @@ struct GrammarFstArc {
   Weight weight;
   StateId nextstate;
 
-  GrammarFstArc() {}
+  ActiveGrammarFstArc() {}
 
-  GrammarFstArc(Label ilabel, Label olabel, Weight weight, StateId nextstate)
+  ActiveGrammarFstArc(Label ilabel, Label olabel, Weight weight, StateId nextstate)
       : ilabel(ilabel),
         olabel(olabel),
         weight(std::move(weight)),
@@ -67,16 +66,16 @@ struct GrammarFstArc {
 
 #define KALDI_GRAMMAR_FST_SPECIAL_WEIGHT 4096.0
 
-class GrammarFst;
+class ActiveGrammarFst;
 
-// Declare that we'll be overriding class ArcIterator for class GrammarFst.
+// Declare that we'll be overriding class ArcIterator for class ActiveGrammarFst.
 // This wouldn't work if we were fully using the OpenFst framework,
-// e.g. if we had GrammarFst inherit from class Fst.
-template<> class ArcIterator<GrammarFst>;
+// e.g. if we had ActiveGrammarFst inherit from class Fst.
+template<> class ArcIterator<ActiveGrammarFst>;
 
 
 /**
-   GrammarFst is an FST that is 'stitched together' from multiple FSTs, that can
+   ActiveGrammarFst is an FST that is 'stitched together' from multiple FSTs, that can
    recursively incorporate each other.  (This is limited to left-biphone
    phonetic context). This class does not inherit from fst::Fst and does not
    support its full interface-- only the parts that are necessary for the
@@ -89,14 +88,12 @@ template<> class ArcIterator<GrammarFst>;
    points whenever we invoke a nonterminal.  For more information
    see \ref grammar (i.e. ../doc/grammar.dox).
 
-   THREAD SAFETY: you can't use this object from multiple threads; you should
-   create lightweight copies of this object using the copy constructor,
-   e.g. `new GrammarFst(this_grammar_fst)`, if you want to decode from multiple
-   threads using the same GrammarFst.
-*/
-class GrammarFst {
+   Caution: this class is not thread safe, i.e. you shouldn't access the same
+   ActiveGrammarFst from multiple threads.  We can fix this later if needed.
+ */
+class ActiveGrammarFst {
  public:
-  typedef GrammarFstArc Arc;
+  typedef ActiveGrammarFstArc Arc;
   typedef TropicalWeight Weight;
 
   // StateId is actually int64.  The high-order 32 bits are interpreted as an
@@ -139,22 +136,18 @@ class GrammarFst {
               phones.txt, i.e. the things with names like "#nonterm:foo" and
               "#nonterm:bar" in phones.txt.  Also no nonterminal may appear more
               than once in 'fsts'.  ifsts may be empty, even though that doesn't
-              make much sense.
+              make much sense.  This function does not take ownership of
+              these pointers (i.e. it will not delete them when it is destroyed).
     */
-  GrammarFst(
+  ActiveGrammarFst(
       int32 nonterm_phones_offset,
-      std::shared_ptr<const ConstFst<StdArc> > top_fst,
-      const std::vector<std::pair<int32, std::shared_ptr<const ConstFst<StdArc> > > > &ifsts);
-
-  /// Copy constructor.  Useful because this object is not thread safe so cannot
-  /// be used by multiple parallel decoder threads, but it is lightweight and
-  /// can copy it without causing the stored FSTs to be copied.
-  GrammarFst(const GrammarFst &other) = default;
+      const ConstFst<StdArc> &top_fst,
+      const std::vector<std::pair<int32, const ConstFst<StdArc> *> > &ifsts);
 
   ///  This constructor should only be used prior to calling Read().
-  GrammarFst() { }
+  ActiveGrammarFst(): top_fst_(NULL) { }
 
-  // This Write function allows you to dump a GrammarFst to disk as a single
+  // This Write function allows you to dump a ActiveGrammarFst to disk as a single
   // object.  It only supports binary mode, but the option is allowed for
   // compatibility with other Kaldi read/write functions (it will crash if
   // binary == false).
@@ -192,7 +185,7 @@ class GrammarFst {
     // Compare with the constructor of ArcIterator.
     int32 instance_id = s >> 32;
     BaseStateId base_state = static_cast<int32>(s);
-    const GrammarFst::FstInstance &instance = instances_[instance_id];
+    const ActiveGrammarFst::FstInstance &instance = instances_[instance_id];
     const ConstFst<StdArc> *base_fst = instance.fst;
     if (base_fst->Final(base_state).Value() != KALDI_GRAMMAR_FST_SPECIAL_WEIGHT) {
       return base_fst->NumInputEpsilons(base_state);
@@ -203,12 +196,12 @@ class GrammarFst {
 
   inline std::string Type() const { return "grammar"; }
 
-  ~GrammarFst();
+  ~ActiveGrammarFst();
  private:
 
   struct ExpandedState;
 
-  friend class ArcIterator<GrammarFst>;
+  friend class ArcIterator<ActiveGrammarFst>;
 
   // sets up nonterminal_map_.
   void InitNonterminalMap();
@@ -456,12 +449,12 @@ class GrammarFst {
   // The top-level FST passed in by the user; contains the start state and
   // final-states, and may invoke FSTs in 'ifsts_' (which can also invoke
   // each other recursively).
-  std::shared_ptr<const ConstFst<StdArc> > top_fst_;
+  const ConstFst<StdArc> *top_fst_;
 
   // A list of pairs (nonterm, fst), where 'nonterm' is a user-defined
   // nonterminal symbol as numbered in phones.txt (e.g. #nonterm:foo), and
   // 'fst' is the corresponding FST.
-  std::vector<std::pair<int32, std::shared_ptr<const ConstFst<StdArc> > > > ifsts_;
+  std::vector<std::pair<int32, const ConstFst<StdArc> *> > ifsts_;
 
   // Maps from the user-defined nonterminals like #nonterm:foo as numbered
   // in phones.txt, to the corresponding index into 'ifsts_', i.e. the ifst_index.
@@ -481,35 +474,40 @@ class GrammarFst {
   // representing top_fst_, and it will be populated with more elements on
   // demand.  An instance_id refers to an index into this vector.
   std::vector<FstInstance> instances_;
+
+  // A list of FSTs that are to be deleted when this object is destroyed.  This
+  // will only be nonempty if we have read this object from the disk using
+  // Read().
+  std::vector<const ConstFst<StdArc> *> fsts_to_delete_;
 };
 
 
 /**
-   This is the overridden template for class ArcIterator for GrammarFst.  This
-   is only used in the decoder, and the GrammarFst is not a "real" FST (it just
+   This is the overridden template for class ArcIterator for ActiveGrammarFst.  This
+   is only used in the decoder, and the ActiveGrammarFst is not a "real" FST (it just
    has a very similar-looking interface), so we don't need to implement all the
    functionality that the regular ArcIterator has.
  */
 template <>
-class ArcIterator<GrammarFst> {
+class ArcIterator<ActiveGrammarFst> {
  public:
-  using Arc = typename GrammarFst::Arc;
+  using Arc = typename ActiveGrammarFst::Arc;
   using BaseArc = StdArc;
   using StateId = typename Arc::StateId;  // int64
   using BaseStateId = typename StdArc::StateId;  // int
-  using ExpandedState = GrammarFst::ExpandedState;
+  using ExpandedState = ActiveGrammarFst::ExpandedState;
 
-  // Caution: uses const_cast to evade const rules on GrammarFst.  This is for
+  // Caution: uses const_cast to evade const rules on ActiveGrammarFst.  This is for
   // compatibility with how things work in OpenFst.
-  inline ArcIterator(const GrammarFst &fst_in, StateId s) {
-    GrammarFst &fst = const_cast<GrammarFst&>(fst_in);
+  inline ArcIterator(const ActiveGrammarFst &fst_in, StateId s) {
+    ActiveGrammarFst &fst = const_cast<ActiveGrammarFst&>(fst_in);
     // 'instance_id' is the high order bits of the state.
     int32 instance_id = s >> 32;
     // 'base_state' is low order bits of the state.  It's important to
     // explicitly say int32 below, not BaseStateId == int, which might on some
     // compilers be a 64-bit type.
     BaseStateId base_state = static_cast<int32>(s);
-    const GrammarFst::FstInstance &instance = fst.instances_[instance_id];
+    const ActiveGrammarFst::FstInstance &instance = fst.instances_[instance_id];
     const ConstFst<StdArc> *base_fst = instance.fst;
     if (base_fst->Final(base_state).Value() != KALDI_GRAMMAR_FST_SPECIAL_WEIGHT) {
       // A normal state
@@ -578,7 +576,7 @@ class ArcIterator<GrammarFst> {
                          // this state.
   size_t i_;  // i_ is the index into the 'arcs' pointer.
 
-  Arc arc_;  // 'Arc' is the current arc in the GrammarFst, that this iterator
+  Arc arc_;  // 'Arc' is the current arc in the ActiveGrammarFst, that this iterator
              // is pointing to.  It will be a copy of data_.arcs[i], except with
              // the 'nextstate' modified to encode dest_instance_ in the higher
              // order bits.  Making a copy is of course unnecessary for the most
@@ -587,21 +585,21 @@ class ArcIterator<GrammarFst> {
 };
 
 /**
-   This function copies a GrammarFst to a VectorFst (intended mostly for testing
-   and comparison purposes).  GrammarFst doesn't actually inherit from class
-   Fst, so we can't just construct an FST from the GrammarFst.
+   This function copies a ActiveGrammarFst to a VectorFst (intended mostly for testing
+   and comparison purposes).  ActiveGrammarFst doesn't actually inherit from class
+   Fst, so we can't just construct an FST from the ActiveGrammarFst.
 
    grammar_fst gets expanded by this call, and although we could make it a const
    reference (because the ArcIterator does actually use const_cast), we make it
    a non-const pointer to emphasize that this call does change grammar_fst.
  */
-void CopyToVectorFst(GrammarFst *grammar_fst,
+void CopyToVectorFst(ActiveGrammarFst *grammar_fst,
                      VectorFst<StdArc> *vector_fst);
 
 /**
-   This function prepares 'ifst' for use in GrammarFst: it ensures that it has
+   This function prepares 'ifst' for use in ActiveGrammarFst: it ensures that it has
    the expected properties, changing it slightly as needed.  'ifst' is expected
-   to be a fully compiled HCLG graph that is intended to be used in GrammarFst.
+   to be a fully compiled HCLG graph that is intended to be used in ActiveGrammarFst.
    The user will most likely want to copy it to the ConstFst type after calling
    this function.
 
@@ -615,10 +613,10 @@ void CopyToVectorFst(GrammarFst *grammar_fst,
        FST (for a given source state).  We fix this problem by introducing
        epsilon arcs and new states whenever we find a state that would cause a
        problem for the above.
-     - In order to signal to the GrammarFst code that a particular state has
+     - In order to signal to the ActiveGrammarFst code that a particular state has
        cross-FST-boundary transitions, we set the final-prob to a nonzero value
        on that state.  Specifically, we use a weight with Value() == 4096.0.
-       When the GrammarFst code sees that value it knows that it was not a
+       When the ActiveGrammarFst code sees that value it knows that it was not a
        'real' final-prob.  Prior to doing this we ensure, by adding epsilon
        transitions as needed, that the state did not previously have a
        final-prob.
@@ -626,14 +624,14 @@ void CopyToVectorFst(GrammarFst *grammar_fst,
        (these arcs would have #nonterm_exit on them), we ensure that the
        states that they transition to have unit final-prob (i.e. final-prob
        equal to One()), by incorporating any final-prob into the arc itself.
-       This avoids the GrammarFst code having to inspect those final-probs
+       This avoids the ActiveGrammarFst code having to inspect those final-probs
        when expanding states.
 
      @param [in] nonterm_phones_offset   The integer id of
                 the symbols #nonterm_bos in the phones.txt file.
      @param [in,out] fst  The FST to be (slightly) modified.
  */
-void PrepareForGrammarFst(int32 nonterm_phones_offset,
+void PrepareForActiveGrammarFst(int32 nonterm_phones_offset,
                           VectorFst<StdArc> *fst);
 
 

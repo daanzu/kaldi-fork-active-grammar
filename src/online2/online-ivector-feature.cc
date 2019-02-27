@@ -517,6 +517,9 @@ void OnlineSilenceWeighting::ComputeCurrentTraceback<fst::Fst<fst::StdArc> >(
 template
 void OnlineSilenceWeighting::ComputeCurrentTraceback<fst::GrammarFst>(
     const LatticeFasterOnlineDecoderTpl<fst::GrammarFst> &decoder);
+template
+void OnlineSilenceWeighting::ComputeCurrentTraceback<fst::ActiveGrammarFst>(
+    const LatticeFasterOnlineDecoderTpl<fst::ActiveGrammarFst> &decoder);
 
 int32 OnlineSilenceWeighting::GetBeginFrame() {
   int32 max_duration = config_.max_state_duration;

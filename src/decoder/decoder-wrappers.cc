@@ -326,6 +326,21 @@ template bool DecodeUtteranceLatticeFaster(
     LatticeWriter *lattice_writer,
     double *like_ptr);
 
+template bool DecodeUtteranceLatticeFaster(
+    LatticeFasterDecoderTpl<fst::ActiveGrammarFst> &decoder,
+    DecodableInterface &decodable,
+    const TransitionModel &trans_model,
+    const fst::SymbolTable *word_syms,
+    std::string utt,
+    double acoustic_scale,
+    bool determinize,
+    bool allow_partial,
+    Int32VectorWriter *alignment_writer,
+    Int32VectorWriter *words_writer,
+    CompactLatticeWriter *compact_lattice_writer,
+    LatticeWriter *lattice_writer,
+    double *like_ptr);
+
 
 // Takes care of output.  Returns true on success.
 bool DecodeUtteranceLatticeSimple(
