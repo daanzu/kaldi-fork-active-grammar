@@ -521,10 +521,6 @@ class ArcIterator<ActiveGrammarFst> {
       dest_instance_ = instance_id;
       base_fst->InitArcIterator(s, &data_);
       i_ = 0;
-    // } else if (!fst.ifsts_activity_[instance.ifst_index]) {
-    //   // ifst is not active; ignore all arcs, since all must go to it
-    //   data_.narcs = 0;
-    //   i_ = 0;
     } else {
       // A special state
       ExpandedState *expanded_state = fst.GetExpandedState(instance_id,

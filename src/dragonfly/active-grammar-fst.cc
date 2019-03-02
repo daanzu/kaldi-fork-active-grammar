@@ -69,6 +69,7 @@ void ActiveGrammarFst::Destroy() {
   ifsts_.clear();
   nonterminal_map_.clear();
   entry_arcs_.clear();
+  ifsts_activity_.clear();
   instances_.clear();
   // the following will only do something if we read this object from disk using
   // its Read() function.
@@ -338,7 +339,6 @@ ActiveGrammarFst::ExpandedState *ActiveGrammarFst::ExpandStateUserDefined(
     int32 nonterminal, left_context_phone;
     DecodeSymbol(leaving_arc.ilabel, &nonterminal,
                  &left_context_phone);
-    // if (!ifsts_activity_[instances_[instance_id].ifst_index]) {
     if (!ifsts_activity_[nonterminal_map_[nonterminal]]) {
       // ifst/nonterminal is not active
       continue;
