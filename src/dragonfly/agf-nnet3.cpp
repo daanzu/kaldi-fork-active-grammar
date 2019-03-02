@@ -387,6 +387,7 @@ namespace dragonfly {
         if (active_grammar_fst == nullptr) {
             active_grammar_fst = new ActiveGrammarFst(nonterm_phones_offset, *top_fst, active_grammar_ifsts);
         }
+        active_grammar_fst->UpdateActivity(grammars_activity);
         
         feature_pipeline = new OnlineNnet2FeaturePipeline(*feature_info);
         feature_pipeline->SetAdaptationState(*adaptation_state);
@@ -394,13 +395,13 @@ namespace dragonfly {
             trans_model, feature_info->silence_weighting_config,
             decodable_config.frame_subsampling_factor);
 
-        grammars_activity.resize(grammar_fsts_enabled.size(), false);
-        if (grammar_fsts_enabled != grammars_activity || false) {
-            // Timer timer(true);
-            //rebuild_union_pyramid(grammars_activity);
-            // build_union_pyramid(grammars_activity);
-            // KALDI_LOG << "rebuilt union pyramid" << " in " << (timer.Elapsed() * 1000) << "ms.";
-        }
+        // grammars_activity.resize(grammar_fsts_enabled.size(), false);
+        // if (grammar_fsts_enabled != grammars_activity || false) {
+        //     // Timer timer(true);
+        //     //rebuild_union_pyramid(grammars_activity);
+        //     // build_union_pyramid(grammars_activity);
+        //     // KALDI_LOG << "rebuilt union pyramid" << " in " << (timer.Elapsed() * 1000) << "ms.";
+        // }
 
         decoder = new SingleUtteranceNnet3DecoderTpl<fst::ActiveGrammarFst>(
             decoder_config, trans_model, *decodable_info, *active_grammar_fst, feature_pipeline);

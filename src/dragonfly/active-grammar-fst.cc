@@ -37,6 +37,7 @@ void ActiveGrammarFst::Init() {
   KALDI_ASSERT(nonterm_phones_offset_ > 1);
   InitNonterminalMap();
   entry_arcs_.resize(ifsts_.size());
+  ifsts_activity_.resize(ifsts_.size());
   if (!ifsts_.empty()) {
     // We call this mostly so that if something is wrong with the input FSTs, the
     // problem will be detected sooner rather than later.
@@ -337,6 +338,11 @@ ActiveGrammarFst::ExpandedState *ActiveGrammarFst::ExpandStateUserDefined(
     int32 nonterminal, left_context_phone;
     DecodeSymbol(leaving_arc.ilabel, &nonterminal,
                  &left_context_phone);
+    // if (!ifsts_activity_[instances_[instance_id].ifst_index]) {
+    if (!ifsts_activity_[nonterminal_map_[nonterminal]]) {
+      // ifst/nonterminal is not active
+      continue;
+    }
     int32 child_instance_id = GetChildInstanceId(instance_id,
                                                  nonterminal,
                                                  leaving_arc.nextstate);
@@ -373,8 +379,14 @@ ActiveGrammarFst::ExpandedState *ActiveGrammarFst::ExpandStateUserDefined(
     CombineArcs(leaving_arc, arriving_arc, cost_correction, &arc);
     ans->arcs.push_back(arc);
   }
-  ans->dest_fst_instance = dest_fst_instance;
-  return ans;
+
+  if (dest_fst_instance != -1) {
+    ans->dest_fst_instance = dest_fst_instance;
+    return ans;
+  } else {
+    delete ans;
+    return nullptr;
+  }
 }
 
 

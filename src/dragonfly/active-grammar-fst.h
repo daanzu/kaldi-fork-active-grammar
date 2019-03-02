@@ -194,7 +194,11 @@ class ActiveGrammarFst {
     }
   }
 
-  inline std::string Type() const { return "grammar"; }
+  void UpdateActivity(std::vector<bool>& activity) {
+    ifsts_activity_ = activity;
+  }
+
+  inline std::string Type() const { return "active_grammar"; }
 
   ~ActiveGrammarFst();
  private:
@@ -470,6 +474,9 @@ class ActiveGrammarFst {
   // nontrivial in the case where there are a lot of nonterminals.
   std::vector<std::unordered_map<int32, int32> > entry_arcs_;
 
+  // Parallel to ifsts_, whether corresponding ifst is currently active.
+  std::vector<bool> ifsts_activity_;
+
   // The FST instances.  Initially it is a vector with just one element
   // representing top_fst_, and it will be populated with more elements on
   // demand.  An instance_id refers to an index into this vector.
@@ -514,15 +521,24 @@ class ArcIterator<ActiveGrammarFst> {
       dest_instance_ = instance_id;
       base_fst->InitArcIterator(s, &data_);
       i_ = 0;
+    // } else if (!fst.ifsts_activity_[instance.ifst_index]) {
+    //   // ifst is not active; ignore all arcs, since all must go to it
+    //   data_.narcs = 0;
+    //   i_ = 0;
     } else {
       // A special state
       ExpandedState *expanded_state = fst.GetExpandedState(instance_id,
                                                            base_state);
-      dest_instance_ = expanded_state->dest_fst_instance;
-      // it's ok to leave the other members of data_ uninitialized, as they will
-      // never be interrogated.
-      data_.arcs = &(expanded_state->arcs[0]);
-      data_.narcs = expanded_state->arcs.size();
+      if (!expanded_state) {
+        // dest is not active; ignore all arcs, since all must go to it
+        data_.narcs = 0;
+      } else {
+        dest_instance_ = expanded_state->dest_fst_instance;
+        // it's ok to leave the other members of data_ uninitialized, as they will
+        // never be interrogated.
+        data_.arcs = &(expanded_state->arcs[0]);
+        data_.narcs = expanded_state->arcs.size();
+      }
       i_ = 0;
     }
     // Ideally we want to call CopyArcToTemp() now, but we rely on the fact that
