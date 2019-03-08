@@ -194,8 +194,35 @@ class ActiveGrammarFst {
     }
   }
 
-  void UpdateActivity(std::vector<bool>& activity) {
-    ifsts_activity_ = activity;
+  // Update activity of ifsts. Return whether any changed.
+  bool UpdateActivity(const std::vector<bool>& activity) {
+    KALDI_ASSERT(ifsts_activity_.size() == activity.size());
+    KALDI_ASSERT(ifsts_activity_.size() == ifsts_.size());
+    if (ifsts_activity_ != activity) {
+      // Clear all instances' expanded_states
+      for (size_t i = 0; i < instances_.size(); i++) {
+        FstInstance &instance = instances_[i];
+        std::unordered_map<BaseStateId, ExpandedState *>::const_iterator
+            iter = instance.expanded_states.begin(),
+            end = instance.expanded_states.end();
+        for (; iter != end; ++iter) {
+          ExpandedState *e = iter->second;
+          delete e;
+        }
+        instance.expanded_states.clear();
+      }
+      // FIXME: only clear top_fst_ expanded_states for changed nonterms?
+      // for (size_t i = 0; i < ifsts_.size(); i++) {
+      //   if (ifsts_activity_[i] != activity[i]) {}
+      // }
+      // std::vector<FstInstance>::const_iterator iter = instances_.begin(), end = instances_.end();
+      // for (; iter != end; ++iter) {
+      //   if ((iter->ifst_index != -1) && (ifsts_activity_[iter->ifst_index] != activity[iter->ifst_index])) {}
+      // }
+      ifsts_activity_ = activity;
+      return true;
+    }
+    return false;
   }
 
   inline std::string Type() const { return "active_grammar"; }
