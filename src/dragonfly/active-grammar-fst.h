@@ -199,26 +199,21 @@ class ActiveGrammarFst {
     KALDI_ASSERT(ifsts_activity_.size() == activity.size());
     KALDI_ASSERT(ifsts_activity_.size() == ifsts_.size());
     if (ifsts_activity_ != activity) {
-      // Clear all instances' expanded_states
-      for (size_t i = 0; i < instances_.size(); i++) {
-        FstInstance &instance = instances_[i];
-        std::unordered_map<BaseStateId, ExpandedState *>::const_iterator
-            iter = instance.expanded_states.begin(),
-            end = instance.expanded_states.end();
-        for (; iter != end; ++iter) {
-          ExpandedState *e = iter->second;
-          delete e;
+      // Only clear top_fst_'s expanded_states for nonterms/ifsts whose activity changed
+      FstInstance &top_fst_instance = instances_[0];
+      for (auto iter = top_fst_instance.expanded_states.begin(), end = top_fst_instance.expanded_states.end(); iter != end; ) {
+        ExpandedState *expanded_state = iter->second;
+        if (expanded_state != nullptr) {
+          // int32 i = instances_[expanded_state->dest_fst_instance].ifst_index;
+          int32 i;
+          if ((i >= 0) && (ifsts_activity_[i] != activity[i])) {
+            delete expanded_state;
+            iter = top_fst_instance.expanded_states.erase(iter);
+            continue;
+          }
         }
-        instance.expanded_states.clear();
+        ++iter;
       }
-      // FIXME: only clear top_fst_ expanded_states for changed nonterms?
-      // for (size_t i = 0; i < ifsts_.size(); i++) {
-      //   if (ifsts_activity_[i] != activity[i]) {}
-      // }
-      // std::vector<FstInstance>::const_iterator iter = instances_.begin(), end = instances_.end();
-      // for (; iter != end; ++iter) {
-      //   if ((iter->ifst_index != -1) && (ifsts_activity_[iter->ifst_index] != activity[iter->ifst_index])) {}
-      // }
       ifsts_activity_ = activity;
       return true;
     }
@@ -400,6 +395,9 @@ class ActiveGrammarFst {
     // corner cases, we ensure this via adding epsilon arcs where
     // needed.
 
+    int32 ifst_index;
+    bool active;
+
     // fst-instance index of destination state (we will have ensured previously
     // that this is the same for all outgoing arcs).
     int32 dest_fst_instance;
@@ -432,6 +430,7 @@ class ActiveGrammarFst {
     // FST that the final-prob's value equal to
     // KALDI_GRAMMAR_FST_SPECIAL_WEIGHT.  (That final-prob value is used as a
     // kind of signal to this code that the state needs expansion).
+    // NOTE: may contain nullptrs for inactive ifsts.
     std::unordered_map<BaseStateId, ExpandedState*> expanded_states;
 
     // 'child_instances', which is populated on demand as states in this FST
@@ -552,8 +551,8 @@ class ArcIterator<ActiveGrammarFst> {
       // A special state
       ExpandedState *expanded_state = fst.GetExpandedState(instance_id,
                                                            base_state);
-      if (!expanded_state) {
-        // dest is not active; ignore all arcs, since all must go to it
+      if (expanded_state == nullptr) {
+        // dest instance is not active; ignore all arcs, since all must go to it
         data_.narcs = 0;
       } else {
         dest_instance_ = expanded_state->dest_fst_instance;

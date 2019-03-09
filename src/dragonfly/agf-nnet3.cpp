@@ -48,6 +48,7 @@ namespace dragonfly {
         ~AgfNNet3OnlineModelWrapper();
 
         bool add_grammar_fst(std::string& grammar_fst_filename);
+        void reset_adaptation_state();
         bool decode(BaseFloat samp_freq, int32 num_frames, BaseFloat* frames, bool finalize, std::vector<bool>& grammars_activity);
 
         void get_decoded_string(std::string& decoded_string, double& likelihood);
@@ -132,6 +133,7 @@ namespace dragonfly {
 
         feature_info = new OnlineNnet2FeaturePipelineInfo(feature_config);
         decodable_info = new nnet3::DecodableNnetSimpleLoopedInfo(decodable_config, &am_nnet);
+        reset_adaptation_state();
         top_fst = dynamic_cast<StdConstFst*>(ReadFstKaldiGeneric(top_fst_filename));
 
         this->nonterm_phones_offset = nonterm_phones_offset;
@@ -150,9 +152,6 @@ namespace dragonfly {
         // 			<< align_lex_filename;
         // 	}
         // }
-
-        // NOTE: assumes single speaker
-        adaptation_state = new OnlineIvectorExtractorAdaptationState(feature_info->ivector_extractor_info);
 
         active_grammar_fst = nullptr;
         decoder = nullptr;
@@ -189,6 +188,14 @@ namespace dragonfly {
             active_grammar_fst = nullptr;
         }
         return true;
+    }
+
+    void AgfNNet3OnlineModelWrapper::reset_adaptation_state() {
+        // NOTE: assumes single speaker; optionally maintains adaptation state
+        if (adaptation_state != nullptr) {
+            delete adaptation_state;
+        }
+        adaptation_state = new OnlineIvectorExtractorAdaptationState(feature_info->ivector_extractor_info);
     }
 
     void AgfNNet3OnlineModelWrapper::start_decoding(std::vector<bool> grammars_activity) {
@@ -272,6 +279,7 @@ namespace dragonfly {
             // BaseFloat inv_acoustic_scale = 1.0 / decodable_config.acoustic_scale;
             // ScaleLattice(AcousticLatticeScale(inv_acoustic_scale), &clat);
 
+            // TODO: decide whether to save adaptation?
             feature_pipeline->GetAdaptationState(adaptation_state);
 
             tot_frames_decoded = tot_frames;
@@ -366,4 +374,9 @@ bool get_output_agf_nnet3(void* model_vp, char* output, int32_t output_length, d
     output[output_length - 1] = 0;
     *likelihood_p = likelihood;
     return true;
+}
+
+void reset_adaptation_state_agf_nnet3(void* model_vp) {
+    AgfNNet3OnlineModelWrapper* model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
+    model->reset_adaptation_state();
 }

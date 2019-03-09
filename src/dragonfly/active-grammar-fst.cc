@@ -340,8 +340,10 @@ ActiveGrammarFst::ExpandedState *ActiveGrammarFst::ExpandStateUserDefined(
     DecodeSymbol(leaving_arc.ilabel, &nonterminal,
                  &left_context_phone);
     if (!ifsts_activity_[nonterminal_map_[nonterminal]]) {
-      // ifst/nonterminal is not active
-      continue;
+      // ifst/nonterminal is not active; a state should only go to one dest ifst
+      ans->active = false;
+      ans->ifst_index = nonterminal_map_[nonterminal];
+      return ans;
     }
     int32 child_instance_id = GetChildInstanceId(instance_id,
                                                  nonterminal,
@@ -379,14 +381,9 @@ ActiveGrammarFst::ExpandedState *ActiveGrammarFst::ExpandStateUserDefined(
     CombineArcs(leaving_arc, arriving_arc, cost_correction, &arc);
     ans->arcs.push_back(arc);
   }
-
-  if (dest_fst_instance != -1) {
-    ans->dest_fst_instance = dest_fst_instance;
-    return ans;
-  } else {
-    delete ans;
-    return nullptr;
-  }
+  ans->active = true;
+  ans->dest_fst_instance = dest_fst_instance;
+  return ans;
 }
 
 

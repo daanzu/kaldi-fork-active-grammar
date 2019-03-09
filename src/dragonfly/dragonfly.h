@@ -33,3 +33,4 @@ extern "C" DRAGONFLY_API bool add_grammar_fst_agf_nnet3(void* model_vp, char* gr
 extern "C" DRAGONFLY_API bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,
     bool* grammars_activity_cp, int32_t grammars_activity_cp_size);
 extern "C" DRAGONFLY_API bool get_output_agf_nnet3(void* model_vp, char* output, int32_t output_length, double* likelihood_p);
+extern "C" DRAGONFLY_API void reset_adaptation_state_agf_nnet3(void* model_vp);
