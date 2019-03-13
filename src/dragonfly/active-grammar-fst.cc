@@ -232,6 +232,8 @@ ActiveGrammarFst::ExpandedState *ActiveGrammarFst::ExpandStateEnd(
   const ConstFst<StdArc> &parent_fst = *(parent_instance.fst);
 
   ExpandedState *ans = new ExpandedState;
+  ans->active = true;
+  ans->dest_ifst_index = parent_instance.ifst_index;
   ans->dest_fst_instance = parent_instance_id;
 
   // parent_aiter is the arc-iterator in the state we return to.  We'll Seek()
@@ -339,12 +341,18 @@ ActiveGrammarFst::ExpandedState *ActiveGrammarFst::ExpandStateUserDefined(
     int32 nonterminal, left_context_phone;
     DecodeSymbol(leaving_arc.ilabel, &nonterminal,
                  &left_context_phone);
+
     if (!ifsts_activity_[nonterminal_map_[nonterminal]]) {
       // ifst/nonterminal is not active; a state should only go to one dest ifst
       ans->active = false;
-      ans->ifst_index = nonterminal_map_[nonterminal];
+      ans->dest_ifst_index = nonterminal_map_[nonterminal];
+      ans->dest_fst_instance = -1;
       return ans;
+    } else {
+      ans->active = true;
+      ans->dest_ifst_index = nonterminal_map_[nonterminal];
     }
+
     int32 child_instance_id = GetChildInstanceId(instance_id,
                                                  nonterminal,
                                                  leaving_arc.nextstate);
@@ -381,7 +389,6 @@ ActiveGrammarFst::ExpandedState *ActiveGrammarFst::ExpandStateUserDefined(
     CombineArcs(leaving_arc, arriving_arc, cost_correction, &arc);
     ans->arcs.push_back(arc);
   }
-  ans->active = true;
   ans->dest_fst_instance = dest_fst_instance;
   return ans;
 }

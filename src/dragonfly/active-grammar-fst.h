@@ -203,14 +203,17 @@ class ActiveGrammarFst {
       FstInstance &top_fst_instance = instances_[0];
       for (auto iter = top_fst_instance.expanded_states.begin(), end = top_fst_instance.expanded_states.end(); iter != end; ) {
         ExpandedState *expanded_state = iter->second;
-        if (expanded_state != nullptr) {
-          // int32 i = instances_[expanded_state->dest_fst_instance].ifst_index;
-          int32 i;
-          if ((i >= 0) && (ifsts_activity_[i] != activity[i])) {
+        int32 i = expanded_state->dest_ifst_index;
+        if ((i != -1) && (ifsts_activity_[i] != activity[i])) {
+          KALDI_ASSERT(expanded_state->active == ifsts_activity_[i]);
+          if (expanded_state->dest_fst_instance == -1) {
+            // Was never fully initialized, so erase and start over
+            KALDI_ASSERT(!expanded_state->active);
             delete expanded_state;
             iter = top_fst_instance.expanded_states.erase(iter);
             continue;
           }
+          expanded_state->active = activity[i];
         }
         ++iter;
       }
@@ -395,11 +398,15 @@ class ActiveGrammarFst {
     // corner cases, we ensure this via adding epsilon arcs where
     // needed.
 
-    int32 ifst_index;
+    // Whether destination FST is active.
     bool active;
 
+    // ifsts_ index of destination state. May be -1 if it's top_fst_.
+    int32 dest_ifst_index;
+
     // fst-instance index of destination state (we will have ensured previously
-    // that this is the same for all outgoing arcs).
+    // that this is the same for all outgoing arcs). May be -1 if it's an
+    // inactive ifst that hasn't been fully expanded yet.
     int32 dest_fst_instance;
 
     // List of arcs out of this state, where the 'nextstate' element will be the
@@ -430,7 +437,6 @@ class ActiveGrammarFst {
     // FST that the final-prob's value equal to
     // KALDI_GRAMMAR_FST_SPECIAL_WEIGHT.  (That final-prob value is used as a
     // kind of signal to this code that the state needs expansion).
-    // NOTE: may contain nullptrs for inactive ifsts.
     std::unordered_map<BaseStateId, ExpandedState*> expanded_states;
 
     // 'child_instances', which is populated on demand as states in this FST
@@ -551,8 +557,8 @@ class ArcIterator<ActiveGrammarFst> {
       // A special state
       ExpandedState *expanded_state = fst.GetExpandedState(instance_id,
                                                            base_state);
-      if (expanded_state == nullptr) {
-        // dest instance is not active; ignore all arcs, since all must go to it
+      if (!expanded_state->active) {
+        // dest fst is not active; ignore all arcs, since all must go to it
         data_.narcs = 0;
       } else {
         dest_instance_ = expanded_state->dest_fst_instance;
