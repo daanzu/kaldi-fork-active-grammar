@@ -49,7 +49,7 @@ namespace dragonfly {
 
         bool add_grammar_fst(std::string& grammar_fst_filename);
         void reset_adaptation_state();
-        bool decode(BaseFloat samp_freq, int32 num_frames, BaseFloat* frames, bool finalize, std::vector<bool>& grammars_activity);
+        bool decode(BaseFloat samp_freq, int32 num_frames, BaseFloat* frames, bool finalize, std::vector<bool>& grammars_activity, bool save_adaptation_state = true);
 
         void get_decoded_string(std::string& decoded_string, double& likelihood);
         bool get_word_alignment(std::vector<string>& words, std::vector<int32>& times, std::vector<int32>& lengths);
@@ -233,7 +233,7 @@ namespace dragonfly {
 
     // grammars_activity is ignored once decoding has already started
     bool AgfNNet3OnlineModelWrapper::decode(BaseFloat samp_freq, int32 num_frames, BaseFloat* frames, bool finalize,
-        std::vector<bool>& grammars_activity) {
+        std::vector<bool>& grammars_activity, bool save_adaptation_state) {
         using fst::VectorFst;
 
         if (!decoder)
@@ -280,7 +280,10 @@ namespace dragonfly {
             // ScaleLattice(AcousticLatticeScale(inv_acoustic_scale), &clat);
 
             // TODO: decide whether to save adaptation?
-            feature_pipeline->GetAdaptationState(adaptation_state);
+            if (save_adaptation_state) {
+                feature_pipeline->GetAdaptationState(adaptation_state);
+                KALDI_LOG << "Saved adaptation state.";
+            }
 
             tot_frames_decoded = tot_frames;
             tot_frames = 0;
@@ -353,13 +356,13 @@ bool add_grammar_fst_agf_nnet3(void* model_vp, char* grammar_fst_filename_cp) {
 }
 
 bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,
-    bool* grammars_activity_cp, int32_t grammars_activity_cp_size) {
+    bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state) {
     AgfNNet3OnlineModelWrapper* model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
     std::vector<bool> grammars_activity(grammars_activity_cp_size);
     for (size_t i = 0; i < grammars_activity_cp_size; i++) {
         grammars_activity[i] = grammars_activity_cp[i];
     }
-    bool result = model->decode(samp_freq, num_frames, frames, finalize, grammars_activity);
+    bool result = model->decode(samp_freq, num_frames, frames, finalize, grammars_activity, save_adaptation_state);
     return result;
 }
 

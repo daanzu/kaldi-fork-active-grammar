@@ -31,6 +31,6 @@ extern "C" DRAGONFLY_API void* init_agf_nnet3(float beam, int32_t max_active, in
     char* model_filename_cp, char* top_fst_filename_cp);
 extern "C" DRAGONFLY_API bool add_grammar_fst_agf_nnet3(void* model_vp, char* grammar_fst_filename_cp);
 extern "C" DRAGONFLY_API bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,
-    bool* grammars_activity_cp, int32_t grammars_activity_cp_size);
+    bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state);
 extern "C" DRAGONFLY_API bool get_output_agf_nnet3(void* model_vp, char* output, int32_t output_length, double* likelihood_p);
 extern "C" DRAGONFLY_API void reset_adaptation_state_agf_nnet3(void* model_vp);
