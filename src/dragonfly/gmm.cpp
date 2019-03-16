@@ -57,8 +57,7 @@ namespace dragonfly
 		void free_decoder(void);
 	};
 
-	void silent_log_handler(const LogMessageEnvelope &envelope,
-		const char *message) {
+    void silent_log_handler(const LogMessageEnvelope &envelope, const char *message) {
 		// nothing - this handler simply keeps silent
 	}
 

@@ -343,7 +343,7 @@ ActiveGrammarFst::ExpandedState *ActiveGrammarFst::ExpandStateUserDefined(
                  &left_context_phone);
 
     if (!ifsts_activity_[nonterminal_map_[nonterminal]]) {
-      // ifst/nonterminal is not active; a state should only go to one dest ifst
+      // ifst/nonterminal is not active; return because a state should only go to one dest ifst
       ans->active = false;
       ans->dest_ifst_index = nonterminal_map_[nonterminal];
       ans->dest_fst_instance = -1;
@@ -728,7 +728,7 @@ bool ActiveGrammarFstPreparer::IsEntryState(StateId s) const {
     // we check that at least one has label with nonterminal equal to #nonterm_begin...
     // in fact they will all have this value if at least one does, and this was checked
     // in NeedEpsilons().
-    if (nonterminal == kNontermBegin)
+    if (nonterminal == GetPhoneSymbolFor(kNontermBegin))
       return true;
   }
   return false;

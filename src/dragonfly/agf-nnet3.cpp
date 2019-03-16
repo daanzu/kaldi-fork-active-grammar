@@ -18,7 +18,7 @@ extern "C" {
 #include "nnet3/nnet-utils.h"
 #include "active-grammar-fst.h"
 
-#define VERBOSE 1
+#define VERBOSE 0
 
 namespace dragonfly {
     using namespace kaldi;
@@ -44,7 +44,7 @@ namespace dragonfly {
 
         AgfNNet3OnlineModelWrapper(BaseFloat beam, int32 max_active, int32 min_active, BaseFloat lattice_beam, BaseFloat acoustic_scale, int32 frame_subsampling_factor,
             int32 nonterm_phones_offset, std::string& word_syms_filename, std::string& mfcc_config_filename, std::string& ie_config_filename,
-            std::string& model_filename, std::string& top_fst_filename);
+            std::string& model_filename, std::string& top_fst_filename, std::string& dictation_fst_filename);
         ~AgfNNet3OnlineModelWrapper();
 
         bool add_grammar_fst(std::string& grammar_fst_filename);
@@ -59,6 +59,8 @@ namespace dragonfly {
         // model
         fst::SymbolTable *word_syms;
         int32 nonterm_phones_offset;
+        int32 dictation_phones_offset;
+        int32 rules_phones_offset;
         OnlineNnet2FeaturePipelineConfig feature_config;
         nnet3::NnetSimpleLoopedComputationOptions decodable_config;
         LatticeFasterDecoderConfig decoder_config;
@@ -68,6 +70,7 @@ namespace dragonfly {
         nnet3::AmNnetSimple am_nnet;
         ActiveGrammarFst* active_grammar_fst;
         StdConstFst *top_fst;
+        StdConstFst *dictation_fst;
         std::vector<StdFst*> grammar_fsts;
         std::map<StdFst*, std::string> grammar_fsts_name_map;
         std::vector<std::pair<int32, const StdConstFst *> > active_grammar_ifsts;
@@ -93,7 +96,7 @@ namespace dragonfly {
     AgfNNet3OnlineModelWrapper::AgfNNet3OnlineModelWrapper(
         BaseFloat beam, int32 max_active, int32 min_active, BaseFloat lattice_beam, BaseFloat acoustic_scale, int32 frame_subsampling_factor,
         int32 nonterm_phones_offset, std::string& word_syms_filename, std::string& mfcc_config_filename, std::string& ie_config_filename,
-        std::string& model_filename, std::string& top_fst_filename) {
+        std::string& model_filename, std::string& top_fst_filename, std::string& dictation_fst_filename) {
 #if VERBOSE
         KALDI_LOG << "nonterm_phones_offset: " << nonterm_phones_offset;
         KALDI_LOG << "word_syms_filename: " << word_syms_filename;
@@ -101,9 +104,10 @@ namespace dragonfly {
         KALDI_LOG << "ie_config_filename: " << ie_config_filename;
         KALDI_LOG << "model_filename: " << model_filename;
         KALDI_LOG << "top_fst_filename: " << top_fst_filename;
+        KALDI_LOG << "dictation_fst_filename: " << dictation_fst_filename;
 #else
         // silence kaldi output as well
-        SetLogHandler(silent_log_handler);
+        SetLogHandler([](auto envelope, auto message) {});
 #endif
 
         ParseOptions po("");
@@ -137,6 +141,15 @@ namespace dragonfly {
         top_fst = dynamic_cast<StdConstFst*>(ReadFstKaldiGeneric(top_fst_filename));
 
         this->nonterm_phones_offset = nonterm_phones_offset;
+        rules_phones_offset = nonterm_phones_offset + 5;
+        if (!dictation_fst_filename.empty()) {
+            dictation_phones_offset = nonterm_phones_offset + 4;
+            dictation_fst = read_fst_file(dictation_fst_filename);
+        } else {
+            dictation_phones_offset = 0;
+            dictation_fst = nullptr;
+        }
+
         word_syms = nullptr;
         if (word_syms_filename != "")
             if (!(word_syms = fst::SymbolTable::ReadText(word_syms_filename)))
@@ -182,7 +195,7 @@ namespace dragonfly {
         grammar_fsts.emplace_back(grammar_fst);
         grammar_fsts_enabled.emplace_back(false);
         grammar_fsts_name_map[grammar_fst] = grammar_fst_filename;
-        active_grammar_ifsts.emplace_back(std::make_pair(nonterm_phones_offset + 4 + active_grammar_ifsts.size(), grammar_fst));
+        active_grammar_ifsts.emplace_back(std::make_pair(rules_phones_offset + active_grammar_ifsts.size(), grammar_fst));
         if (active_grammar_fst) {
             delete active_grammar_fst;
             active_grammar_fst = nullptr;
@@ -202,9 +215,14 @@ namespace dragonfly {
         free_decoder();
         if (active_grammar_fst == nullptr) {
             // Timer timer(true);
-            active_grammar_fst = new ActiveGrammarFst(nonterm_phones_offset, *top_fst, active_grammar_ifsts);
+            auto ifsts = active_grammar_ifsts;
+            if (dictation_fst != nullptr)
+                ifsts.emplace_back(std::make_pair(dictation_phones_offset, dictation_fst));
+            active_grammar_fst = new ActiveGrammarFst(nonterm_phones_offset, *top_fst, ifsts);
             // KALDI_LOG << "built new ActiveGrammarFst" << " in " << (timer.Elapsed() * 1000) << "ms.";
         }
+        if (dictation_fst != nullptr)
+            grammars_activity.emplace_back(dictation_fst != nullptr);
         active_grammar_fst->UpdateActivity(grammars_activity);
         
         feature_pipeline = new OnlineNnet2FeaturePipeline(*feature_info);
@@ -340,11 +358,12 @@ using namespace dragonfly;
 
 void* init_agf_nnet3(float beam, int32_t max_active, int32_t min_active, float lattice_beam, float acoustic_scale, int32_t frame_subsampling_factor,
     int32_t nonterm_phones_offset, char* word_syms_filename_cp, char* mfcc_config_filename_cp, char* ie_config_filename_cp,
-    char* model_filename_cp, char* top_fst_filename_cp) {
+    char* model_filename_cp, char* top_fst_filename_cp, char* dictation_fst_filename_cp) {
     std::string word_syms_filename(word_syms_filename_cp), mfcc_config_filename(mfcc_config_filename_cp), ie_config_filename(ie_config_filename_cp),
-        model_filename(model_filename_cp), top_fst_filename(top_fst_filename_cp);
+        model_filename(model_filename_cp), top_fst_filename(top_fst_filename_cp),
+        dictation_fst_filename((dictation_fst_filename_cp != nullptr) ? dictation_fst_filename_cp : "");
     AgfNNet3OnlineModelWrapper* model = new AgfNNet3OnlineModelWrapper(beam, max_active, min_active, lattice_beam, acoustic_scale, frame_subsampling_factor,
-        nonterm_phones_offset, word_syms_filename, mfcc_config_filename, ie_config_filename, model_filename, top_fst_filename);
+        nonterm_phones_offset, word_syms_filename, mfcc_config_filename, ie_config_filename, model_filename, top_fst_filename, dictation_fst_filename);
     return model;
 }
 
