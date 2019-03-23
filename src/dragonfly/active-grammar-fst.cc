@@ -37,7 +37,7 @@ void ActiveGrammarFst::Init() {
   KALDI_ASSERT(nonterm_phones_offset_ > 1);
   InitNonterminalMap();
   entry_arcs_.resize(ifsts_.size());
-  ifsts_activity_.resize(ifsts_.size());
+  ifsts_activity_.resize(ifsts_.size(), false);
   if (!ifsts_.empty()) {
     // We call this mostly so that if something is wrong with the input FSTs, the
     // problem will be detected sooner rather than later.
@@ -234,6 +234,7 @@ ActiveGrammarFst::ExpandedState *ActiveGrammarFst::ExpandStateEnd(
   ExpandedState *ans = new ExpandedState;
   ans->active = true;
   ans->dest_ifst_index = parent_instance.ifst_index;
+  ans->nonterminal = GetPhoneSymbolFor(kNontermEnd);
   ans->dest_fst_instance = parent_instance_id;
 
   // parent_aiter is the arc-iterator in the state we return to.  We'll Seek()
@@ -342,15 +343,21 @@ ActiveGrammarFst::ExpandedState *ActiveGrammarFst::ExpandStateUserDefined(
     DecodeSymbol(leaving_arc.ilabel, &nonterminal,
                  &left_context_phone);
 
-    if (!ifsts_activity_[nonterminal_map_[nonterminal]]) {
+    auto nonterminal_map_iter = nonterminal_map_.find(nonterminal);
+    if ((nonterminal_map_iter == nonterminal_map_.end()) || (!ifsts_activity_.at(nonterminal_map_iter->second))) {
       // ifst/nonterminal is not active; return because a state should only go to one dest ifst
       ans->active = false;
-      ans->dest_ifst_index = nonterminal_map_[nonterminal];
+      ans->dest_ifst_index = (nonterminal_map_iter == nonterminal_map_.end()) ? -1 : nonterminal_map_iter->second;
+      ans->nonterminal = nonterminal;
+      // KALDI_LOG << "ExpandStateUserDefined: new inactive expanded_state for (instance_id #" << instance_id << ", nonterminal " << nonterminal << ")";
       ans->dest_fst_instance = -1;
       return ans;
     } else {
       ans->active = true;
-      ans->dest_ifst_index = nonterminal_map_[nonterminal];
+      ans->dest_ifst_index = nonterminal_map_iter->second;
+      ans->nonterminal = nonterminal;
+      // KALDI_LOG << "ExpandStateUserDefined: new active expanded_state for (instance_id #" << instance_id << ", nonterminal " << nonterminal << "), to ifst_index #" << ans->dest_ifst_index;
+      // ans->dest_fst_instance assigned below
     }
 
     int32 child_instance_id = GetChildInstanceId(instance_id,

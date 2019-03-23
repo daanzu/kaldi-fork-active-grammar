@@ -19,6 +19,7 @@ extern "C" {
 #include "active-grammar-fst.h"
 
 #define VERBOSE 0
+#define SILENT 0
 
 namespace dragonfly {
     using namespace kaldi;
@@ -105,9 +106,15 @@ namespace dragonfly {
         KALDI_LOG << "model_filename: " << model_filename;
         KALDI_LOG << "top_fst_filename: " << top_fst_filename;
         KALDI_LOG << "dictation_fst_filename: " << dictation_fst_filename;
-#else
+#elif SILENT
         // silence kaldi output as well
         SetLogHandler([](auto envelope, auto message) {});
+#else
+        SetLogHandler([](auto envelope, auto message) {
+            if (envelope.severity <= LogMessageEnvelope::kWarning) {
+                std::cerr << "[KALDI severity=" << envelope.severity << "] " << message << "\n";
+            }
+        });
 #endif
 
         ParseOptions po("");

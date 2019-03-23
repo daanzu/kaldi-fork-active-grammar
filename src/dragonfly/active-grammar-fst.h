@@ -398,10 +398,14 @@ class ActiveGrammarFst {
     // corner cases, we ensure this via adding epsilon arcs where
     // needed.
 
+    // nonterminal on ilabel of arc from expanded state to destination.
+    int32 nonterminal;
+
     // Whether destination FST is active.
     bool active;
 
-    // ifsts_ index of destination state. May be -1 if it's top_fst_.
+    // ifsts_ index of destination state. May be -1 if it's top_fst_ or a
+    // nonterminal not represented in ifsts_.
     int32 dest_ifst_index;
 
     // fst-instance index of destination state (we will have ensured previously

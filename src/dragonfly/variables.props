@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ImportGroup Label="PropertySheets" />
+  <PropertyGroup Label="UserMacros">
+    <!-- Change the following paths so they are correct on your machine -->
+    <!-- Do not modify anything before this line -->
+    <MKLDIR>C:\Program Files (x86)\IntelSWTools\compilers_and_libraries\windows\mkl\</MKLDIR>
+    <OPENBLASDIR>C:\Work\Speech\kaldi\kaldi-windows-deps\OpenBLAS-v0.2.14-Win64-int32</OPENBLASDIR>
+    <OPENFST>C:\Work\Speech\kaldi\kaldi-windows-deps\openfst</OPENFST>
+    <OPENFSTLIB>C:\Work\Speech\kaldi\kaldi-windows-deps\openfst\build_output</OPENFSTLIB>
+    <!-- Do not modify anything after this line -->
+  </PropertyGroup>
+  <PropertyGroup />
+  <ItemDefinitionGroup />
+  <ItemGroup>
+    <BuildMacro Include="OPENBLASDIR">
+      <Value>$(OPENBLASDIR)</Value>
+      <EnvironmentVariable>true</EnvironmentVariable>
+    </BuildMacro>
+    <BuildMacro Include="OPENFST">
+      <Value>$(OPENFST)</Value>
+      <EnvironmentVariable>true</EnvironmentVariable>
+    </BuildMacro>
+    <BuildMacro Include="OPENFSTLIB">
+      <Value>$(OPENFSTLIB)</Value>
+      <EnvironmentVariable>true</EnvironmentVariable>
+    </BuildMacro>
+    <BuildMacro Include="MKLDIR">
+      <Value>$(MKLDIR)</Value>
+      <EnvironmentVariable>true</EnvironmentVariable>
+    </BuildMacro>
+  </ItemGroup>
+</Project>
