@@ -7,6 +7,7 @@
         #define DRAGONFLY_API __declspec(dllimport)
     #endif
 #elif defined(__GNUC__)
+    // unnecessary
     #define DRAGONFLY_API __attribute__((visibility("default")))
 #else
     #define DRAGONFLY_API

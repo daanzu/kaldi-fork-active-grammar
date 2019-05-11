@@ -108,9 +108,9 @@ namespace dragonfly {
         KALDI_LOG << "dictation_fst_filename: " << dictation_fst_filename;
 #elif SILENT
         // silence kaldi output as well
-        SetLogHandler([](auto envelope, auto message) {});
+        SetLogHandler([](const LogMessageEnvelope& envelope, const char* message) {});
 #else
-        SetLogHandler([](auto envelope, auto message) {
+        SetLogHandler([](const LogMessageEnvelope& envelope, const char* message) {
             if (envelope.severity <= LogMessageEnvelope::kWarning) {
                 std::cerr << "[KALDI severity=" << envelope.severity << "] " << message << "\n";
             }

@@ -174,4 +174,4 @@ onlinebin: base matrix util feat tree gmm transform sgmm2 fstext hmm lm decoder 
 online: decoder gmm transform feat matrix util base lat hmm tree
 online2: decoder gmm transform feat matrix util base lat hmm tree ivector cudamatrix nnet2 nnet3 chain
 kws: base util hmm tree matrix lat
-dragonfly: base util matrix gmm hmm tree transform lat
+dragonfly: online2
