@@ -1,3 +1,5 @@
+# adapted from decoder/Makefile
+
 all:
 
 EXTRA_CXXFLAGS = -Wno-sign-compare
@@ -5,15 +7,13 @@ include ../kaldi.mk
 
 TESTFILES =
 
-OBJFILES = training-graph-compiler.o lattice-simple-decoder.o lattice-faster-decoder.o \
-   lattice-faster-online-decoder.o simple-decoder.o faster-decoder.o \
-   decoder-wrappers.o grammar-fst.o decodable-matrix.o
+OBJFILES = active-grammar-fst.o agf-nnet3.o
 
-LIBNAME = kaldi-decoder
+LIBNAME = kaldi-dragonfly
 
 ADDLIBS = ../lat/kaldi-lat.a ../fstext/kaldi-fstext.a ../hmm/kaldi-hmm.a \
           ../transform/kaldi-transform.a ../gmm/kaldi-gmm.a \
           ../tree/kaldi-tree.a ../util/kaldi-util.a ../matrix/kaldi-matrix.a \
-          ../base/kaldi-base.a ../dragonfly/kaldi-dragonfly.a 
+          ../base/kaldi-base.a 
 
 include ../makefiles/default_rules.mk

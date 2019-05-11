@@ -1,9 +1,16 @@
 #pragma once
 
-#ifdef DRAGONFLY_EXPORTS
-#define DRAGONFLY_API __declspec(dllexport)
+#if defined(_MSC_VER)
+    #ifdef DRAGONFLY_EXPORTS
+        #define DRAGONFLY_API __declspec(dllexport)
+    #else
+        #define DRAGONFLY_API __declspec(dllimport)
+    #endif
+#elif defined(__GNUC__)
+    #define DRAGONFLY_API __attribute__((visibility("default")))
 #else
-#define DRAGONFLY_API __declspec(dllimport)
+    #define DRAGONFLY_API
+    #pragma warning Unknown dynamic link import / export semantics.
 #endif
 
 #include <stdint.h>
