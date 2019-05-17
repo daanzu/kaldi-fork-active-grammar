@@ -7,7 +7,7 @@ include ../kaldi.mk
 
 TESTFILES =
 
-OBJFILES = active-grammar-fst.o agf-nnet3.o
+OBJFILES = agf-nnet3.o
 
 LIBNAME = kaldi-dragonfly
 

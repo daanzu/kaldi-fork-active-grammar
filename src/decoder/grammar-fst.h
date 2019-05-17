@@ -34,7 +34,7 @@
 
 #include "fst/fstlib.h"
 #include "fstext/grammar-context-fst.h"
-#include "dragonfly/active-grammar-fst.h"
+#include "active-grammar-fst.h"
 
 namespace fst {
 

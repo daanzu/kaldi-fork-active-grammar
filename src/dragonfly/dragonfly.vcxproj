@@ -161,7 +161,7 @@
     <ClInclude Include="..\..\..\src\dragonfly\dragonfly.h" />
     <ClInclude Include="..\..\..\src\dragonfly\targetver.h" />
     <!-- <ClInclude Include="..\..\..\src\dragonfly\active-union-fst.h" /> -->
-    <ClInclude Include="..\..\..\src\dragonfly\active-grammar-fst.h" />
+    <!-- <ClInclude Include="..\..\..\src\dragonfly\active-grammar-fst.h" /> -->
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\src\dragonfly\dllmain.cpp" />
@@ -170,7 +170,7 @@
     <!-- <ClCompile Include="..\..\..\src\dragonfly\auf-gmm.cpp" /> -->
     <ClCompile Include="..\..\..\src\dragonfly\agf-nnet3.cpp" />
     <!-- <ClCompile Include="..\..\..\src\dragonfly\active-union-fst.cc" /> -->
-    <ClCompile Include="..\..\..\src\dragonfly\active-grammar-fst.cc" />
+    <!-- <ClCompile Include="..\..\..\src\dragonfly\active-grammar-fst.cc" /> -->
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\kaldi-base\kaldi-base.vcxproj">
