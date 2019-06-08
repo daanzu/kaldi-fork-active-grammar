@@ -15,11 +15,6 @@
 #endif
 
 #include <stdint.h>
-//#include "targetver.h"
-//#define WIN32_LEAN_AND_MEAN             // Exclude rarely-used stuff from Windows headers
-//#include <windows.h>
-
-//extern "C" DRAGONFLY_API int test();
 
 extern "C" DRAGONFLY_API void* init_gmm(float beam, int32_t max_active, int32_t min_active, float lattice_beam,
     char* word_syms_filename_cp, char* fst_in_str_cp, char* config_cp);
@@ -35,10 +30,12 @@ extern "C" DRAGONFLY_API bool decode_otf_gmm(void* model_vp, float samp_freq, in
 extern "C" DRAGONFLY_API bool get_output_otf_gmm(void* model_vp, char* output, int32_t output_length, double* likelihood_p);
 
 extern "C" DRAGONFLY_API void* init_agf_nnet3(float beam, int32_t max_active, int32_t min_active, float lattice_beam, float acoustic_scale, int32_t frame_subsampling_factor,
-    int32_t nonterm_phones_offset, char* word_syms_filename_cp, char* mfcc_config_filename_cp, char* ie_config_filename_cp,
+    int32_t nonterm_phones_offset, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp,
+    char* mfcc_config_filename_cp, char* ie_config_filename_cp,
     char* model_filename_cp, char* top_fst_filename_cp, char* dictation_fst_filename_cp);
 extern "C" DRAGONFLY_API bool add_grammar_fst_agf_nnet3(void* model_vp, char* grammar_fst_filename_cp);
 extern "C" DRAGONFLY_API bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,
     bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state);
-extern "C" DRAGONFLY_API bool get_output_agf_nnet3(void* model_vp, char* output, int32_t output_length, double* likelihood_p);
+extern "C" DRAGONFLY_API bool get_output_agf_nnet3(void* model_vp, char* output, int32_t output_max_length, double* likelihood_p);
+extern "C" DRAGONFLY_API bool get_word_align_agf_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words);
 extern "C" DRAGONFLY_API void reset_adaptation_state_agf_nnet3(void* model_vp);
