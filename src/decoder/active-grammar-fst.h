@@ -194,16 +194,20 @@ class ActiveGrammarFst {
     }
   }
 
-  // Update activity of ifsts. Return whether any changed.
+  // Update activity of ifsts, with given current activity. Return whether any
+  // changed.
   bool UpdateActivity(const std::vector<bool>& activity) {
     KALDI_ASSERT(ifsts_activity_.size() == activity.size());
     KALDI_ASSERT(ifsts_activity_.size() == ifsts_.size());
+
     if (ifsts_activity_ != activity) {
       // Only clear top_fst_'s expanded_states for nonterms/ifsts whose activity changed
       FstInstance &top_fst_instance = instances_[0];
+
       for (auto iter = top_fst_instance.expanded_states.begin(), end = top_fst_instance.expanded_states.end(); iter != end; ) {
         ExpandedState *expanded_state = iter->second;
         int32 i = expanded_state->dest_ifst_index;
+
         if ((i != -1) && (ifsts_activity_[i] != activity[i])) {
           KALDI_ASSERT(expanded_state->active == ifsts_activity_[i]);
           if (expanded_state->dest_fst_instance == -1) {
@@ -217,6 +221,7 @@ class ActiveGrammarFst {
         }
         ++iter;
       }
+
       ifsts_activity_ = activity;
       return true;
     }
