@@ -33,7 +33,8 @@ extern "C" DRAGONFLY_API void* init_agf_nnet3(float beam, int32_t max_active, in
     int32_t nonterm_phones_offset, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp,
     char* mfcc_config_filename_cp, char* ie_config_filename_cp,
     char* model_filename_cp, char* top_fst_filename_cp, char* dictation_fst_filename_cp);
-extern "C" DRAGONFLY_API bool add_grammar_fst_agf_nnet3(void* model_vp, char* grammar_fst_filename_cp);
+extern "C" DRAGONFLY_API int32_t add_grammar_fst_agf_nnet3(void* model_vp, char* grammar_fst_filename_cp);
+extern "C" DRAGONFLY_API bool reload_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp);
 extern "C" DRAGONFLY_API bool remove_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index);
 extern "C" DRAGONFLY_API bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,
     bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state);

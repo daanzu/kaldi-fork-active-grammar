@@ -49,7 +49,8 @@ namespace dragonfly {
             std::string& model_filename, std::string& top_fst_filename, std::string& dictation_fst_filename);
         ~AgfNNet3OnlineModelWrapper();
 
-        bool add_grammar_fst(std::string& grammar_fst_filename);
+        int32 add_grammar_fst(std::string& grammar_fst_filename);
+        bool reload_grammar_fst(int32 grammar_fst_index, std::string& grammar_fst_filename);
         bool remove_grammar_fst(int32 grammar_fst_index);
         void reset_adaptation_state();
         bool decode(BaseFloat samp_freq, int32 num_frames, BaseFloat* frames, bool finalize, std::vector<bool>& grammars_activity, bool save_adaptation_state = true);
@@ -68,9 +69,10 @@ namespace dragonfly {
         StdConstFst *top_fst;
         StdConstFst *dictation_fst;
         std::vector<StdFst*> grammar_fsts;
-        std::map<StdFst*, std::string> grammar_fsts_name_map;  // maps grammar_fst -> name; for debugging
+        std::map<StdFst*, std::string> grammar_fsts_filename_map;  // maps grammar_fst -> name; for debugging
         std::vector<std::pair<int32, const StdConstFst *> > active_grammar_ifsts;  // pairs (word_sym, grammar_fst)
         std::vector<bool> grammar_fsts_enabled;
+        // same size: grammar_fsts, grammar_fsts_filename_map, active_grammar_ifsts, grammar_fsts_enabled
 
         // Model objects
         OnlineNnet2FeaturePipelineConfig feature_config;
@@ -200,14 +202,32 @@ namespace dragonfly {
         }
     }
 
-    bool AgfNNet3OnlineModelWrapper::add_grammar_fst(std::string& grammar_fst_filename) {
+    int32 AgfNNet3OnlineModelWrapper::add_grammar_fst(std::string& grammar_fst_filename) {
+        auto grammar_fst_index = grammar_fsts.size();
         auto grammar_fst = read_fst_file(grammar_fst_filename);
-        auto i = grammar_fsts.size();
-        KALDI_LOG << "adding FST #" << i << " @ 0x" << grammar_fst << " " << grammar_fst_filename;
+        KALDI_LOG << "adding FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst_filename;
         grammar_fsts.emplace_back(grammar_fst);
         grammar_fsts_enabled.emplace_back(false);
-        grammar_fsts_name_map[grammar_fst] = grammar_fst_filename;
-        active_grammar_ifsts.emplace_back(std::make_pair(rules_phones_offset + active_grammar_ifsts.size(), grammar_fst));
+        grammar_fsts_filename_map[grammar_fst] = grammar_fst_filename;
+        active_grammar_ifsts.emplace_back(std::make_pair(rules_phones_offset + grammar_fst_index, grammar_fst));
+        if (active_grammar_fst) {
+            delete active_grammar_fst;
+            active_grammar_fst = nullptr;
+        }
+        return grammar_fst_index;
+    }
+
+    bool AgfNNet3OnlineModelWrapper::reload_grammar_fst(int32 grammar_fst_index, std::string& grammar_fst_filename) {
+        auto old_grammar_fst = grammar_fsts.at(grammar_fst_index);
+        KALDI_ASSERT(grammar_fst_filename == grammar_fsts_filename_map[old_grammar_fst]);
+        grammar_fsts_filename_map.erase(old_grammar_fst);
+        delete old_grammar_fst;
+
+        auto grammar_fst = read_fst_file(grammar_fst_filename);
+        KALDI_LOG << "reloading FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst_filename;
+        grammar_fsts.at(grammar_fst_index) = grammar_fst;
+        grammar_fsts_filename_map[grammar_fst] = grammar_fst_filename;
+        active_grammar_ifsts[grammar_fst_index] = std::make_pair(rules_phones_offset + grammar_fst_index, grammar_fst);
         if (active_grammar_fst) {
             delete active_grammar_fst;
             active_grammar_fst = nullptr;
@@ -217,10 +237,10 @@ namespace dragonfly {
 
     bool AgfNNet3OnlineModelWrapper::remove_grammar_fst(int32 grammar_fst_index) {
         auto grammar_fst = grammar_fsts.at(grammar_fst_index);
-        KALDI_LOG << "removing FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fsts_name_map.at(grammar_fst);
+        KALDI_LOG << "removing FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fsts_filename_map.at(grammar_fst);
         grammar_fsts.erase(grammar_fsts.begin() + grammar_fst_index);
         grammar_fsts_enabled.erase(grammar_fsts_enabled.begin() + grammar_fst_index);
-        grammar_fsts_name_map.erase(grammar_fst);
+        grammar_fsts_filename_map.erase(grammar_fst);
         active_grammar_ifsts.erase(active_grammar_ifsts.begin() + grammar_fst_index);
         delete grammar_fst;
         if (active_grammar_fst) {
@@ -242,9 +262,10 @@ namespace dragonfly {
         free_decoder();
         if (active_grammar_fst == nullptr) {
             // Timer timer(true);
+            auto ifsts = active_grammar_ifsts;
             if (dictation_fst != nullptr)
-                active_grammar_ifsts.emplace_back(std::make_pair(dictation_phones_offset, dictation_fst));
-            active_grammar_fst = new ActiveGrammarFst(nonterm_phones_offset, *top_fst, active_grammar_ifsts);
+                ifsts.emplace_back(std::make_pair(dictation_phones_offset, dictation_fst));
+            active_grammar_fst = new ActiveGrammarFst(nonterm_phones_offset, *top_fst, ifsts);
             // KALDI_LOG << "built new ActiveGrammarFst" << " in " << (timer.Elapsed() * 1000) << "ms.";
         }
         grammars_activity.emplace_back(dictation_fst != nullptr);  // dictation_fst is only enabled if present
@@ -444,10 +465,17 @@ void* init_agf_nnet3(float beam, int32_t max_active, int32_t min_active, float l
     return model;
 }
 
-bool add_grammar_fst_agf_nnet3(void* model_vp, char* grammar_fst_filename_cp) {
+int32_t add_grammar_fst_agf_nnet3(void* model_vp, char* grammar_fst_filename_cp) {
     AgfNNet3OnlineModelWrapper* model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
     std::string grammar_fst_filename(grammar_fst_filename_cp);
-    bool result = model->add_grammar_fst(grammar_fst_filename);
+    int32_t grammar_fst_index = model->add_grammar_fst(grammar_fst_filename);
+    return grammar_fst_index;
+}
+
+bool reload_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp) {
+    AgfNNet3OnlineModelWrapper* model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
+    std::string grammar_fst_filename(grammar_fst_filename_cp);
+    bool result = model->reload_grammar_fst(grammar_fst_index, grammar_fst_filename);
     return result;
 }
 
