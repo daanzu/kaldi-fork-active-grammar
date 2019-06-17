@@ -18,8 +18,7 @@ extern "C" {
 #include "nnet3/nnet-utils.h"
 #include "decoder/active-grammar-fst.h"
 
-#define VERBOSE 0
-#define SILENT 0
+#define VERBOSITY 1
 
 namespace dragonfly {
     using namespace kaldi;
@@ -46,7 +45,8 @@ namespace dragonfly {
         AgfNNet3OnlineModelWrapper(BaseFloat beam, int32 max_active, int32 min_active, BaseFloat lattice_beam, BaseFloat acoustic_scale, int32 frame_subsampling_factor,
             int32 nonterm_phones_offset, std::string& word_syms_filename, std::string& word_align_lexicon_filename,
             std::string& mfcc_config_filename, std::string& ie_config_filename,
-            std::string& model_filename, std::string& top_fst_filename, std::string& dictation_fst_filename);
+            std::string& model_filename, std::string& top_fst_filename, std::string& dictation_fst_filename,
+            int32 verbosity = VERBOSITY);
         ~AgfNNet3OnlineModelWrapper();
 
         int32 add_grammar_fst(std::string& grammar_fst_filename);
@@ -104,26 +104,27 @@ namespace dragonfly {
         BaseFloat beam, int32 max_active, int32 min_active, BaseFloat lattice_beam, BaseFloat acoustic_scale, int32 frame_subsampling_factor,
         int32 nonterm_phones_offset, std::string& word_syms_filename, std::string& word_align_lexicon_filename,
         std::string& mfcc_config_filename, std::string& ie_config_filename,
-        std::string& model_filename, std::string& top_fst_filename, std::string& dictation_fst_filename) {
-#if VERBOSE
-        KALDI_LOG << "nonterm_phones_offset: " << nonterm_phones_offset;
-        KALDI_LOG << "word_syms_filename: " << word_syms_filename;
-        KALDI_LOG << "word_align_lexicon_filename: " << word_align_lexicon_filename;
-        KALDI_LOG << "mfcc_config_filename: " << mfcc_config_filename;
-        KALDI_LOG << "ie_config_filename: " << ie_config_filename;
-        KALDI_LOG << "model_filename: " << model_filename;
-        KALDI_LOG << "top_fst_filename: " << top_fst_filename;
-        KALDI_LOG << "dictation_fst_filename: " << dictation_fst_filename;
-#elif SILENT
-        // silence kaldi output as well
-        SetLogHandler([](const LogMessageEnvelope& envelope, const char* message) {});
-#else
-        SetLogHandler([](const LogMessageEnvelope& envelope, const char* message) {
-            if (envelope.severity <= LogMessageEnvelope::kWarning) {
-                std::cerr << "[KALDI severity=" << envelope.severity << "] " << message << "\n";
-            }
-        });
-#endif
+        std::string& model_filename, std::string& top_fst_filename, std::string& dictation_fst_filename,
+        int32 verbosity) {
+        if (verbosity >= 2) {
+            KALDI_LOG << "nonterm_phones_offset: " << nonterm_phones_offset;
+            KALDI_LOG << "word_syms_filename: " << word_syms_filename;
+            KALDI_LOG << "word_align_lexicon_filename: " << word_align_lexicon_filename;
+            KALDI_LOG << "mfcc_config_filename: " << mfcc_config_filename;
+            KALDI_LOG << "ie_config_filename: " << ie_config_filename;
+            KALDI_LOG << "model_filename: " << model_filename;
+            KALDI_LOG << "top_fst_filename: " << top_fst_filename;
+            KALDI_LOG << "dictation_fst_filename: " << dictation_fst_filename;
+        } else if (verbosity == 1) {
+            SetLogHandler([](const LogMessageEnvelope& envelope, const char* message) {
+                if (envelope.severity <= LogMessageEnvelope::kWarning) {
+                    std::cerr << "[KALDI severity=" << envelope.severity << "] " << message << "\n";
+                }
+            });
+        } else {
+            // Silence kaldi output as well
+            SetLogHandler([](const LogMessageEnvelope& envelope, const char* message) {});
+        }
 
         ParseOptions po("");
         feature_config.Register(&po);
@@ -450,7 +451,8 @@ using namespace dragonfly;
 void* init_agf_nnet3(float beam, int32_t max_active, int32_t min_active, float lattice_beam, float acoustic_scale, int32_t frame_subsampling_factor,
     int32_t nonterm_phones_offset, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp,
     char* mfcc_config_filename_cp, char* ie_config_filename_cp,
-    char* model_filename_cp, char* top_fst_filename_cp, char* dictation_fst_filename_cp) {
+    char* model_filename_cp, char* top_fst_filename_cp, char* dictation_fst_filename_cp,
+    int32_t verbosity) {
     std::string word_syms_filename(word_syms_filename_cp),
         word_align_lexicon_filename((word_align_lexicon_filename_cp != nullptr) ? word_align_lexicon_filename_cp : ""),
         mfcc_config_filename(mfcc_config_filename_cp),
@@ -461,7 +463,8 @@ void* init_agf_nnet3(float beam, int32_t max_active, int32_t min_active, float l
     AgfNNet3OnlineModelWrapper* model = new AgfNNet3OnlineModelWrapper(beam, max_active, min_active, lattice_beam, acoustic_scale, frame_subsampling_factor,
         nonterm_phones_offset, word_syms_filename, word_align_lexicon_filename,
         mfcc_config_filename, ie_config_filename,
-        model_filename, top_fst_filename, dictation_fst_filename);
+        model_filename, top_fst_filename, dictation_fst_filename,
+        verbosity);
     return model;
 }
 
