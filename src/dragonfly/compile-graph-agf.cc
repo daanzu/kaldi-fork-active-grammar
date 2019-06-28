@@ -26,6 +26,7 @@
 #include "fstext/push-special.h"
 #include "fstext/grammar-context-fst.h"
 #include "decoder/grammar-fst.h"
+#include "fst/script/compile.h"
 
 
 
@@ -65,6 +66,17 @@ int main(int argc, char *argv[]) {
                 "value of symbol #nonterm_bos in phones.txt, if present. "
                 "(Only relevant for grammar decoding).");
 
+    bool compile_grammar = false;
+    std::string grammar_symbols;
+    bool arcsort_grammar = false;
+    std::string grammar_prepend_nonterm;
+    std::string grammar_append_nonterm;
+    po.Register("compile-grammar", &compile_grammar, "");
+    po.Register("grammar-symbols", &grammar_symbols, "");
+    po.Register("arcsort-grammar", &arcsort_grammar, "");
+    po.Register("grammar-prepend-nonterm", &grammar_prepend_nonterm, "");
+    po.Register("grammar-append-nonterm", &grammar_append_nonterm, "");
+
     po.Read(argc, argv);
 
     if (po.NumArgs() != 5) {
@@ -84,8 +96,39 @@ int main(int argc, char *argv[]) {
     TransitionModel trans_model;
     ReadKaldiObject(model_rxfilename, &trans_model);
 
-    VectorFst<StdArc> *lex_fst = fst::ReadFstKaldi(lex_rxfilename),
-        *grammar_fst = fst::ReadFstKaldi(grammar_rxfilename);
+    VectorFst<StdArc> *lex_fst = fst::ReadFstKaldi(lex_rxfilename);
+
+    VectorFst<StdArc> *grammar_fst;
+    // if (compile_grammar) {
+    //   kaldi::Input ki;
+    //   ki.OpenTextMode(grammar_rxfilename);
+    //   std::unique_ptr<const SymbolTable> isyms, osyms, ssyms;
+    //   isyms.reset(SymbolTable::ReadText(grammar_symbols));
+    //   if (!isyms) return 1;
+    //   osyms.reset(SymbolTable::ReadText(grammar_symbols));
+    //   if (!osyms) return 1;
+    //   auto compiled_fst = fst::script::CompileFstInternal(
+    //       ki.Stream(), grammar_rxfilename, "vector", "standard", isyms.get(),
+    //       osyms.get(), ssyms.get(), false, false, false, false, false);
+    //   grammar_fst = fst::CastOrConvertToVectorFst(compiled_fst);
+    //   grammar_fst = fst::CastOrConvertToVectorFst(compiled_fst->GetFst<StdArc>());
+    //   grammar_fst = fst::Convert<StdArc>(compiled_fst->GetFst<StdArc>(), "vector");
+    //   grammar_fst = compiled_fst->GetFst<StdArc>();
+    // }
+    grammar_fst = fst::ReadFstKaldi(grammar_rxfilename);
+
+    if (arcsort_grammar) {
+      fst::ArcSort(grammar_fst, fst::ILabelCompare<StdArc>());
+    }
+
+    if (grammar_prepend_nonterm.size()) {
+      VectorFst<StdArc> *nonterm_fst = fst::ReadFstKaldi(grammar_prepend_nonterm);
+      fst::Concat(*nonterm_fst, grammar_fst);
+    }
+    if (grammar_append_nonterm.size()) {
+      VectorFst<StdArc> *nonterm_fst = fst::ReadFstKaldi(grammar_append_nonterm);
+      fst::Concat(grammar_fst, *nonterm_fst);
+    }
 
     std::vector<int32> disambig_syms;
     if (disambig_rxfilename != "")
