@@ -18,7 +18,7 @@ extern "C" {
 #include "nnet3/nnet-utils.h"
 #include "decoder/active-grammar-fst.h"
 
-#define VERBOSITY 1
+#define DEFAULT_VERBOSITY 1
 
 namespace dragonfly {
     using namespace kaldi;
@@ -42,11 +42,13 @@ namespace dragonfly {
     class AgfNNet3OnlineModelWrapper {
     public:
 
-        AgfNNet3OnlineModelWrapper(BaseFloat beam, int32 max_active, int32 min_active, BaseFloat lattice_beam, BaseFloat acoustic_scale, int32 frame_subsampling_factor,
-            int32 nonterm_phones_offset, std::string& word_syms_filename, std::string& word_align_lexicon_filename,
-            std::string& mfcc_config_filename, std::string& ie_config_filename,
-            std::string& model_filename, std::string& top_fst_filename, std::string& dictation_fst_filename,
-            int32 verbosity = VERBOSITY);
+        AgfNNet3OnlineModelWrapper(
+            BaseFloat beam, int32 max_active, int32 min_active, BaseFloat lattice_beam, BaseFloat acoustic_scale, int32 frame_subsampling_factor,
+            std::string& mfcc_config_filename, std::string& ie_config_filename, std::string& model_filename,
+            int32 nonterm_phones_offset, int32 rules_nonterm_offset, int32 dictation_nonterm_offset,
+            std::string& word_syms_filename, std::string& word_align_lexicon_filename,
+            std::string& top_fst_filename, std::string& dictation_fst_filename,
+            int32 verbosity = DEFAULT_VERBOSITY);
         ~AgfNNet3OnlineModelWrapper();
 
         int32 add_grammar_fst(std::string& grammar_fst_filename);
@@ -102,12 +104,15 @@ namespace dragonfly {
 
     AgfNNet3OnlineModelWrapper::AgfNNet3OnlineModelWrapper(
         BaseFloat beam, int32 max_active, int32 min_active, BaseFloat lattice_beam, BaseFloat acoustic_scale, int32 frame_subsampling_factor,
-        int32 nonterm_phones_offset, std::string& word_syms_filename, std::string& word_align_lexicon_filename,
-        std::string& mfcc_config_filename, std::string& ie_config_filename,
-        std::string& model_filename, std::string& top_fst_filename, std::string& dictation_fst_filename,
+        std::string& mfcc_config_filename, std::string& ie_config_filename, std::string& model_filename,
+        int32 nonterm_phones_offset, int32 rules_nonterm_offset, int32 dictation_nonterm_offset,
+        std::string& word_syms_filename, std::string& word_align_lexicon_filename,
+        std::string& top_fst_filename, std::string& dictation_fst_filename,
         int32 verbosity) {
         if (verbosity >= 2) {
             KALDI_LOG << "nonterm_phones_offset: " << nonterm_phones_offset;
+            KALDI_LOG << "rules_nonterm_offset: " << rules_nonterm_offset;
+            KALDI_LOG << "dictation_nonterm_offset: " << dictation_nonterm_offset;
             KALDI_LOG << "word_syms_filename: " << word_syms_filename;
             KALDI_LOG << "word_align_lexicon_filename: " << word_align_lexicon_filename;
             KALDI_LOG << "mfcc_config_filename: " << mfcc_config_filename;
@@ -115,6 +120,7 @@ namespace dragonfly {
             KALDI_LOG << "model_filename: " << model_filename;
             KALDI_LOG << "top_fst_filename: " << top_fst_filename;
             KALDI_LOG << "dictation_fst_filename: " << dictation_fst_filename;
+            KALDI_LOG << "kNontermBigNumber, GetEncodingMultiple: " << kNontermBigNumber << ", " << GetEncodingMultiple(nonterm_phones_offset);
         } else if (verbosity == 1) {
             SetLogHandler([](const LogMessageEnvelope& envelope, const char* message) {
                 if (envelope.severity <= LogMessageEnvelope::kWarning) {
@@ -157,9 +163,9 @@ namespace dragonfly {
         top_fst = dynamic_cast<StdConstFst*>(ReadFstKaldiGeneric(top_fst_filename));
 
         this->nonterm_phones_offset = nonterm_phones_offset;
-        rules_phones_offset = nonterm_phones_offset + 5;
+        rules_phones_offset = nonterm_phones_offset + rules_nonterm_offset;
         if (!dictation_fst_filename.empty()) {
-            dictation_phones_offset = nonterm_phones_offset + 4;
+            dictation_phones_offset = nonterm_phones_offset + dictation_nonterm_offset;
             dictation_fst = read_fst_file(dictation_fst_filename);
         } else {
             dictation_phones_offset = 0;
@@ -449,9 +455,10 @@ namespace dragonfly {
 using namespace dragonfly;
 
 void* init_agf_nnet3(float beam, int32_t max_active, int32_t min_active, float lattice_beam, float acoustic_scale, int32_t frame_subsampling_factor,
-    int32_t nonterm_phones_offset, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp,
-    char* mfcc_config_filename_cp, char* ie_config_filename_cp,
-    char* model_filename_cp, char* top_fst_filename_cp, char* dictation_fst_filename_cp,
+    char* mfcc_config_filename_cp, char* ie_config_filename_cp, char* model_filename_cp,
+    int32_t nonterm_phones_offset, int32_t rules_nonterm_offset, int32_t dictation_nonterm_offset,
+    char* word_syms_filename_cp, char* word_align_lexicon_filename_cp,
+    char* top_fst_filename_cp, char* dictation_fst_filename_cp,
     int32_t verbosity) {
     std::string word_syms_filename(word_syms_filename_cp),
         word_align_lexicon_filename((word_align_lexicon_filename_cp != nullptr) ? word_align_lexicon_filename_cp : ""),
@@ -461,9 +468,10 @@ void* init_agf_nnet3(float beam, int32_t max_active, int32_t min_active, float l
         top_fst_filename(top_fst_filename_cp),
         dictation_fst_filename((dictation_fst_filename_cp != nullptr) ? dictation_fst_filename_cp : "");
     AgfNNet3OnlineModelWrapper* model = new AgfNNet3OnlineModelWrapper(beam, max_active, min_active, lattice_beam, acoustic_scale, frame_subsampling_factor,
-        nonterm_phones_offset, word_syms_filename, word_align_lexicon_filename,
-        mfcc_config_filename, ie_config_filename,
-        model_filename, top_fst_filename, dictation_fst_filename,
+        mfcc_config_filename, ie_config_filename, model_filename,
+        nonterm_phones_offset, rules_nonterm_offset, dictation_nonterm_offset,
+        word_syms_filename, word_align_lexicon_filename,
+        top_fst_filename, dictation_fst_filename,
         verbosity);
     return model;
 }
