@@ -99,23 +99,29 @@ int main(int argc, char *argv[]) {
     VectorFst<StdArc> *lex_fst = fst::ReadFstKaldi(lex_rxfilename);
 
     VectorFst<StdArc> *grammar_fst;
-    // if (compile_grammar) {
-    //   kaldi::Input ki;
-    //   ki.OpenTextMode(grammar_rxfilename);
-    //   std::unique_ptr<const SymbolTable> isyms, osyms, ssyms;
-    //   isyms.reset(SymbolTable::ReadText(grammar_symbols));
-    //   if (!isyms) return 1;
-    //   osyms.reset(SymbolTable::ReadText(grammar_symbols));
-    //   if (!osyms) return 1;
-    //   auto compiled_fst = fst::script::CompileFstInternal(
-    //       ki.Stream(), grammar_rxfilename, "vector", "standard", isyms.get(),
-    //       osyms.get(), ssyms.get(), false, false, false, false, false);
-    //   grammar_fst = fst::CastOrConvertToVectorFst(compiled_fst);
-    //   grammar_fst = fst::CastOrConvertToVectorFst(compiled_fst->GetFst<StdArc>());
-    //   grammar_fst = fst::Convert<StdArc>(compiled_fst->GetFst<StdArc>(), "vector");
-    //   grammar_fst = compiled_fst->GetFst<StdArc>();
-    // }
-    grammar_fst = fst::ReadFstKaldi(grammar_rxfilename);
+    if (compile_grammar) {
+      KALDI_ERR << "compile-grammar not supported";
+      // kaldi::Input ki;
+      // ki.OpenTextMode(grammar_rxfilename);
+      // std::unique_ptr<const SymbolTable> isyms, osyms, ssyms;
+      // isyms.reset(SymbolTable::ReadText(grammar_symbols));
+      // if (!isyms) return 1;
+      // osyms.reset(SymbolTable::ReadText(grammar_symbols));
+      // if (!osyms) return 1;
+      // auto compiled_fst = fst::script::CompileFstInternal(
+      //     ki.Stream(), grammar_rxfilename, "vector", "standard", isyms.get(),
+      //     osyms.get(), ssyms.get(), false, false, false, false, false);
+      // // grammar_fst = fst::CastOrConvertToVectorFst(compiled_fst);
+      // // grammar_fst = fst::CastOrConvertToVectorFst(compiled_fst->GetFst<StdArc>());
+      // // auto f = VectorFst<StdArc>(*compiled_fst->GetFst<StdArc>());
+      // grammar_fst = new VectorFst<StdArc>(*compiled_fst->GetFst<StdArc>());
+      // // grammar_fst = fst::Convert<StdArc>(compiled_fst->GetFst<StdArc>(), "vector");
+      // // grammar_fst = compiled_fst->GetFst<StdArc>();
+      // // auto compiled_vectorfst = fst::script::VectorFstClass(*compiled_fst);
+      // // grammar_fst = compiled_vectorfst.;
+    } else {
+      grammar_fst = fst::ReadFstKaldi(grammar_rxfilename);
+    }
 
     if (arcsort_grammar) {
       fst::ArcSort(grammar_fst, fst::ILabelCompare<StdArc>());
