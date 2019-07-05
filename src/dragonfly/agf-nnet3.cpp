@@ -95,6 +95,9 @@ namespace dragonfly {
         std::vector<std::pair<int32, BaseFloat> > delta_weights;
         int32 tot_frames, tot_frames_decoded;
         CompactLattice best_path_clat;
+        WordAlignLatticeLexiconInfo* word_align_lexicon_info = nullptr;
+        std::set<int32> word_align_lexicon_words;
+        bool best_path_has_valid_word_align;
 
         StdConstFst* read_fst_file(std::string filename);
 
@@ -185,6 +188,9 @@ namespace dragonfly {
         	if (!ReadLexiconForWordAlign(ki.Stream(), &word_align_lexicon)) {
         		KALDI_ERR << "Error reading word alignment lexicon from " << word_align_lexicon_filename;
         	}
+            word_align_lexicon_info = new WordAlignLatticeLexiconInfo(word_align_lexicon);
+            for (auto entry : word_align_lexicon)
+                word_align_lexicon_words.insert(entry.at(0));
         }
 
         active_grammar_fst = nullptr;
@@ -195,8 +201,10 @@ namespace dragonfly {
 
     AgfNNet3OnlineModelWrapper::~AgfNNet3OnlineModelWrapper() {
         free_decoder();
-        // delete ...;
-        // FIXME
+        delete feature_info;
+        delete decodable_info;
+        if (word_align_lexicon_info)
+            delete word_align_lexicon_info;
     }
 
     StdConstFst* AgfNNet3OnlineModelWrapper::read_fst_file(std::string filename) {
@@ -285,6 +293,7 @@ namespace dragonfly {
             decodable_config.frame_subsampling_factor);
         decoder = new SingleUtteranceNnet3DecoderTpl<fst::ActiveGrammarFst>(
             decoder_config, trans_model, *decodable_info, *active_grammar_fst, feature_pipeline);
+        best_path_has_valid_word_align = false;
     }
 
     void AgfNNet3OnlineModelWrapper::free_decoder(void) {
@@ -350,7 +359,7 @@ namespace dragonfly {
             // BaseFloat inv_acoustic_scale = 1.0 / decodable_config.acoustic_scale;
             // ScaleLattice(AcousticLatticeScale(inv_acoustic_scale), &clat);
 
-            // TODO: decide whether to save adaptation?
+            // FIXME: decide whether to save adaptation?
             if (save_adaptation_state) {
                 feature_pipeline->GetAdaptationState(adaptation_state);
                 KALDI_LOG << "Saved adaptation state.";
@@ -390,6 +399,7 @@ namespace dragonfly {
         likelihood = -(weight.Value1() + weight.Value2()) / num_frames;
 
         decoded_string = "";
+        best_path_has_valid_word_align = true;
         for (size_t i = 0; i < words.size(); i++) {
             std::string s = word_syms->Find(words[i]);
             if (s == "")
@@ -397,20 +407,25 @@ namespace dragonfly {
             if (i != 0)
                 decoded_string += ' ';
             decoded_string += s;
+            if (!word_align_lexicon_words.count(words[i]))
+                best_path_has_valid_word_align = false;
         }
     }
 
     bool AgfNNet3OnlineModelWrapper::get_word_alignment(std::vector<string>& words, std::vector<int32>& times, std::vector<int32>& lengths, bool include_eps) {
-        if (!word_align_lexicon.size()) {
-            KALDI_ERR << "No word alignment lexicon loaded";
+        if (!word_align_lexicon.size() || !word_align_lexicon_info) {
+            KALDI_WARN << "No word alignment lexicon loaded";
             return false;
         }
-        
-        WordAlignLatticeLexiconInfo lexicon_info(word_align_lexicon);
+
+        if (!best_path_has_valid_word_align) {
+            KALDI_WARN << "Word not in word alignment lexicon";
+            return false;
+        }
+
         CompactLattice aligned_clat;
         WordAlignLatticeLexiconOpts opts;
-
-        bool ok = WordAlignLatticeLexicon(best_path_clat, trans_model, lexicon_info, opts, &aligned_clat);
+        bool ok = WordAlignLatticeLexicon(best_path_clat, trans_model, *word_align_lexicon_info, opts, &aligned_clat);
 
         if (!ok) {
             KALDI_WARN << "Lattice did not align correctly";
