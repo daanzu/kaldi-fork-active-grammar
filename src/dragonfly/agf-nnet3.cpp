@@ -51,6 +51,7 @@ namespace dragonfly {
             int32 verbosity = DEFAULT_VERBOSITY);
         ~AgfNNet3OnlineModelWrapper();
 
+        bool load_lexicon(std::string& word_syms_filename, std::string& word_align_lexicon_filename);
         int32 add_grammar_fst(std::string& grammar_fst_filename);
         bool reload_grammar_fst(int32 grammar_fst_index, std::string& grammar_fst_filename);
         bool remove_grammar_fst(int32 grammar_fst_index);
@@ -66,10 +67,10 @@ namespace dragonfly {
         int32 nonterm_phones_offset;
         int32 dictation_phones_offset;
         int32 rules_phones_offset;
-        fst::SymbolTable *word_syms;
+        fst::SymbolTable *word_syms = nullptr;
         std::vector<std::vector<int32> > word_align_lexicon;
-        StdConstFst *top_fst;
-        StdConstFst *dictation_fst;
+        StdConstFst *top_fst = nullptr;
+        StdConstFst *dictation_fst = nullptr;
         std::vector<StdFst*> grammar_fsts;
         std::map<StdFst*, std::string> grammar_fsts_filename_map;  // maps grammar_fst -> name; for debugging
         std::vector<std::pair<int32, const StdConstFst *> > active_grammar_ifsts;  // pairs (word_sym, grammar_fst)
@@ -81,10 +82,10 @@ namespace dragonfly {
         nnet3::NnetSimpleLoopedComputationOptions decodable_config;
         LatticeFasterDecoderConfig decoder_config;
         OnlineEndpointConfig endpoint_config;
-        OnlineNnet2FeaturePipelineInfo *feature_info;
+        OnlineNnet2FeaturePipelineInfo* feature_info = nullptr;
         TransitionModel trans_model;
         nnet3::AmNnetSimple am_nnet;
-        ActiveGrammarFst* active_grammar_fst;
+        ActiveGrammarFst* active_grammar_fst = nullptr;
 
         // Decoder objects
         OnlineIvectorExtractorAdaptationState* adaptation_state = nullptr;
@@ -100,7 +101,6 @@ namespace dragonfly {
         bool best_path_has_valid_word_align;
 
         StdConstFst* read_fst_file(std::string filename);
-
         void start_decoding(std::vector<bool> grammars_activity);
         void free_decoder(void);
     };
@@ -175,29 +175,13 @@ namespace dragonfly {
             dictation_fst = nullptr;
         }
 
-        word_syms = nullptr;
-        if (word_syms_filename != "")
-            if (!(word_syms = fst::SymbolTable::ReadText(word_syms_filename)))
-                KALDI_ERR << "Could not read symbol table from file "
-                << word_syms_filename;
-
-        if (word_align_lexicon_filename.length()) {
-        	bool binary_in;
-        	Input ki(word_align_lexicon_filename, &binary_in);
-        	KALDI_ASSERT(!binary_in && "Not expecting binary file for lexicon");
-        	if (!ReadLexiconForWordAlign(ki.Stream(), &word_align_lexicon)) {
-        		KALDI_ERR << "Error reading word alignment lexicon from " << word_align_lexicon_filename;
-        	}
-            word_align_lexicon_info = new WordAlignLatticeLexiconInfo(word_align_lexicon);
-            for (auto entry : word_align_lexicon)
-                word_align_lexicon_words.insert(entry.at(0));
-        }
+        load_lexicon(word_syms_filename, word_align_lexicon_filename);
 
         active_grammar_fst = nullptr;
         decoder = nullptr;
         tot_frames = 0;
         tot_frames_decoded = 0;
-        }
+    }
 
     AgfNNet3OnlineModelWrapper::~AgfNNet3OnlineModelWrapper() {
         free_decoder();
@@ -207,10 +191,39 @@ namespace dragonfly {
             delete word_align_lexicon_info;
     }
 
+    bool AgfNNet3OnlineModelWrapper::load_lexicon(std::string& word_syms_filename, std::string& word_align_lexicon_filename) {
+        // FIXME: make more robust to errors
+        
+        if (word_syms_filename != "") {
+            if (!(word_syms = fst::SymbolTable::ReadText(word_syms_filename))) {
+                KALDI_ERR << "Could not read symbol table from file " << word_syms_filename;
+                return false;
+            }
+        }
+
+        if (word_align_lexicon_filename != "") {
+        	bool binary_in;
+        	Input ki(word_align_lexicon_filename, &binary_in);
+        	KALDI_ASSERT(!binary_in && "Not expecting binary file for lexicon");
+        	if (!ReadLexiconForWordAlign(ki.Stream(), &word_align_lexicon)) {
+        		KALDI_ERR << "Error reading word alignment lexicon from file " << word_align_lexicon_filename;
+                return false;
+        	}
+            if (word_align_lexicon_info)
+                delete word_align_lexicon_info;
+            word_align_lexicon_info = new WordAlignLatticeLexiconInfo(word_align_lexicon);
+            word_align_lexicon_words.clear();
+            for (auto entry : word_align_lexicon)
+                word_align_lexicon_words.insert(entry.at(0));
+        }
+
+        return true;
+    }
+
     StdConstFst* AgfNNet3OnlineModelWrapper::read_fst_file(std::string filename) {
         if (filename.compare(filename.length() - 4, 4, ".txt") == 0) {
             // FIXME: fstdeterminize | fstminimize | fstrmepsilon | fstarcsort --sort_type=ilabel
-            KALDI_ERR << "cannot read text fst file!";
+            KALDI_WARN << "cannot read text fst file " << filename;
             return nullptr;
         } else {
             return dynamic_cast<StdConstFst*>(ReadFstKaldiGeneric(filename));
@@ -402,10 +415,12 @@ namespace dragonfly {
         best_path_has_valid_word_align = true;
         for (size_t i = 0; i < words.size(); i++) {
             std::string s = word_syms->Find(words[i]);
-            if (s == "")
-                KALDI_ERR << "Word-id " << words[i] << " not in symbol table.";
             if (i != 0)
                 decoded_string += ' ';
+            if (s == "") {
+                KALDI_WARN << "Word-id " << words[i] << " not in symbol table";
+                s = "MISSING_WORD";
+            }
             decoded_string += s;
             if (!word_align_lexicon_words.count(words[i]))
                 best_path_has_valid_word_align = false;
@@ -489,6 +504,13 @@ void* init_agf_nnet3(float beam, int32_t max_active, int32_t min_active, float l
         top_fst_filename, dictation_fst_filename,
         verbosity);
     return model;
+}
+
+bool load_lexicon_fst_agf_nnet3(void* model_vp, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp) {
+    AgfNNet3OnlineModelWrapper* model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
+    std::string word_syms_filename(word_syms_filename_cp), word_align_lexicon_filename(word_align_lexicon_filename_cp);
+    bool result = model->load_lexicon(word_syms_filename, word_align_lexicon_filename);
+    return result;
 }
 
 int32_t add_grammar_fst_agf_nnet3(void* model_vp, char* grammar_fst_filename_cp) {
