@@ -5,6 +5,8 @@ all:
 EXTRA_CXXFLAGS = -Wno-sign-compare
 include ../kaldi.mk
 
+BINFILES = compile-graph-agf
+
 TESTFILES =
 
 OBJFILES = agf-nnet3.o

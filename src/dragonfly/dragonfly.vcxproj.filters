@@ -24,9 +24,6 @@
     <!-- <ClInclude Include="..\..\..\src\dragonfly\active-union-fst.h">
       <Filter>Header Files</Filter>
     </ClInclude> -->
-    <ClInclude Include="..\..\..\src\dragonfly\active-grammar-fst.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\src\dragonfly\dllmain.cpp">
@@ -47,8 +44,5 @@
     <!-- <ClCompile Include="..\..\..\src\dragonfly\active-union-fst.cc">
       <Filter>Source Files</Filter>
     </ClCompile> -->
-    <ClCompile Include="..\..\..\src\dragonfly\active-grammar-fst.cc">
-      <Filter>Source Files</Filter>
-    </ClCompile>
   </ItemGroup>
 </Project>
