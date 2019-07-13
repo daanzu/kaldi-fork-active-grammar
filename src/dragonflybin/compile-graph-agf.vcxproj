@@ -151,7 +151,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\..\src\dragonfly\compile-graph-agf.cc" />
+    <ClCompile Include="..\..\..\src\dragonflybin\compile-graph-agf.cc" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\kaldi-base\kaldi-base.vcxproj">
