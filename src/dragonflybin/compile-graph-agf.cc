@@ -68,11 +68,13 @@ int main(int argc, char *argv[]) {
 
     bool compile_grammar = false;
     std::string grammar_symbols;
+    bool topsort_grammar = false;
     bool arcsort_grammar = false;
     std::string grammar_prepend_nonterm;
     std::string grammar_append_nonterm;
     po.Register("compile-grammar", &compile_grammar, "");
     po.Register("grammar-symbols", &grammar_symbols, "");
+    po.Register("topsort-grammar", &topsort_grammar, "");
     po.Register("arcsort-grammar", &arcsort_grammar, "");
     po.Register("grammar-prepend-nonterm", &grammar_prepend_nonterm, "");
     po.Register("grammar-append-nonterm", &grammar_append_nonterm, "");
@@ -157,6 +159,16 @@ int main(int argc, char *argv[]) {
 
     VectorFst<StdArc> lg_fst;
     TableCompose(*lex_fst, *grammar_fst, &lg_fst);
+
+    if (topsort_grammar) {
+      bool acyclic = fst::TopSort(&lg_fst);
+      if (!acyclic) {
+        KALDI_ERR
+            << "Topological sorting of state-level lattice failed (probably"
+            << " your lexicon has empty words or your LM has epsilon cycles"
+            << ").";
+      }
+    }
 
     DeterminizeStarInLog(&lg_fst, fst::kDelta);
 
