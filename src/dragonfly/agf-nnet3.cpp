@@ -71,11 +71,10 @@ namespace dragonfly {
         std::vector<std::vector<int32> > word_align_lexicon;
         StdConstFst *top_fst = nullptr;
         StdConstFst *dictation_fst = nullptr;
-        std::vector<StdFst*> grammar_fsts;
-        std::map<StdFst*, std::string> grammar_fsts_filename_map;  // maps grammar_fst -> name; for debugging
-        std::vector<std::pair<int32, const StdConstFst *> > active_grammar_ifsts;  // pairs (word_sym, grammar_fst)
+        std::vector<StdConstFst*> grammar_fsts;
+        std::map<StdConstFst*, std::string> grammar_fsts_filename_map;  // maps grammar_fst -> name; for debugging
         std::vector<bool> grammar_fsts_enabled;
-        // same size: grammar_fsts, grammar_fsts_filename_map, active_grammar_ifsts, grammar_fsts_enabled
+        // INVARIANT: same size: grammar_fsts, grammar_fsts_filename_map, grammar_fsts_enabled
 
         // Model objects
         OnlineNnet2FeaturePipelineConfig feature_config;
@@ -237,7 +236,6 @@ namespace dragonfly {
         grammar_fsts.emplace_back(grammar_fst);
         grammar_fsts_enabled.emplace_back(false);
         grammar_fsts_filename_map[grammar_fst] = grammar_fst_filename;
-        active_grammar_ifsts.emplace_back(std::make_pair(rules_phones_offset + grammar_fst_index, grammar_fst));
         if (active_grammar_fst) {
             delete active_grammar_fst;
             active_grammar_fst = nullptr;
@@ -255,7 +253,6 @@ namespace dragonfly {
         KALDI_LOG << "reloading FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst_filename;
         grammar_fsts.at(grammar_fst_index) = grammar_fst;
         grammar_fsts_filename_map[grammar_fst] = grammar_fst_filename;
-        active_grammar_ifsts[grammar_fst_index] = std::make_pair(rules_phones_offset + grammar_fst_index, grammar_fst);
         if (active_grammar_fst) {
             delete active_grammar_fst;
             active_grammar_fst = nullptr;
@@ -269,7 +266,6 @@ namespace dragonfly {
         grammar_fsts.erase(grammar_fsts.begin() + grammar_fst_index);
         grammar_fsts_enabled.erase(grammar_fsts_enabled.begin() + grammar_fst_index);
         grammar_fsts_filename_map.erase(grammar_fst);
-        active_grammar_ifsts.erase(active_grammar_ifsts.begin() + grammar_fst_index);
         delete grammar_fst;
         if (active_grammar_fst) {
             delete active_grammar_fst;
@@ -290,9 +286,14 @@ namespace dragonfly {
         free_decoder();
         if (active_grammar_fst == nullptr) {
             // Timer timer(true);
-            auto ifsts = active_grammar_ifsts;
-            if (dictation_fst != nullptr)
+            std::vector<std::pair<int32, const StdConstFst *> > ifsts;
+            for (auto grammar_fst : grammar_fsts) {
+                int32 nonterm_phone = rules_phones_offset + ifsts.size();
+                ifsts.emplace_back(std::make_pair(nonterm_phone, grammar_fst));
+            }
+            if (dictation_fst != nullptr) {
                 ifsts.emplace_back(std::make_pair(dictation_phones_offset, dictation_fst));
+            }
             active_grammar_fst = new ActiveGrammarFst(nonterm_phones_offset, *top_fst, ifsts);
             // KALDI_LOG << "built new ActiveGrammarFst" << " in " << (timer.Elapsed() * 1000) << "ms.";
         }
