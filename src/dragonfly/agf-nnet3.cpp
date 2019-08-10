@@ -394,10 +394,10 @@ namespace dragonfly {
         if (decoder) {
             // Decoding is not finished yet, so we will look up the best partial result so far
 
-            // if (decoder->NumFramesDecoded() == 0) {
-            //     likelihood = 0.0;
-            //     return;
-            // }
+            if (decoder->NumFramesDecoded() == 0) {
+                likelihood = 0.0;
+                return;
+            }
 
             decoder->GetBestPath(false, &best_path_lat);
         } else {
