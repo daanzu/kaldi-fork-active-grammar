@@ -70,12 +70,16 @@ int main(int argc, char *argv[]) {
     std::string grammar_symbols;
     bool topsort_grammar = false;
     bool arcsort_grammar = false;
-    std::string grammar_prepend_nonterm;
-    std::string grammar_append_nonterm;
+    std::string grammar_prepend_nonterm_fst;
+    std::string grammar_append_nonterm_fst;
+    int32 grammar_prepend_nonterm = -1;
+    int32 grammar_append_nonterm = -1;
     po.Register("compile-grammar", &compile_grammar, "");
     po.Register("grammar-symbols", &grammar_symbols, "");
     po.Register("topsort-grammar", &topsort_grammar, "");
     po.Register("arcsort-grammar", &arcsort_grammar, "");
+    po.Register("grammar-prepend-nonterm-fst", &grammar_prepend_nonterm_fst, "");
+    po.Register("grammar-append-nonterm-fst", &grammar_append_nonterm_fst, "");
     po.Register("grammar-prepend-nonterm", &grammar_prepend_nonterm, "");
     po.Register("grammar-append-nonterm", &grammar_append_nonterm, "");
 
@@ -129,13 +133,31 @@ int main(int argc, char *argv[]) {
       fst::ArcSort(grammar_fst, fst::ILabelCompare<StdArc>());
     }
 
-    if (grammar_prepend_nonterm.size()) {
-      VectorFst<StdArc> *nonterm_fst = fst::ReadFstKaldi(grammar_prepend_nonterm);
+    if (grammar_prepend_nonterm_fst.size()) {
+      VectorFst<StdArc> *nonterm_fst = fst::ReadFstKaldi(grammar_prepend_nonterm_fst);
       fst::Concat(*nonterm_fst, grammar_fst);
     }
-    if (grammar_append_nonterm.size()) {
-      VectorFst<StdArc> *nonterm_fst = fst::ReadFstKaldi(grammar_append_nonterm);
+    if (grammar_append_nonterm_fst.size()) {
+      VectorFst<StdArc> *nonterm_fst = fst::ReadFstKaldi(grammar_append_nonterm_fst);
       fst::Concat(grammar_fst, *nonterm_fst);
+    }
+    if (grammar_prepend_nonterm > 0) {
+      VectorFst<StdArc> nonterm_fst;
+      nonterm_fst.AddState();
+      nonterm_fst.SetStart(0);
+      nonterm_fst.AddState();
+      nonterm_fst.SetFinal(1, 0.0);
+      nonterm_fst.AddArc(0, StdArc(grammar_prepend_nonterm, 0, 0.0, 1));
+      fst::Concat(nonterm_fst, grammar_fst);
+    }
+    if (grammar_append_nonterm > 0) {
+      VectorFst<StdArc> nonterm_fst;
+      nonterm_fst.AddState();
+      nonterm_fst.SetStart(0);
+      nonterm_fst.AddState();
+      nonterm_fst.SetFinal(1, 0.0);
+      nonterm_fst.AddArc(0, StdArc(grammar_append_nonterm, 0, 0.0, 1));
+      fst::Concat(grammar_fst, nonterm_fst);
     }
 
     std::vector<int32> disambig_syms;
