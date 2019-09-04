@@ -65,15 +65,14 @@ namespace dragonfly {
 
         // Model
         int32 nonterm_phones_offset;
-        int32 dictation_phones_offset;
-        int32 rules_phones_offset;
+        int32 dictation_phones_offset;  // offset from nonterm_phones_offset that the dictation nonterms are
+        int32 rules_phones_offset;  // offset from nonterm_phones_offset that the kaldi_rules nonterms are
         fst::SymbolTable *word_syms = nullptr;
-        std::vector<std::vector<int32> > word_align_lexicon;
+        std::vector<std::vector<int32> > word_align_lexicon;  // for each word, its word-id + word-id + a list of its phones
         StdConstFst *top_fst = nullptr;
         StdConstFst *dictation_fst = nullptr;
         std::vector<StdConstFst*> grammar_fsts;
         std::map<StdConstFst*, std::string> grammar_fsts_filename_map;  // maps grammar_fst -> name; for debugging
-        std::vector<bool> grammar_fsts_enabled;
         // INVARIANT: same size: grammar_fsts, grammar_fsts_filename_map, grammar_fsts_enabled
 
         // Model objects
@@ -96,7 +95,7 @@ namespace dragonfly {
         int32 tot_frames, tot_frames_decoded;
         CompactLattice best_path_clat;
         WordAlignLatticeLexiconInfo* word_align_lexicon_info = nullptr;
-        std::set<int32> word_align_lexicon_words;
+        std::set<int32> word_align_lexicon_words;  // contains word-ids that are in word_align_lexicon_info
         bool best_path_has_valid_word_align;
 
         StdConstFst* read_fst_file(std::string filename);
@@ -211,6 +210,7 @@ namespace dragonfly {
             if (word_align_lexicon_info)
                 delete word_align_lexicon_info;
             word_align_lexicon_info = new WordAlignLatticeLexiconInfo(word_align_lexicon);
+
             word_align_lexicon_words.clear();
             for (auto entry : word_align_lexicon)
                 word_align_lexicon_words.insert(entry.at(0));
@@ -234,7 +234,6 @@ namespace dragonfly {
         auto grammar_fst = read_fst_file(grammar_fst_filename);
         KALDI_LOG << "adding FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst_filename;
         grammar_fsts.emplace_back(grammar_fst);
-        grammar_fsts_enabled.emplace_back(false);
         grammar_fsts_filename_map[grammar_fst] = grammar_fst_filename;
         if (active_grammar_fst) {
             delete active_grammar_fst;
@@ -264,7 +263,6 @@ namespace dragonfly {
         auto grammar_fst = grammar_fsts.at(grammar_fst_index);
         KALDI_LOG << "removing FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fsts_filename_map.at(grammar_fst);
         grammar_fsts.erase(grammar_fsts.begin() + grammar_fst_index);
-        grammar_fsts_enabled.erase(grammar_fsts_enabled.begin() + grammar_fst_index);
         grammar_fsts_filename_map.erase(grammar_fst);
         delete grammar_fst;
         if (active_grammar_fst) {
@@ -537,7 +535,7 @@ bool remove_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index) {
 bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,
     bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state) {
     AgfNNet3OnlineModelWrapper* model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
-    std::vector<bool> grammars_activity(grammars_activity_cp_size);
+    std::vector<bool> grammars_activity(grammars_activity_cp_size, false);
     for (size_t i = 0; i < grammars_activity_cp_size; i++) {
         grammars_activity[i] = grammars_activity_cp[i];
     }
