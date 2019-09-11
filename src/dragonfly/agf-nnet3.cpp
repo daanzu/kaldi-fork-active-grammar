@@ -24,20 +24,20 @@ namespace dragonfly {
     using namespace kaldi;
     using namespace fst;
 
-    ConstFst<StdArc>* CastOrConvertToConstFst(Fst<StdArc>* fst) {
-        // This version currently supports ConstFst<StdArc> or VectorFst<StdArc>
-        std::string real_type = fst->Type();
-        KALDI_ASSERT(real_type == "vector" || real_type == "const");
-        if (real_type == "const") {
-            return dynamic_cast<ConstFst<StdArc>*>(fst);
-        } else {
-            // As the 'fst' can't cast to ConstFst, we carete a new
-            // ConstFst<StdArc> initialized by 'fst', and delete 'fst'.
-            ConstFst<StdArc>* new_fst = new ConstFst<StdArc>(*fst);
-            delete fst;
-            return new_fst;
-        }
-    }
+    // ConstFst<StdArc>* CastOrConvertToConstFst(Fst<StdArc>* fst) {
+    //     // This version currently supports ConstFst<StdArc> or VectorFst<StdArc>
+    //     std::string real_type = fst->Type();
+    //     KALDI_ASSERT(real_type == "vector" || real_type == "const");
+    //     if (real_type == "const") {
+    //         return dynamic_cast<ConstFst<StdArc>*>(fst);
+    //     } else {
+    //         // As the 'fst' can't cast to ConstFst, we carete a new
+    //         // ConstFst<StdArc> initialized by 'fst', and delete 'fst'.
+    //         ConstFst<StdArc>* new_fst = new ConstFst<StdArc>(*fst);
+    //         delete fst;
+    //         return new_fst;
+    //     }
+    // }
 
     class AgfNNet3OnlineModelWrapper {
     public:
@@ -80,18 +80,17 @@ namespace dragonfly {
         nnet3::NnetSimpleLoopedComputationOptions decodable_config;
         LatticeFasterDecoderConfig decoder_config;
         OnlineEndpointConfig endpoint_config;
-        OnlineNnet2FeaturePipelineInfo* feature_info = nullptr;
         TransitionModel trans_model;
         nnet3::AmNnetSimple am_nnet;
+        OnlineNnet2FeaturePipelineInfo* feature_info = nullptr;
+        nnet3::DecodableNnetSimpleLoopedInfo* decodable_info = nullptr;
         ActiveGrammarFst* active_grammar_fst = nullptr;
 
         // Decoder objects
-        OnlineIvectorExtractorAdaptationState* adaptation_state = nullptr;
         OnlineNnet2FeaturePipeline* feature_pipeline = nullptr;
-        OnlineSilenceWeighting* silence_weighting = nullptr;
-        nnet3::DecodableNnetSimpleLoopedInfo* decodable_info = nullptr;
+        OnlineSilenceWeighting* silence_weighting = nullptr;  // reset per utterance
+        OnlineIvectorExtractorAdaptationState* adaptation_state = nullptr;
         SingleUtteranceNnet3DecoderTpl<fst::ActiveGrammarFst>* decoder = nullptr;
-        std::vector<std::pair<int32, BaseFloat> > delta_weights;
         int32 tot_frames, tot_frames_decoded;
         CompactLattice best_path_clat;
         WordAlignLatticeLexiconInfo* word_align_lexicon_info = nullptr;
@@ -151,11 +150,11 @@ namespace dragonfly {
         {
             bool binary;
             Input ki(model_filename, &binary);
-            this->trans_model.Read(ki.Stream(), binary);
-            this->am_nnet.Read(ki.Stream(), binary);
-            SetBatchnormTestMode(true, &(this->am_nnet.GetNnet()));
-            SetDropoutTestMode(true, &(this->am_nnet.GetNnet()));
-            nnet3::CollapseModel(nnet3::CollapseModelConfig(), &(this->am_nnet.GetNnet()));
+            trans_model.Read(ki.Stream(), binary);
+            am_nnet.Read(ki.Stream(), binary);
+            SetBatchnormTestMode(true, &(am_nnet.GetNnet()));
+            SetDropoutTestMode(true, &(am_nnet.GetNnet()));
+            nnet3::CollapseModel(nnet3::CollapseModelConfig(), &(am_nnet.GetNnet()));
         }
 
         feature_info = new OnlineNnet2FeaturePipelineInfo(feature_config);
@@ -297,7 +296,7 @@ namespace dragonfly {
         }
         grammars_activity.emplace_back(dictation_fst != nullptr);  // dictation_fst is only enabled if present
         active_grammar_fst->UpdateActivity(grammars_activity);
-        
+
         feature_pipeline = new OnlineNnet2FeaturePipeline(*feature_info);
         feature_pipeline->SetAdaptationState(*adaptation_state);
         silence_weighting = new OnlineSilenceWeighting(
@@ -346,7 +345,10 @@ namespace dragonfly {
             feature_pipeline->InputFinished();
         }
 
-        if (silence_weighting->Active() && feature_pipeline->IvectorFeature() != nullptr) {
+        if (silence_weighting->Active()
+            && feature_pipeline->NumFramesReady() > 0
+            && feature_pipeline->IvectorFeature() != nullptr) {
+            std::vector<std::pair<int32, BaseFloat> > delta_weights;
             silence_weighting->ComputeCurrentTraceback(decoder->Decoder());
             silence_weighting->GetDeltaWeights(feature_pipeline->NumFramesReady(), &delta_weights);
             feature_pipeline->IvectorFeature()->UpdateFrameWeights(delta_weights);
@@ -505,7 +507,7 @@ void* init_agf_nnet3(float beam, int32_t max_active, int32_t min_active, float l
     return model;
 }
 
-bool load_lexicon_fst_agf_nnet3(void* model_vp, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp) {
+bool load_lexicon_agf_nnet3(void* model_vp, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp) {
     AgfNNet3OnlineModelWrapper* model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
     std::string word_syms_filename(word_syms_filename_cp), word_align_lexicon_filename(word_align_lexicon_filename_cp);
     bool result = model->load_lexicon(word_syms_filename, word_align_lexicon_filename);
