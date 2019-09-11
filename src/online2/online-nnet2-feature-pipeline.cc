@@ -30,7 +30,7 @@ OnlineNnet2FeaturePipelineInfo::OnlineNnet2FeaturePipelineInfo(
     feature_type = config.feature_type;
   } else {
     KALDI_ERR << "Invalid feature type: " << config.feature_type << ". "
-              << "Supported feature types: mfcc, plp.";
+              << "Supported feature types: mfcc, plp, fbank.";
   }
 
   if (config.mfcc_config != "") {
@@ -126,6 +126,11 @@ int32 OnlineNnet2FeaturePipeline::NumFramesReady() const {
 void OnlineNnet2FeaturePipeline::GetFrame(int32 frame,
                                           VectorBase<BaseFloat> *feat) {
   return final_feature_->GetFrame(frame, feat);
+}
+
+void OnlineNnet2FeaturePipeline::UpdateFrameWeights(
+    const std::vector<std::pair<int32, BaseFloat> > &delta_weights) {
+    IvectorFeature()->UpdateFrameWeights(delta_weights);
 }
 
 void OnlineNnet2FeaturePipeline::SetAdaptationState(
