@@ -83,12 +83,12 @@ namespace dragonfly {
         TransitionModel trans_model;
         nnet3::AmNnetSimple am_nnet;
         OnlineNnet2FeaturePipelineInfo* feature_info = nullptr;
-        nnet3::DecodableNnetSimpleLoopedInfo* decodable_info = nullptr;
+        nnet3::DecodableNnetSimpleLoopedInfo* decodable_info = nullptr;  // contains precomputed stuff that is used by all decodable objects
         ActiveGrammarFst* active_grammar_fst = nullptr;
 
         // Decoder objects
         OnlineNnet2FeaturePipeline* feature_pipeline = nullptr;
-        OnlineSilenceWeighting* silence_weighting = nullptr;  // reset per utterance
+        OnlineSilenceWeighting* silence_weighting = nullptr;  // reinstantiated per utterance
         OnlineIvectorExtractorAdaptationState* adaptation_state = nullptr;
         SingleUtteranceNnet3DecoderTpl<fst::ActiveGrammarFst>* decoder = nullptr;
         int32 tot_frames, tot_frames_decoded;
@@ -545,9 +545,10 @@ bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_frames, float
     return result;
 }
 
-void reset_adaptation_state_agf_nnet3(void* model_vp) {
+bool reset_adaptation_state_agf_nnet3(void* model_vp) {
     AgfNNet3OnlineModelWrapper* model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
     model->reset_adaptation_state();
+    return true;
 }
 
 bool get_output_agf_nnet3(void* model_vp, char* output, int32_t output_max_length, double* likelihood_p) {

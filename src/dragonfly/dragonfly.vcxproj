@@ -165,8 +165,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\src\dragonfly\dllmain.cpp" />
-    <ClCompile Include="..\..\..\src\dragonfly\gmm.cpp" />
-    <ClCompile Include="..\..\..\src\dragonfly\otf-gmm.cpp" />
+    <!-- <ClCompile Include="..\..\..\src\dragonfly\gmm.cpp" /> -->
+    <!-- <ClCompile Include="..\..\..\src\dragonfly\otf-gmm.cpp" /> -->
     <!-- <ClCompile Include="..\..\..\src\dragonfly\auf-gmm.cpp" /> -->
     <ClCompile Include="..\..\..\src\dragonfly\agf-nnet3.cpp" />
     <!-- <ClCompile Include="..\..\..\src\dragonfly\active-union-fst.cc" /> -->
@@ -228,4 +228,4 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
-</Project>
+</Pr
