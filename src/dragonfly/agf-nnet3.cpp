@@ -536,49 +536,73 @@ bool remove_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index) {
 
 bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,
     bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state) {
-    AgfNNet3OnlineModelWrapper* model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
-    std::vector<bool> grammars_activity(grammars_activity_cp_size, false);
-    for (size_t i = 0; i < grammars_activity_cp_size; i++) {
-        grammars_activity[i] = grammars_activity_cp[i];
+    try {
+        AgfNNet3OnlineModelWrapper* model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
+        std::vector<bool> grammars_activity(grammars_activity_cp_size, false);
+        for (size_t i = 0; i < grammars_activity_cp_size; i++) {
+            grammars_activity[i] = grammars_activity_cp[i];
+        }
+        bool result = model->decode(samp_freq, num_frames, frames, finalize, grammars_activity, save_adaptation_state);
+        return result;
+
+    } catch(const std::exception& e) {
+        KALDI_WARN << "Trying to survive fatal exception: " << e.what();
+        return false;
     }
-    bool result = model->decode(samp_freq, num_frames, frames, finalize, grammars_activity, save_adaptation_state);
-    return result;
 }
 
 bool reset_adaptation_state_agf_nnet3(void* model_vp) {
-    AgfNNet3OnlineModelWrapper* model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
-    model->reset_adaptation_state();
-    return true;
+    try {
+        AgfNNet3OnlineModelWrapper* model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
+        model->reset_adaptation_state();
+        return true;
+
+    } catch(const std::exception& e) {
+        KALDI_WARN << "Trying to survive fatal exception: " << e.what();
+        return false;
+    }
 }
 
 bool get_output_agf_nnet3(void* model_vp, char* output, int32_t output_max_length, double* likelihood_p) {
-    if (output_max_length < 1) return false;
-    AgfNNet3OnlineModelWrapper* model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
-    std::string decoded_string;
-    double likelihood;
-    model->get_decoded_string(decoded_string, likelihood);
-    const char* cstr = decoded_string.c_str();
-    strncpy(output, cstr, output_max_length);
-    output[output_max_length - 1] = 0;
-    *likelihood_p = likelihood;
-    return true;
+    try {
+        if (output_max_length < 1) return false;
+        AgfNNet3OnlineModelWrapper* model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
+        std::string decoded_string;
+        double likelihood;
+        model->get_decoded_string(decoded_string, likelihood);
+        const char* cstr = decoded_string.c_str();
+        strncpy(output, cstr, output_max_length);
+        output[output_max_length - 1] = 0;
+        *likelihood_p = likelihood;
+        return true;
+
+    } catch(const std::exception& e) {
+        KALDI_WARN << "Trying to survive fatal exception: " << e.what();
+        return false;
+    }
 }
 
 bool get_word_align_agf_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words) {
-    AgfNNet3OnlineModelWrapper* model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
-    std::vector<string> words;
-    std::vector<int32> times, lengths;
-    bool result = model->get_word_alignment(words, times, lengths, false);
+    try {
+        AgfNNet3OnlineModelWrapper* model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
+        std::vector<string> words;
+        std::vector<int32> times, lengths;
+        bool result = model->get_word_alignment(words, times, lengths, false);
 
-    if (result) {
-        KALDI_ASSERT(words.size() == num_words);
-        for (size_t i = 0; i < words.size(); i++) {
-            times_cp[i] = times[i];
-            lengths_cp[i] = lengths[i];
+        if (result) {
+            KALDI_ASSERT(words.size() == num_words);
+            for (size_t i = 0; i < words.size(); i++) {
+                times_cp[i] = times[i];
+                lengths_cp[i] = lengths[i];
+            }
+        } else {
+            KALDI_WARN << "alignment failed";
         }
-    } else {
-        KALDI_WARN << "alignment failed";
-    }
 
-    return result;
+        return result;
+
+    } catch(const std::exception& e) {
+        KALDI_WARN << "Trying to survive fatal exception: " << e.what();
+        return false;
+    }
 }
