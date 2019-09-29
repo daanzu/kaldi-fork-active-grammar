@@ -401,45 +401,69 @@ void* init_plain_nnet3(float beam, int32_t max_active, int32_t min_active, float
 }
 
 bool decode_plain_nnet3(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize, bool save_adaptation_state) {
-    PlainNNet3OnlineModelWrapper* model = static_cast<PlainNNet3OnlineModelWrapper*>(model_vp);
-    bool result = model->decode(samp_freq, num_frames, frames, finalize, save_adaptation_state);
-    return result;
+    try {
+        PlainNNet3OnlineModelWrapper* model = static_cast<PlainNNet3OnlineModelWrapper*>(model_vp);
+        bool result = model->decode(samp_freq, num_frames, frames, finalize, save_adaptation_state);
+        return result;
+
+    } catch(const std::exception& e) {
+        KALDI_WARN << "Trying to survive fatal exception: " << e.what();
+        return false;
+    }
 }
 
 bool reset_adaptation_state_plain_nnet3(void* model_vp) {
-    PlainNNet3OnlineModelWrapper* model = static_cast<PlainNNet3OnlineModelWrapper*>(model_vp);
-    model->reset_adaptation_state();
-    return true;
+    try {
+        PlainNNet3OnlineModelWrapper* model = static_cast<PlainNNet3OnlineModelWrapper*>(model_vp);
+        model->reset_adaptation_state();
+        return true;
+
+    } catch(const std::exception& e) {
+        KALDI_WARN << "Trying to survive fatal exception: " << e.what();
+        return false;
+    }
 }
 
 bool get_output_plain_nnet3(void* model_vp, char* output, int32_t output_max_length, double* likelihood_p) {
-    if (output_max_length < 1) return false;
-    PlainNNet3OnlineModelWrapper* model = static_cast<PlainNNet3OnlineModelWrapper*>(model_vp);
-    std::string decoded_string;
-    double likelihood;
-    model->get_decoded_string(decoded_string, likelihood);
-    const char* cstr = decoded_string.c_str();
-    strncpy(output, cstr, output_max_length);
-    output[output_max_length - 1] = 0;
-    *likelihood_p = likelihood;
-    return true;
+    try {
+        if (output_max_length < 1) return false;
+        PlainNNet3OnlineModelWrapper* model = static_cast<PlainNNet3OnlineModelWrapper*>(model_vp);
+        std::string decoded_string;
+        double likelihood;
+        model->get_decoded_string(decoded_string, likelihood);
+        const char* cstr = decoded_string.c_str();
+        strncpy(output, cstr, output_max_length);
+        output[output_max_length - 1] = 0;
+        *likelihood_p = likelihood;
+        return true;
+
+    } catch(const std::exception& e) {
+        KALDI_WARN << "Trying to survive fatal exception: " << e.what();
+        return false;
+    }
 }
 
 bool get_word_align_plain_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words) {
-    PlainNNet3OnlineModelWrapper* model = static_cast<PlainNNet3OnlineModelWrapper*>(model_vp);
-    std::vector<string> words;
-    std::vector<int32> times, lengths;
-    bool result = model->get_word_alignment(words, times, lengths, false);
+    try {
+        PlainNNet3OnlineModelWrapper* model = static_cast<PlainNNet3OnlineModelWrapper*>(model_vp);
+        std::vector<string> words;
+        std::vector<int32> times, lengths;
+        bool result = model->get_word_alignment(words, times, lengths, false);
 
-    if (result) {
-        KALDI_ASSERT(words.size() == num_words);
-        for (size_t i = 0; i < words.size(); i++) {
-            times_cp[i] = times[i];
-            lengths_cp[i] = lengths[i];
+        if (result) {
+            KALDI_ASSERT(words.size() == num_words);
+            for (size_t i = 0; i < words.size(); i++) {
+                times_cp[i] = times[i];
+                lengths_cp[i] = lengths[i];
+            }
+        } else {
+            KALDI_WARN << "alignment failed";
         }
-    } else {
-        KALDI_WARN << "alignment failed";
-    }
 
-    return result;
+        return result;
+
+    } catch(const std::exception& e) {
+        KALDI_WARN << "Trying to survive fatal exception: " << e.what();
+        return false;
+    }
 }

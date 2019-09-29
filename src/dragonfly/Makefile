@@ -9,7 +9,7 @@ include ../kaldi.mk
 
 TESTFILES =
 
-OBJFILES = agf-nnet3.o
+OBJFILES = agf-nnet3.o plain-nnet3.o
 
 LIBNAME = kaldi-dragonfly
 
