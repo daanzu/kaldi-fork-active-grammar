@@ -169,6 +169,7 @@
     <!-- <ClCompile Include="..\..\..\src\dragonfly\otf-gmm.cpp" /> -->
     <!-- <ClCompile Include="..\..\..\src\dragonfly\auf-gmm.cpp" /> -->
     <ClCompile Include="..\..\..\src\dragonfly\agf-nnet3.cpp" />
+    <ClCompile Include="..\..\..\src\dragonfly\plain-nnet3.cpp" />
     <!-- <ClCompile Include="..\..\..\src\dragonfly\active-union-fst.cc" /> -->
     <!-- <ClCompile Include="..\..\..\src\dragonfly\active-grammar-fst.cc" /> -->
   </ItemGroup>
