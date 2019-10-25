@@ -55,6 +55,7 @@ namespace dragonfly {
         int32 add_grammar_fst(std::string& grammar_fst_filename);
         bool reload_grammar_fst(int32 grammar_fst_index, std::string& grammar_fst_filename);
         bool remove_grammar_fst(int32 grammar_fst_index);
+        bool save_adaptation_state();
         void reset_adaptation_state();
         bool decode(BaseFloat samp_freq, int32 num_frames, BaseFloat* frames, bool finalize, std::vector<bool>& grammars_activity, bool save_adaptation_state = true);
 
@@ -99,7 +100,7 @@ namespace dragonfly {
 
         StdConstFst* read_fst_file(std::string filename);
         void start_decoding(std::vector<bool> grammars_activity);
-        void free_decoder(void);
+        void free_decoder(bool keep_feature_pipeline = false);
     };
 
     AgfNNet3OnlineModelWrapper::AgfNNet3OnlineModelWrapper(
@@ -271,8 +272,16 @@ namespace dragonfly {
         return true;
     }
 
+    bool AgfNNet3OnlineModelWrapper::save_adaptation_state() {
+        if (feature_pipeline != nullptr) {
+            feature_pipeline->GetAdaptationState(adaptation_state);
+            KALDI_LOG << "Saved adaptation state.";
+            return true;
+        }
+        return false;
+    }
+
     void AgfNNet3OnlineModelWrapper::reset_adaptation_state() {
-        // NOTE: assumes single speaker; optionally maintains adaptation state
         if (adaptation_state != nullptr) {
             delete adaptation_state;
         }
@@ -281,6 +290,7 @@ namespace dragonfly {
 
     void AgfNNet3OnlineModelWrapper::start_decoding(std::vector<bool> grammars_activity) {
         free_decoder();
+
         if (active_grammar_fst == nullptr) {
             // Timer timer(true);
             std::vector<std::pair<int32, const StdConstFst *> > ifsts;
@@ -307,7 +317,7 @@ namespace dragonfly {
         best_path_has_valid_word_align = false;
     }
 
-    void AgfNNet3OnlineModelWrapper::free_decoder(void) {
+    void AgfNNet3OnlineModelWrapper::free_decoder(bool keep_feature_pipeline) {
         if (decoder) {
             delete decoder;
             decoder = nullptr;
@@ -316,7 +326,7 @@ namespace dragonfly {
             delete silence_weighting;
             silence_weighting = nullptr;
         }
-        if (feature_pipeline) {
+        if (feature_pipeline && !keep_feature_pipeline) {
             delete feature_pipeline;
             feature_pipeline = nullptr;
         }
@@ -373,16 +383,27 @@ namespace dragonfly {
             // BaseFloat inv_acoustic_scale = 1.0 / decodable_config.acoustic_scale;
             // ScaleLattice(AcousticLatticeScale(inv_acoustic_scale), &clat);
 
-            // FIXME: decide whether to save adaptation?
-            if (save_adaptation_state) {
-                feature_pipeline->GetAdaptationState(adaptation_state);
-                KALDI_LOG << "Saved adaptation state.";
-            }
-
             tot_frames_decoded = tot_frames;
             tot_frames = 0;
 
-            free_decoder();
+            free_decoder(true);
+
+            if (save_adaptation_state) {
+                feature_pipeline->GetAdaptationState(adaptation_state);
+                KALDI_LOG << "Saved adaptation state.";
+                free_decoder();
+                // std::string output;
+                // double likelihood;
+                // get_decoded_string(output, likelihood);
+                // // int count_terminals = std::count_if(output.begin(), output.end(), [](std::string word){ return word[0] != '#'; });
+                // if (output.size() > 0) {
+                //     feature_pipeline->GetAdaptationState(adaptation_state);
+                //     KALDI_LOG << "Saved adaptation state." << output;
+                //     free_decoder();
+                // } else {
+                //     KALDI_LOG << "Did not save adaptation state, because empty recognition.";
+                // }
+            }
         }
 
         return true;
@@ -393,12 +414,10 @@ namespace dragonfly {
 
         if (decoder) {
             // Decoding is not finished yet, so we will look up the best partial result so far
-
             if (decoder->NumFramesDecoded() == 0) {
                 likelihood = 0.0;
                 return;
             }
-
             decoder->GetBestPath(false, &best_path_lat);
         } else {
             ConvertLattice(best_path_clat, &best_path_lat);
@@ -543,6 +562,18 @@ bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_frames, float
             grammars_activity[i] = grammars_activity_cp[i];
         }
         bool result = model->decode(samp_freq, num_frames, frames, finalize, grammars_activity, save_adaptation_state);
+        return result;
+
+    } catch(const std::exception& e) {
+        KALDI_WARN << "Trying to survive fatal exception: " << e.what();
+        return false;
+    }
+}
+
+bool save_adaptation_state_agf_nnet3(void* model_vp) {
+    try {
+        AgfNNet3OnlineModelWrapper* model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
+        bool result = model->save_adaptation_state();
         return result;
 
     } catch(const std::exception& e) {
