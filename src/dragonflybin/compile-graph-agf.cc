@@ -25,7 +25,7 @@
 #include "fstext/fstext-lib.h"
 #include "fstext/push-special.h"
 #include "fstext/grammar-context-fst.h"
-#include "decoder/grammar-fst.h"
+#include "decoder/active-grammar-fst.h"
 #include "fst/script/compile.h"
 
 
@@ -263,7 +263,7 @@ int main(int argc, char *argv[]) {
                  &hclg_fst);
 
     if (nonterm_phones_offset >= 0)
-      PrepareForGrammarFst(nonterm_phones_offset, &hclg_fst);
+      PrepareForActiveGrammarFst(nonterm_phones_offset, &hclg_fst);
 
     {  // convert 'hclg' to ConstFst and write.
       fst::ConstFst<StdArc> const_hclg(hclg_fst);

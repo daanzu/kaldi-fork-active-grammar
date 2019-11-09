@@ -515,7 +515,8 @@ class ActiveGrammarFst {
   // nontrivial in the case where there are a lot of nonterminals.
   std::vector<std::unordered_map<int32, int32> > entry_arcs_;
 
-  // Parallel to ifsts_, whether corresponding ifst is currently active.
+  // Parallel to ifsts_, whether corresponding ifst is currently active, and
+  // non-empty (empty meaning we must ignore it too).
   std::vector<bool> ifsts_activity_;
 
   // The FST instances.  Initially it is a vector with just one element

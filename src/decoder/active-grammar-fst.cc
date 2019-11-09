@@ -120,9 +120,11 @@ void ActiveGrammarFst::InitNonterminalMap() {
 void ActiveGrammarFst::InitEntryArcs(int32 i) {
   KALDI_ASSERT(static_cast<size_t>(i) < ifsts_.size());
   const ConstFst<StdArc> &fst = *(ifsts_[i].second);
-  InitEntryOrReentryArcs(fst, fst.Start(),
-                         GetPhoneSymbolFor(kNontermBegin),
-                         &(entry_arcs_[i]));
+  if (fst.Start() != kNoStateId) {
+    InitEntryOrReentryArcs(fst, fst.Start(),
+                           GetPhoneSymbolFor(kNontermBegin),
+                           &(entry_arcs_[i]));
+  }
 }
 
 void ActiveGrammarFst::InitInstances() {
@@ -344,20 +346,23 @@ ActiveGrammarFst::ExpandedState *ActiveGrammarFst::ExpandStateUserDefined(
                  &left_context_phone);
 
     auto nonterminal_map_iter = nonterminal_map_.find(nonterminal);
-    if ((nonterminal_map_iter == nonterminal_map_.end()) || (!ifsts_activity_.at(nonterminal_map_iter->second))) {
-      // ifst/nonterminal is not active; return because a state should only go to one dest ifst
+    if ((nonterminal_map_iter == nonterminal_map_.end())
+        || (!ifsts_activity_.at(nonterminal_map_iter->second))
+        || (ifsts_.at(nonterminal_map_iter->second).second->NumStates() == 0)) {
+      // The ifst/nonterminal is not here/included/loaded, or not active, or empty of states (and must be ignored)
       ans->active = false;
       ans->dest_ifst_index = (nonterminal_map_iter == nonterminal_map_.end()) ? -1 : nonterminal_map_iter->second;
       ans->nonterminal = nonterminal;
       // KALDI_LOG << "ExpandStateUserDefined: new inactive expanded_state for (instance_id #" << instance_id << ", nonterminal " << nonterminal << ")";
       ans->dest_fst_instance = -1;
+      // Go ahead and return, because a state should only go to one destination ifst, so we don't need to keep iterating
       return ans;
     } else {
       ans->active = true;
       ans->dest_ifst_index = nonterminal_map_iter->second;
       ans->nonterminal = nonterminal;
       // KALDI_LOG << "ExpandStateUserDefined: new active expanded_state for (instance_id #" << instance_id << ", nonterminal " << nonterminal << "), to ifst_index #" << ans->dest_ifst_index;
-      // ans->dest_fst_instance assigned below
+      // Note: ans->dest_fst_instance assigned below
     }
 
     int32 child_instance_id = GetChildInstanceId(instance_id,
@@ -576,7 +581,7 @@ class ActiveGrammarFstPreparer {
 
   void Prepare() {
     if (fst_->Start() == kNoStateId) {
-      KALDI_ERR << "FST has no states.";
+      // KALDI_ERR << "FST has no states.";
     }
     for (StateId s = 0; s < fst_->NumStates(); s++) {
       if (IsSpecialState(s)) {
