@@ -258,7 +258,6 @@ namespace dragonfly {
 
     bool AgfNNet3OnlineModelWrapper::reload_grammar_fst(int32 grammar_fst_index, std::string& grammar_fst_filename) {
         auto old_grammar_fst = grammar_fsts.at(grammar_fst_index);
-        KALDI_ASSERT(grammar_fst_filename == grammar_fsts_filename_map[old_grammar_fst]);
         grammar_fsts_filename_map.erase(old_grammar_fst);
         delete old_grammar_fst;
 
