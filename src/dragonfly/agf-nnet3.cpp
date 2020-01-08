@@ -455,8 +455,10 @@ namespace dragonfly {
                 s = "MISSING_WORD";
             }
             decoded_string += s;
-            if (!word_align_lexicon_words.count(words[i]))
+            if (!word_align_lexicon_words.count(words[i])) {
                 best_path_has_valid_word_align = false;
+                KALDI_LOG << "Word " << s << " (id #" << words[i] << ") not in word alignment lexicon";
+            }
         }
     }
 
@@ -467,7 +469,7 @@ namespace dragonfly {
         }
 
         if (!best_path_has_valid_word_align) {
-            KALDI_WARN << "Word not in word alignment lexicon";
+            KALDI_WARN << "There was a word not in word alignment lexicon";
             return false;
         }
 
