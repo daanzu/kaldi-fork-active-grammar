@@ -205,7 +205,7 @@ namespace dragonfly {
 
     bool AgfNNet3OnlineModelWrapper::load_lexicon(std::string& word_syms_filename, std::string& word_align_lexicon_filename) {
         // FIXME: make more robust to errors
-        
+
         if (word_syms_filename != "") {
             if (!(word_syms = fst::SymbolTable::ReadText(word_syms_filename))) {
                 KALDI_ERR << "Could not read symbol table from file " << word_syms_filename;
@@ -491,7 +491,7 @@ namespace dragonfly {
 
                 // lattice-1best
                 CompactLattice best_path_aligned;
-                CompactLatticeShortestPath(aligned_clat, &best_path_aligned); 
+                CompactLatticeShortestPath(aligned_clat, &best_path_aligned);
 
                 // nbest-to-ctm
                 std::vector<int32> word_idxs, times_raw, lengths_raw;
