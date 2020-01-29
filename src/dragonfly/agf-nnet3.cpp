@@ -317,7 +317,7 @@ namespace dragonfly {
             active_grammar_fst = new ActiveGrammarFst(nonterm_phones_offset, *top_fst, ifsts);
             // KALDI_LOG << "built new ActiveGrammarFst" << " in " << (timer.Elapsed() * 1000) << "ms.";
         }
-        grammars_activity.emplace_back(dictation_fst != nullptr);  // dictation_fst is only enabled if present
+        grammars_activity.push_back(dictation_fst != nullptr);  // dictation_fst is only enabled if present
         active_grammar_fst->UpdateActivity(grammars_activity);
 
         feature_pipeline = new OnlineNnet2FeaturePipeline(*feature_info);
