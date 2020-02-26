@@ -192,7 +192,16 @@ int main(int argc, char *argv[]) {
       }
     }
 
+    {
+      // Disambiguate LG to ease Determinization (caspark's hanging bug)
+      VectorFst<StdArc> tmp_fst;
+      Disambiguate(lg_fst, &tmp_fst);
+      lg_fst = tmp_fst;
+    }
+
+    KALDI_VLOG(1) << "Determinizing LG fst...";
     DeterminizeStarInLog(&lg_fst, fst::kDelta);
+    KALDI_VLOG(1) << "...Done.";
 
     MinimizeEncoded(&lg_fst, fst::kDelta);
 
