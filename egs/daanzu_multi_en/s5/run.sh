@@ -109,6 +109,7 @@ if [ $stage -le 2 ]; then
   local/librispeech_data_prep.sh $librispeech/LibriSpeech/train-clean-360 data/librispeech_360/train
   local/librispeech_data_prep.sh $librispeech/LibriSpeech/train-other-500 data/librispeech_500/train
   local/librispeech_data_prep.sh $librispeech/LibriSpeech/test-clean data/librispeech/test
+  local/librispeech_data_prep.sh $librispeech/LibriSpeech/test-other data/librispeech_other/test
   # tedlium
   local/tedlium_download_data.sh
   local/tedlium_prepare_data.sh $tedlium3
@@ -417,7 +418,6 @@ if [ $stage -le 21 ]; then
     data/$multi/tri5b $lang exp/$multi/tri5a_ali exp/$multi/tri5b || exit 1;
   do_decode_test_gmm tri5b graph_tg _${dict_affix}_daanzu_tg decode_tg &
 fi
-wait; exit 0  ######################################################################################################################################################
 
 # train tri6a on fisher + swbd + tedlium + wsj + hub4_en + librispeeh960 (nodup)
 if [ $stage -le 22 ]; then
@@ -430,3 +430,4 @@ if [ $stage -le 22 ]; then
     data/$multi/tri6a $lang exp/$multi/tri5b_ali exp/$multi/tri6a || exit 1;
   do_decode_test_gmm tri6a graph_tg _${dict_affix}_daanzu_tg decode_tg &
 fi
+# wait; exit 0  ######################################################################################################################################################

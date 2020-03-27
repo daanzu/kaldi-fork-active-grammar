@@ -1,4 +1,4 @@
-#!/bin/bash
+  #!/bin/bash
 # Copyright 2018 Xiaohui Zhang
 #           2017 University of Chinese Academy of Sciences (UCAS) Gaofeng Cheng
 # Apache 2.0
@@ -40,7 +40,6 @@ get_egs_stage=-10
 speed_perturb=true
 multi=multi_a
 gmm=tri5a
-dir=exp/multi_a/chain/tdnn_5b # Note: _sp will get added to this if $speed_perturb == true.
 decode_iter=
 decode_dir_affix=
 rescore=true # whether to rescore lattices
@@ -84,16 +83,17 @@ if [ "$speed_perturb" == "true" ]; then
   suffix=_sp
 fi
 
+dir=exp/${multi}/chain/tdnn_5b # Note: _sp will get added to this if $speed_perturb == true.
 dir=${dir}$suffix
-train_set=multi_a/${gmm}_sp
-build_tree_ali_dir=exp/multi_a/${gmm}_ali_sp
-treedir=exp/multi_a/chain/${gmm}_tree
-lang=data/multi_a/lang_${gmm}_chain
+train_set=${multi}/${gmm}_sp
+build_tree_ali_dir=exp/${multi}/${gmm}_ali_sp
+treedir=exp/${multi}/chain/${gmm}_tree
+lang=data/${multi}/lang_${gmm}_chain
 
 # if we are using the speed-perturbed data we need to generate
 # alignments for it.
 local/nnet3/run_ivector_common.sh --stage $stage \
-  --multi multi_a \
+  --multi $multi \
   --gmm $gmm \
   --speed-perturb $speed_perturb \
   --generate-alignments $speed_perturb || exit 1;
@@ -103,8 +103,8 @@ if [ $stage -le 9 ]; then
   # use the same num-jobs as the alignments
   nj=$(cat $build_tree_ali_dir/num_jobs) || exit 1;
   steps/align_fmllr_lats.sh --nj $nj --cmd "$train_cmd" data/$train_set \
-    data/lang_${multi}_${gmm} exp/multi_a/$gmm exp/multi_a/${gmm}_lats_nodup$suffix
-  rm exp/multi_a/${gmm}_lats_nodup$suffix/fsts.*.gz # save space
+    data/lang_${multi}_${gmm} exp/${multi}/$gmm exp/${multi}/${gmm}_lats_nodup$suffix
+  rm exp/${multi}/${gmm}_lats_nodup$suffix/fsts.*.gz # save space
 fi
 
 if [ $stage -le 10 ]; then
@@ -201,7 +201,7 @@ if [ $stage -le 13 ]; then
 
   steps/nnet3/chain/train.py --stage $train_stage \
     --cmd "$decode_cmd" \
-    --feat.online-ivector-dir exp/multi_a/nnet3/ivectors_${train_set} \
+    --feat.online-ivector-dir exp/${multi}/nnet3/ivectors_${train_set} \
     --feat.cmvn-opts "--norm-means=false --norm-vars=false" \
     --chain.xent-regularize $xent_regularize \
     --chain.leaky-hmm-coefficient 0.1 \
@@ -227,7 +227,7 @@ if [ $stage -le 13 ]; then
     --cleanup.remove-egs $remove_egs \
     --feat-dir data/${train_set}_hires \
     --tree-dir $treedir \
-    --lat-dir exp/multi_a/tri5a_lats_nodup$suffix \
+    --lat-dir exp/${multi}/${gmm}_lats_nodup$suffix \
     --dir $dir  || exit 1;
 fi
 
@@ -253,7 +253,7 @@ if [ $stage -le 15 ]; then
       (
       steps/nnet3/decode.sh --acwt 1.0 --post-decode-acwt 10.0 \
         --nj 50 --cmd "$decode_cmd" $iter_opts \
-        --online-ivector-dir exp/multi_a/nnet3/ivectors_${decode_set} \
+        --online-ivector-dir exp/${multi}/nnet3/ivectors_${decode_set} \
         $graph_dir data/${decode_set}_hires \
         $dir/decode_${decode_set}${decode_dir_affix:+_$decode_dir_affix}_${decode_suff} || exit 1;
       if $rescore; then
@@ -272,7 +272,7 @@ if $test_online_decoding && [ $stage -le 16 ]; then
   # change the options of the following command line.
   steps/online/nnet3/prepare_online_decoding.sh \
        --mfcc-config conf/mfcc_hires.conf \
-       $lang exp/multi_a/nnet3/extractor $dir ${dir}_online
+       $lang exp/${multi}/nnet3/extractor $dir ${dir}_online
 
   rm $dir/.error 2>/dev/null || true
   for decode_set in librispeech; do

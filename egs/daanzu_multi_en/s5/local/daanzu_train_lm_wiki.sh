@@ -49,10 +49,10 @@ if [ $stage -le 2 ]; then
     fi
 
     # 3 4 5 6
-    for n in 3; do
-        name=enwiki-${n}
-        # -S 4G -o 4
-        wikicat "enwiki" | wikifilter | ~/build/kenlm/build/bin/lmplz -o $n --prune 0 1 2 --temp_prefix . > $name.arpa
+    for n in 4; do
+        name=enwiki-${n}gram
+        # -S 4G -o 4 --prune 0 1 2
+        wikicat "enwiki" | wikifilter | ~/build/kenlm/build/bin/lmplz -o $n --prune 0 3 5 7 --temp_prefix . > $name.arpa
         xz -v -f -k $name.arpa
         ~/build/kenlm/build/bin/build_binary $name.arpa $name.bin
         xz -v -f $name.bin
