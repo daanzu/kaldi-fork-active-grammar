@@ -161,11 +161,18 @@ bool EndpointDetected<LatticeIncrementalOnlineDecoderTpl<fst::GrammarFst> >(
 
 
 template
-bool EndpointDetected<fst::ActiveGrammarFst>(
+bool EndpointDetected<LatticeFasterOnlineDecoderTpl<fst::ActiveGrammarFst> >(
     const OnlineEndpointConfig &config,
     const TransitionModel &tmodel,
     BaseFloat frame_shift_in_seconds,
     const LatticeFasterOnlineDecoderTpl<fst::ActiveGrammarFst> &decoder);
+
+template
+bool EndpointDetected<LatticeIncrementalOnlineDecoderTpl<fst::ActiveGrammarFst> >(
+    const OnlineEndpointConfig &config,
+    const TransitionModel &tmodel,
+    BaseFloat frame_shift_in_seconds,
+    const LatticeIncrementalOnlineDecoderTpl<fst::ActiveGrammarFst> &decoder);
 
 
 }  // namespace kaldi
