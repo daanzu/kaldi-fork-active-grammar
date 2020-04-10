@@ -22,7 +22,7 @@
     <VCProjectVersion>15.0</VCProjectVersion>
     <ProjectGuid>{BF3654FC-A3A9-490C-B2E7-FD3A7F653B5D}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
-    <RootNamespace>dragonfly</RootNamespace>
+    <RootNamespace>kaldidragonfly</RootNamespace>
     <WindowsTargetPlatformVersion>10.0.17134.0</WindowsTargetPlatformVersion>
     <ProjectName>kaldi-dragonfly</ProjectName>
   </PropertyGroup>
@@ -164,12 +164,12 @@
     <!-- <ClInclude Include="..\..\..\src\dragonfly\active-grammar-fst.h" /> -->
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\..\src\dragonfly\dllmain.cpp" />
-    <!-- <ClCompile Include="..\..\..\src\dragonfly\gmm.cpp" /> -->
-    <!-- <ClCompile Include="..\..\..\src\dragonfly\otf-gmm.cpp" /> -->
-    <!-- <ClCompile Include="..\..\..\src\dragonfly\auf-gmm.cpp" /> -->
-    <ClCompile Include="..\..\..\src\dragonfly\agf-nnet3.cpp" />
-    <ClCompile Include="..\..\..\src\dragonfly\plain-nnet3.cpp" />
+    <ClCompile Include="..\..\..\src\dragonfly\dllmain.cc" />
+    <!-- <ClCompile Include="..\..\..\src\dragonfly\gmm.cc" /> -->
+    <!-- <ClCompile Include="..\..\..\src\dragonfly\otf-gmm.cc" /> -->
+    <!-- <ClCompile Include="..\..\..\src\dragonfly\auf-gmm.cc" /> -->
+    <ClCompile Include="..\..\..\src\dragonfly\agf-nnet3.cc" />
+    <ClCompile Include="..\..\..\src\dragonfly\plain-nnet3.cc" />
     <!-- <ClCompile Include="..\..\..\src\dragonfly\active-union-fst.cc" /> -->
     <!-- <ClCompile Include="..\..\..\src\dragonfly\active-grammar-fst.cc" /> -->
   </ItemGroup>
