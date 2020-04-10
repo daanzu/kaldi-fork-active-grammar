@@ -9,13 +9,15 @@ SUBDIRS = base matrix util feat cudafeat tree gmm transform \
           bin fstbin gmmbin fgmmbin featbin cudafeatbin \
           nnetbin latbin sgmm2 sgmm2bin nnet2 nnet3 rnnlm chain nnet3bin nnet2bin kwsbin \
           ivector ivectorbin online2 online2bin lmbin chainbin rnnlmbin \
-          cudadecoder cudadecoderbin dragonfly dragonflybin
+          cudadecoder cudadecoderbin \
+          dragonfly dragonflybin
 
 MEMTESTDIRS = base matrix util feat cudafeat tree gmm transform \
           fstext hmm lm decoder lat nnet kws chain \
           bin fstbin gmmbin fgmmbin featbin cudafeatbin \
           nnetbin latbin sgmm2 nnet2 nnet3 rnnlm nnet2bin nnet3bin sgmm2bin kwsbin \
-          ivector ivectorbin online2 online2bin lmbin
+          ivector ivectorbin online2 online2bin lmbin \
+          dragonfly dragonflybin
 
 CUDAMEMTESTDIR = cudamatrix
 
@@ -146,7 +148,7 @@ $(EXT_SUBDIRS) : checkversion kaldi.mk mklibdir ext_depend
 bin fstbin gmmbin fgmmbin sgmm2bin featbin cudafeatbin nnetbin nnet2bin nnet3bin chainbin latbin ivectorbin lmbin kwsbin online2bin rnnlmbin cudadecoderbin dragonflybin: \
  base matrix util feat cudafeat tree gmm transform sgmm2 fstext hmm \
  lm decoder lat cudamatrix nnet nnet2 nnet3 ivector chain kws online2 rnnlm \
- cudadecoder
+ cudadecoder dragonfly
 
 #2)The libraries have inter-dependencies
 base: base/.depend.mk

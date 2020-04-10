@@ -5,14 +5,19 @@ CC ?= gcc        # used for sph2pipe
 # CXX = clang++  # Uncomment these lines...
 # CC = clang     # ...to build with Clang.
 
+WGET ?= wget
+
 # Note: OpenFst requires a relatively recent C++ compiler with C++11 support,
 # e.g. g++ >= 4.7, Apple clang >= 5.0 or LLVM clang >= 3.3.
 OPENFST_VERSION ?= 1.6.7
 CUB_VERSION ?= 1.8.0
 OPENBLAS_VERSION ?= 0.3.5
+SCTK_VERSION_PARTIAL ?= 2.4.10
+SCTK_VERSION ?= $(SCTK_VERSION_PARTIAL)-20151007-1312Z
+SPH2PIPE_VERSION = v2.5
 
 # Default features configured for OpenFST; can be overridden in the make command line.
-OPENFST_CONFIGURE ?= --enable-static --enable-shared --enable-far --enable-ngram-fsts
+OPENFST_CONFIGURE ?= --enable-static --enable-shared --enable-far --enable-ngram-fsts --enable-lookahead-fsts --with-pic
 
 OPENFST_VER_NUM := $(shell echo $(OPENFST_VERSION) | sed 's/\./ /g' | xargs printf "%d%02d%02d")
 ifeq ("$(shell expr $(OPENFST_VER_NUM) \< 10600)","1")
@@ -43,11 +48,11 @@ sclite_cleaned:
 
 distclean:
 	rm -rf openfst-$(OPENFST_VERSION)/
-	rm -rf sctk-2.4.10/
+	rm -rf sctk-$(SCTK_VERSION_PARTIAL)/
 	rm -rf sctk
-	rm -rf sph2pipe_v2.5/
-	rm -rf sph2pipe_v2.5.tar.gz
-	rm -rf sctk-2.4.10-20151007-1312Z.tar.bz2
+	rm -rf sph2pipe_$(SPH2PIPE_VERSION)/
+	rm -rf sph2pipe_$(SPH2PIPE_VERSION).tar.gz
+	rm -rf sctk-$(SCTK_VERSION).tar.bz2
 	rm -rf openfst-$(OPENFST_VERSION).tar.gz
 	rm -f openfst
 	rm -rf libsndfile-1.0.25{,.tar.gz} BeamformIt-3.51{,.tgz}
@@ -72,12 +77,12 @@ openfst-$(OPENFST_VERSION)/lib: | openfst-$(OPENFST_VERSION)/Makefile
 # "file too big".
 ifeq ($(OSTYPE),cygwin)
   # Note: OSTYPE path is probably dead for latest cygwin64 (installed on 2016/11/11).
-  openfst_add_CXXFLAGS = -O -Wa,-mbig-obj
+  openfst_add_CXXFLAGS = -g -O2 -Wa,-mbig-obj
 else ifeq ($(OS),Windows_NT)
   # This new OS path is confirmed working on Windows 10 / Cygwin64.
-  openfst_add_CXXFLAGS = -O -Wa,-mbig-obj
+  openfst_add_CXXFLAGS = -g -O2 -Wa,-mbig-obj
 else
-  openfst_add_CXXFLAGS =
+  openfst_add_CXXFLAGS = -g -O2
 endif
 
 openfst-$(OPENFST_VERSION)/Makefile: openfst-$(OPENFST_VERSION) | check_required_programs
@@ -89,8 +94,12 @@ openfst-$(OPENFST_VERSION): openfst-$(OPENFST_VERSION).tar.gz
 	tar xozf openfst-$(OPENFST_VERSION).tar.gz
 
 openfst-$(OPENFST_VERSION).tar.gz:
-	wget -T 10 -t 1 http://www.openfst.org/twiki/pub/FST/FstDownload/openfst-$(OPENFST_VERSION).tar.gz || \
-	wget -T 10 -t 3 http://www.openslr.org/resources/2/openfst-$(OPENFST_VERSION).tar.gz
+	if [ -d "$(DOWNLOAD_DIR)" ]; then \
+		cp -p "$(DOWNLOAD_DIR)/openfst-$(OPENFST_VERSION).tar.gz" .; \
+	else \
+		$(WGET) -T 10 -t 1 http://www.openfst.org/twiki/pub/FST/FstDownload/openfst-$(OPENFST_VERSION).tar.gz || \
+		$(WGET) -T 10 -t 3 -c https://www.openslr.org/resources/2/openfst-$(OPENFST_VERSION).tar.gz; \
+	fi
 
 sclite: sclite_compiled
 
@@ -106,34 +115,44 @@ sctk/.configured: sctk
 	touch sctk/.configured
 
 .PHONY: sctk
-sctk: sctk-2.4.10-20151007-1312Z.tar.bz2
-	tar xojf sctk-2.4.10-20151007-1312Z.tar.bz2 || \
-      tar --exclude '*NONE*html' -xvojf sctk-2.4.10-20151007-1312Z.tar.bz2
-	rm -rf sctk && ln -s sctk-2.4.10 sctk
+sctk: sctk-$(SCTK_VERSION).tar.bz2
+	tar xojf sctk-$(SCTK_VERSION).tar.bz2 || \
+	tar --exclude '*NONE*html' -xvojf sctk-$(SCTK_VERSION).tar.bz2
+	rm -rf sctk && ln -s sctk-$(SCTK_VERSION_PARTIAL) sctk
 
-sctk-2.4.10-20151007-1312Z.tar.bz2:
-	wget -T 10 -t 3 ftp://jaguar.ncsl.nist.gov/pub/sctk-2.4.10-20151007-1312Z.tar.bz2|| \
-	wget --no-check-certificate -T 10 http://www.openslr.org/resources/4/sctk-2.4.10-20151007-1312Z.tar.bz2
+sctk-$(SCTK_VERSION).tar.bz2:
+	if [ -d "$(DOWNLOAD_DIR)" ]; then \
+		cp -p "$(DOWNLOAD_DIR)/sctk-$(SCTK_VERSION).tar.bz2" .; \
+	else \
+		$(WGET) -T 10 https://www.openslr.org/resources/4/sctk-$(SCTK_VERSION).tar.bz2; \
+	fi
 
 sph2pipe: sph2pipe_compiled
 
-sph2pipe_compiled: sph2pipe_v2.5/sph2pipe
+sph2pipe_compiled: sph2pipe_$(SPH2PIPE_VERSION)/sph2pipe
 
-sph2pipe_v2.5/sph2pipe: | sph2pipe_v2.5
-	cd sph2pipe_v2.5/; \
+sph2pipe_$(SPH2PIPE_VERSION)/sph2pipe: | sph2pipe_$(SPH2PIPE_VERSION)
+	cd sph2pipe_$(SPH2PIPE_VERSION)/ && \
 	$(CC) -o sph2pipe  *.c -lm
 
-sph2pipe_v2.5: sph2pipe_v2.5.tar.gz
-	tar --no-same-owner -xzf sph2pipe_v2.5.tar.gz
+sph2pipe_$(SPH2PIPE_VERSION): sph2pipe_$(SPH2PIPE_VERSION).tar.gz
+	tar --no-same-owner -xzf sph2pipe_$(SPH2PIPE_VERSION).tar.gz
 
-sph2pipe_v2.5.tar.gz:
-	wget -T 10 -t 3 http://www.openslr.org/resources/3/sph2pipe_v2.5.tar.gz || \
-	wget --no-check-certificate -T 10  https://sourceforge.net/projects/kaldi/files/sph2pipe_v2.5.tar.gz
-
+sph2pipe_$(SPH2PIPE_VERSION).tar.gz:
+	if [ -d "$(DOWNLOAD_DIR)" ]; then \
+		cp -p "$(DOWNLOAD_DIR)/sph2pipe_$(SPH2PIPE_VERSION).tar.gz" .; \
+	else \
+		$(WGET) -T 10 -t 3 https://www.openslr.org/resources/3/sph2pipe_$(SPH2PIPE_VERSION).tar.gz || \
+		$(WGET) -T 10 -c https://sourceforge.net/projects/kaldi/files/sph2pipe_$(SPH2PIPE_VERSION).tar.gz; \
+	fi
 
 .PHONY: cub
 cub:
-	wget -T 10 -t 3 -O cub-$(CUB_VERSION).zip https://github.com/NVlabs/cub/archive/$(CUB_VERSION).zip
+	if [ -d "$(DOWNLOAD_DIR)" ]; then \
+		cp -p "$(DOWNLOAD_DIR)/cub-$(CUB_VERSION).zip" .; \
+	else \
+		$(WGET) -T 10 -t 3 -O cub-$(CUB_VERSION).zip https://github.com/NVlabs/cub/archive/$(CUB_VERSION).zip; \
+	fi
 	unzip -oq cub-$(CUB_VERSION).zip
 	rm -f cub
 	ln -s cub-$(CUB_VERSION) cub

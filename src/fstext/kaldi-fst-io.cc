@@ -42,6 +42,12 @@ VectorFst<StdArc> *ReadFstKaldi(std::string rxfilename) {
   return fst;
 }
 
+// Register const fst to load it automatically. Other types like
+// olabel_lookahead or ngram or compact_fst should be registered
+// through OpenFst registration API.
+static fst::FstRegisterer<VectorFst<StdArc>> VectorFst_StdArc_registerer;
+static fst::FstRegisterer<ConstFst<StdArc>> ConstFst_StdArc_registerer;
+
 Fst<StdArc> *ReadFstKaldiGeneric(std::string rxfilename, bool throw_on_err) {
   if (rxfilename == "") rxfilename = "-"; // interpret "" as stdin,
   // for compatibility with OpenFst conventions.
@@ -71,18 +77,11 @@ Fst<StdArc> *ReadFstKaldiGeneric(std::string rxfilename, bool throw_on_err) {
   }
   // Read the FST
   FstReadOptions ropts("<unspecified>", &hdr);
-  Fst<StdArc> *fst = NULL;
-  if (hdr.FstType() == "const") {
-    fst = ConstFst<StdArc>::Read(ki.Stream(), ropts);
-  } else if (hdr.FstType() == "vector") {
-    fst = VectorFst<StdArc>::Read(ki.Stream(), ropts);
-  } else if (hdr.FstType() == "olabel_lookahead") {
-    fst = StdOLabelLookAheadFst::Read(ki.Stream(), ropts);
-  }
+  Fst<StdArc> *fst = Fst<StdArc>::Read(ki.Stream(), ropts);
   if (!fst) {
     if(throw_on_err) {
-     KALDI_ERR << "Could not read fst of type " << hdr.FstType() << " from "
-               << kaldi::PrintableRxfilename(rxfilename);
+      KALDI_ERR << "Could not read fst of type " << hdr.FstType() << " from "
+                << kaldi::PrintableRxfilename(rxfilename);
     } else {
       KALDI_WARN << "Could not read fst of type " << hdr.FstType() << " from "
                  << kaldi::PrintableRxfilename(rxfilename)
