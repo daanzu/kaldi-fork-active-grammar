@@ -28,7 +28,7 @@ extern "C" {
 #include "fstext/fstext-lib.h"
 #include "lat/lattice-functions.h"
 #include "lat/word-align-lattice-lexicon.h"
-#include "active-grammar-fst.h"
+#include "decoder/active-grammar-fst.h"
 
 #define VERBOSE 1
 
