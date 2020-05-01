@@ -28,10 +28,10 @@ arpa_lm=$1
 old_lang=$2
 new_lang=$3
 
-mkdir -p $new_lang
-
-mkdir -p $new_lang
-cp -r $old_lang/* $new_lang
+if [ "$new_lang" != "$old_lang" ]; then
+  mkdir -p $new_lang
+  cp -r $old_lang/* $new_lang
+fi
 
 unk=`cat $new_lang/oov.int`
 bos=`grep "^<s>\s" $new_lang/words.txt | awk '{print $2}'`
