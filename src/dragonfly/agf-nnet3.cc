@@ -73,7 +73,7 @@ namespace dragonfly {
         void reset_adaptation_state();
         bool decode(BaseFloat samp_freq, int32 num_frames, BaseFloat* frames, bool finalize, std::vector<bool>& grammars_activity, bool save_adaptation_state = true);
 
-        void get_decoded_string(std::string& decoded_string, double& likelihood);
+        void get_decoded_string(std::string& decoded_string, float& likelihood, float& confidence, float& am_score, float& lm_score);
         bool get_word_alignment(std::vector<string>& words, std::vector<int32>& times, std::vector<int32>& lengths, bool include_eps);
 
     protected:
@@ -422,7 +422,7 @@ namespace dragonfly {
         return true;
     }
 
-    void AgfNNet3OnlineModelWrapper::get_decoded_string(std::string& decoded_string, double& likelihood) {
+    void AgfNNet3OnlineModelWrapper::get_decoded_string(std::string& decoded_string, float& likelihood, float& confidence, float& am_score, float& lm_score) {
         Lattice best_path_lat;
 
         if (decoder) {
@@ -439,10 +439,18 @@ namespace dragonfly {
         std::vector<int32> words;
         std::vector<int32> alignment;
         LatticeWeight weight;
-        int32 num_frames;
-        GetLinearSymbolSequence(best_path_lat, &alignment, &words, &weight);
-        num_frames = alignment.size();
+        bool ok = GetLinearSymbolSequence(best_path_lat, &alignment, &words, &weight);
+        if (!ok) {
+            KALDI_WARN << "GetLinearSymbolSequence returned false";
+        }
+
+        int32 num_frames = alignment.size();
+        int32 num_words = words.size();
         likelihood = -(weight.Value1() + weight.Value2()) / num_frames;
+        am_score = weight.Value2();
+        lm_score = weight.Value1();
+        // https://github.com/dialogflow/asr-server/blob/master/src/OnlineDecoder.cc#L90
+        confidence = std::max(0.0, std::min(1.0, (-0.0001466488 * (2.388449 * lm_score + am_score) / (num_words + 1) + 0.956)));
 
         decoded_string = "";
         best_path_has_valid_word_align = true;
@@ -480,40 +488,39 @@ namespace dragonfly {
         if (!ok) {
             KALDI_WARN << "Lattice did not align correctly";
             return false;
+        }
 
-        } else {
-            if (aligned_clat.Start() == fst::kNoStateId) {
-                KALDI_WARN << "Lattice was empty";
-                return false;
+        if (aligned_clat.Start() == fst::kNoStateId) {
+            KALDI_WARN << "Lattice was empty";
+            return false;
+        }
 
-            } else {
-                TopSortCompactLatticeIfNeeded(&aligned_clat);
+        TopSortCompactLatticeIfNeeded(&aligned_clat);
 
-                // lattice-1best
-                CompactLattice best_path_aligned;
-                CompactLatticeShortestPath(aligned_clat, &best_path_aligned);
+        // lattice-1best
+        CompactLattice best_path_aligned;
+        CompactLatticeShortestPath(aligned_clat, &best_path_aligned); 
 
-                // nbest-to-ctm
-                std::vector<int32> word_idxs, times_raw, lengths_raw;
-                if (!CompactLatticeToWordAlignment(best_path_aligned, &word_idxs, &times_raw, &lengths_raw)) {
-                    KALDI_WARN << "CompactLatticeToWordAlignment failed.";
-                    return false;
-                }
+        // nbest-to-ctm
+        std::vector<int32> word_idxs, times_raw, lengths_raw;
+        ok = CompactLatticeToWordAlignment(best_path_aligned, &word_idxs, &times_raw, &lengths_raw);
+        if (!ok) {
+            KALDI_WARN << "CompactLatticeToWordAlignment failed.";
+            return false;
+        }
 
-                // lexicon lookup
-                words.clear();
-                for (size_t i = 0; i < word_idxs.size(); i++) {
-                    std::string s = word_syms->Find(word_idxs[i]);  // Must be found, or CompactLatticeToWordAlignment would have crashed
-                    // KALDI_LOG << "align: " << s << " - " << times_raw[i] << " - " << lengths_raw[i];
-                    if (include_eps || (word_idxs[i] != 0)) {
-                        words.push_back(s);
-                        times.push_back(times_raw[i]);
-                        lengths.push_back(lengths_raw[i]);
-                    }
-                }
-                return true;
+        // lexicon lookup
+        words.clear();
+        for (size_t i = 0; i < word_idxs.size(); i++) {
+            std::string s = word_syms->Find(word_idxs[i]);  // Must be found, or CompactLatticeToWordAlignment would have crashed
+            // KALDI_LOG << "align: " << s << " - " << times_raw[i] << " - " << lengths_raw[i];
+            if (include_eps || (word_idxs[i] != 0)) {
+                words.push_back(s);
+                times.push_back(times_raw[i]);
+                lengths.push_back(lengths_raw[i]);
             }
         }
+        return true;
     }
 }
 
@@ -609,17 +616,21 @@ bool reset_adaptation_state_agf_nnet3(void* model_vp) {
     }
 }
 
-bool get_output_agf_nnet3(void* model_vp, char* output, int32_t output_max_length, double* likelihood_p) {
+bool get_output_agf_nnet3(void* model_vp, char* output, int32_t output_max_length, float* likelihood_p, float* confidence_p, float* am_score_p, float* lm_score_p) {
     try {
         if (output_max_length < 1) return false;
         AgfNNet3OnlineModelWrapper* model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
         std::string decoded_string;
-        double likelihood;
-        model->get_decoded_string(decoded_string, likelihood);
+	    float likelihood, confidence, am_score, lm_score;
+	    model->get_decoded_string(decoded_string, likelihood, confidence, am_score, lm_score);
+
         const char* cstr = decoded_string.c_str();
         strncpy(output, cstr, output_max_length);
         output[output_max_length - 1] = 0;
-        *likelihood_p = likelihood;
+        if (likelihood_p != nullptr) *likelihood_p = likelihood;
+        if (confidence_p != nullptr) *confidence_p = confidence;
+        if (am_score_p != nullptr) *am_score_p = am_score;
+        if (lm_score_p != nullptr) *lm_score_p = lm_score;
         return true;
 
     } catch(const std::exception& e) {

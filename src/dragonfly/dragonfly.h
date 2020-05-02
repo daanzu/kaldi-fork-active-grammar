@@ -65,7 +65,8 @@ extern "C" DRAGONFLY_API bool reload_grammar_fst_agf_nnet3(void* model_vp, int32
 extern "C" DRAGONFLY_API bool remove_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index);
 extern "C" DRAGONFLY_API bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,
     bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state);
-extern "C" DRAGONFLY_API bool get_output_agf_nnet3(void* model_vp, char* output, int32_t output_max_length, double* likelihood_p);
+extern "C" DRAGONFLY_API bool get_output_agf_nnet3(void* model_vp, char* output, int32_t output_max_length,
+    float* likelihood_p, float* confidence_p, float* am_score_p, float* lm_score_p);
 extern "C" DRAGONFLY_API bool get_word_align_agf_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words);
 extern "C" DRAGONFLY_API bool save_adaptation_state_agf_nnet3(void* model_vp);
 extern "C" DRAGONFLY_API bool reset_adaptation_state_agf_nnet3(void* model_vp);
