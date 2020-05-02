@@ -42,7 +42,7 @@ int main(int argc, char *argv[]) {
     const char *usage =
         "Creates HCLG decoding graph.  Similar to mkgraph.sh but done in code.\n"
         "\n"
-        "Usage:   compile-graph [options] <tree-in> <model-in> <lexicon-fst-in> "
+        "Usage:   compile-graph-agf [options] <tree-in> <model-in> <lexicon-fst-in> "
         " <gammar-rspecifier> <hclg-wspecifier>\n"
         "e.g.: \n"
         " compile-train-graphs-fsts tree 1.mdl L_disambig.fst G.fst HCLG.fst\n";
@@ -74,6 +74,7 @@ int main(int argc, char *argv[]) {
     std::string grammar_append_nonterm_fst;
     int32 grammar_prepend_nonterm = -1;
     int32 grammar_append_nonterm = -1;
+    bool disambiguate_lg = true;
     po.Register("compile-grammar", &compile_grammar, "");
     po.Register("grammar-symbols", &grammar_symbols, "");
     po.Register("topsort-grammar", &topsort_grammar, "");
@@ -82,6 +83,7 @@ int main(int argc, char *argv[]) {
     po.Register("grammar-append-nonterm-fst", &grammar_append_nonterm_fst, "");
     po.Register("grammar-prepend-nonterm", &grammar_prepend_nonterm, "");
     po.Register("grammar-append-nonterm", &grammar_append_nonterm, "");
+    po.Register("disambiguate-lg", &disambiguate_lg, "Bool whether to disambiguate LG (do for command grammars, but not for dictation graph!)");
 
     po.Read(argc, argv);
 
@@ -103,6 +105,8 @@ int main(int argc, char *argv[]) {
     ReadKaldiObject(model_rxfilename, &trans_model);
 
     VectorFst<StdArc> *lex_fst = fst::ReadFstKaldi(lex_rxfilename);
+
+    KALDI_VLOG(1) << "Preparing G...";
 
     VectorFst<StdArc> *grammar_fst;
     if (compile_grammar) {
@@ -179,6 +183,7 @@ int main(int argc, char *argv[]) {
         KALDI_ERR << "Disambiguation symbol " << disambig_syms[i]
                   << " is also a phone.";
 
+    KALDI_VLOG(1) << "Composing LG...";
     VectorFst<StdArc> lg_fst;
     TableCompose(*lex_fst, *grammar_fst, &lg_fst);
 
@@ -192,8 +197,9 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    {
+    if (disambiguate_lg) {
       // Disambiguate LG to ease Determinization (caspark's hanging bug)
+      KALDI_VLOG(1) << "Disambiguating LG fst...";
       VectorFst<StdArc> tmp_fst;
       Disambiguate(lg_fst, &tmp_fst);
       lg_fst = tmp_fst;
@@ -201,8 +207,8 @@ int main(int argc, char *argv[]) {
 
     KALDI_VLOG(1) << "Determinizing LG fst...";
     DeterminizeStarInLog(&lg_fst, fst::kDelta);
-    KALDI_VLOG(1) << "...Done.";
 
+    KALDI_VLOG(1) << "Preparing LG fst...";
     MinimizeEncoded(&lg_fst, fst::kDelta);
 
     fst::PushSpecial(&lg_fst, fst::kDelta);
@@ -217,6 +223,7 @@ int main(int argc, char *argv[]) {
     int32 context_width = ctx_dep.ContextWidth(),
         central_position = ctx_dep.CentralPosition();
 
+    KALDI_VLOG(1) << "Composing CLG fst...";
     if (nonterm_phones_offset < 0) {
       // The normal case.
       ComposeContext(disambig_syms, context_width, central_position,
@@ -232,6 +239,7 @@ int main(int argc, char *argv[]) {
     }
     lg_fst.DeleteStates();
 
+    KALDI_VLOG(1) << "Constructing H fst...";
     HTransducerConfig h_cfg;
     h_cfg.transition_scale = transition_scale;
     h_cfg.nonterm_phones_offset = nonterm_phones_offset;
@@ -243,6 +251,7 @@ int main(int argc, char *argv[]) {
                                               h_cfg,
                                               &disambig_syms_h);
 
+    KALDI_VLOG(1) << "Composing HCLG fst...";
     VectorFst<StdArc> hclg_fst;  // transition-id to word.
     TableCompose(*h_fst, clg_fst, &hclg_fst);
     clg_fst.DeleteStates();
@@ -250,6 +259,7 @@ int main(int argc, char *argv[]) {
 
     KALDI_ASSERT(hclg_fst.Start() != fst::kNoStateId);
 
+    KALDI_VLOG(1) << "Preparing HCLG fst...";
     // Epsilon-removal and determinization combined. This will fail if not determinizable.
     DeterminizeStarInLog(&hclg_fst);
 
@@ -286,6 +296,7 @@ int main(int argc, char *argv[]) {
               << " states to " << hclg_wxfilename;
     return 0;
   } catch(const std::exception &e) {
+    KALDI_ERR << "Exception in compile-graph-agf";
     std::cerr << e.what();
     return -1;
   }
