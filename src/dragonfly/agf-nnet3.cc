@@ -27,7 +27,9 @@ extern "C" {
 #include "online2/online-timing.h"
 #include "online2/online-endpoint.h"
 #include "fstext/fstext-lib.h"
+#include "lat/confidence.h"
 #include "lat/lattice-functions.h"
+#include "lat/sausages.h"
 #include "lat/word-align-lattice-lexicon.h"
 #include "nnet3/nnet-utils.h"
 #include "decoder/active-grammar-fst.h"
@@ -393,6 +395,42 @@ namespace dragonfly {
 
             CompactLatticeShortestPath(clat, &best_path_clat);
 
+            if (true) {
+                int32 num_paths;
+                float conf = SentenceLevelConfidence(clat, &num_paths, NULL, NULL);
+                KALDI_LOG << "SLC(" << num_paths << "): " << conf;
+            }
+
+            if (true) {
+                MinimumBayesRiskOptions mbr_opts;
+                mbr_opts.decode_mbr = false;
+                MinimumBayesRisk mbr(clat, mbr_opts);
+                const vector<BaseFloat> &conf = mbr.GetOneBestConfidences();
+                const vector<int32> &words = mbr.GetOneBest();
+                const vector<pair<BaseFloat, BaseFloat> > &times = mbr.GetOneBestTimes();
+
+                stringstream text;
+                for (size_t i = 0; i < words.size(); i++) {
+                    text << " " << word_syms->Find(words[i]);
+                }
+                KALDI_LOG << "MBR(false): " << mbr.GetBayesRisk() << text.str();
+            }
+
+            if (true) {
+                MinimumBayesRiskOptions mbr_opts;
+                mbr_opts.decode_mbr = true;
+                MinimumBayesRisk mbr(clat, mbr_opts);
+                const vector<BaseFloat> &conf = mbr.GetOneBestConfidences();
+                const vector<int32> &words = mbr.GetOneBest();
+                const vector<pair<BaseFloat, BaseFloat> > &times = mbr.GetOneBestTimes();
+
+                stringstream text;
+                for (size_t i = 0; i < words.size(); i++) {
+                    text << " " << word_syms->Find(words[i]);
+                }
+                KALDI_LOG << "MBR(true): " << mbr.GetBayesRisk() << text.str();
+            }
+
             // BaseFloat inv_acoustic_scale = 1.0 / decodable_config.acoustic_scale;
             // ScaleLattice(AcousticLatticeScale(inv_acoustic_scale), &clat);
 
@@ -429,6 +467,8 @@ namespace dragonfly {
             // Decoding is not finished yet, so we will look up the best partial result so far
             if (decoder->NumFramesDecoded() == 0) {
                 likelihood = 0.0;
+                lm_score = 0.0;
+                am_score = 0.0;
                 return;
             }
             decoder->GetBestPath(false, &best_path_lat);
@@ -446,11 +486,9 @@ namespace dragonfly {
 
         int32 num_frames = alignment.size();
         int32 num_words = words.size();
-        likelihood = -(weight.Value1() + weight.Value2()) / num_frames;
-        am_score = weight.Value2();
         lm_score = weight.Value1();
-        // https://github.com/dialogflow/asr-server/blob/master/src/OnlineDecoder.cc#L90
-        confidence = std::max(0.0, std::min(1.0, (-0.0001466488 * (2.388449 * lm_score + am_score) / (num_words + 1) + 0.956)));
+        am_score = weight.Value2();
+        likelihood = std::expf(-(lm_score + am_score) / num_frames);
 
         decoded_string = "";
         best_path_has_valid_word_align = true;
