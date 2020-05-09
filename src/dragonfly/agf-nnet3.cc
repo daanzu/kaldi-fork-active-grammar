@@ -19,6 +19,8 @@ extern "C" {
 #include "dragonfly.h"
 }
 
+#include <iomanip>
+
 #include "feat/wave-reader.h"
 #include "online2/online-feature-pipeline.h"
 #include "online2/online-nnet3-decoding.h"
@@ -39,6 +41,23 @@ extern "C" {
 namespace dragonfly {
     using namespace kaldi;
     using namespace fst;
+
+    void WriteLattice(const CompactLattice clat_in, std::string name = "lattice") {
+        auto clat = clat_in;
+        RemoveAlignmentsFromCompactLattice(&clat);
+        Lattice lat;
+        ConvertLattice(clat, &lat);
+        StdVectorFst fst;
+        ConvertLattice(lat, &fst);
+        Project(&fst, fst::PROJECT_OUTPUT);
+        RemoveEpsLocal(&fst);
+
+        auto time = std::time(nullptr);
+        std::stringstream ss;
+        auto filename = name + "_%Y-%m-%d_%H-%M-%S.fst";
+        ss << std::put_time(std::localtime(&time), filename.c_str());
+        WriteFstKaldi(fst, ss.str());
+    }
 
     // ConstFst<StdArc>* CastOrConvertToConstFst(Fst<StdArc>* fst) {
     //     // This version currently supports ConstFst<StdArc> or VectorFst<StdArc>
@@ -392,6 +411,8 @@ namespace dragonfly {
                 KALDI_WARN << "Empty lattice.";
                 return false;
             }
+
+            // WriteLattice(clat);
 
             CompactLatticeShortestPath(clat, &best_path_clat);
 
