@@ -20,6 +20,8 @@ for f in `ls $dir/*.txt`; do
   if [ ! -f $counts_file -o $counts_file -ot $f ]; then
     echo "$0: generating counts file for $f" 1>&2
     cat $f | awk '{for(i = 1; i <= NF; i++) {print $i;} print "</s>"}' | \
-      sort | uniq -c | awk '{print $2,$1}' > $counts_file
+      # sort | uniq -c | awk '{print $2,$1}' > $counts_file
+      python -c "import collections, sys;[sys.stdout.write('{} {}\n'.format(word, count)) for word, count in sorted(collections.Counter(line.strip() for line in sys.stdin).items())]" \
+      > $counts_file
   fi
 done
