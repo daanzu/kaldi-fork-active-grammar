@@ -10,6 +10,7 @@ cmd=run.pl
 skip_scoring=false
 stage=1
 scoring_opts=
+carpa=
 # End configuration section.
 
 echo "$0 $@"  # Print the command line for logging
@@ -33,7 +34,7 @@ indir=$4
 outdir=$5
 
 oldlm=$oldlang/G.fst
-newlm=$newlang/G.carpa
+newlm=$newlang/${carpa:-G.carpa}
 ! cmp $oldlang/words.txt $newlang/words.txt &&\
   echo "$0: Warning: vocabularies may be incompatible."
 [ ! -f $oldlm ] && echo "$0: Missing file $oldlm" && exit 1;
