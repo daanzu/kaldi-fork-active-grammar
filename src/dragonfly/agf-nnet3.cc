@@ -47,10 +47,10 @@ void WriteLattice(const CompactLattice clat_in, std::string name = "lattice") {
     auto clat = clat_in;
     RemoveAlignmentsFromCompactLattice(&clat);
     Lattice lat;
-    ConvertLattice(clat, &lat);
+    ConvertLattice(clat, &lat);  // Convert to non-compact form.. won't introduce extra states because already removed alignments.
     StdVectorFst fst;
-    ConvertLattice(lat, &fst);
-    Project(&fst, fst::PROJECT_OUTPUT);
+    ConvertLattice(lat, &fst);  // This adds up the (lm,acoustic) costs to get the normal (tropical) costs.
+    Project(&fst, fst::PROJECT_OUTPUT);  // Because in the standard Lattice format, the words are on the output, and we want the word labels.
     RemoveEpsLocal(&fst);
 
     auto time = std::time(nullptr);
@@ -74,6 +74,185 @@ void WriteLattice(const CompactLattice clat_in, std::string name = "lattice") {
 //         return new_fst;
 //     }
 // }
+
+template <class S>
+class DictationOrderQueue : public QueueBase<S> {
+   public:
+    using StateId = S;
+
+    DictationOrderQueue()
+        : QueueBase<StateId>(OTHER_QUEUE), front_(0), back_(kNoStateId) {}
+
+    virtual ~DictationOrderQueue() = default;
+
+    StateId Head() const final { return front_; }
+
+    void Enqueue(StateId s) final {
+        if (front_ > back_) {
+            front_ = back_ = s;
+        } else if (s > back_) {
+            back_ = s;
+        } else if (s < front_) {
+            front_ = s;
+        }
+        while (enqueued_.size() <= s) enqueued_.push_back(false);
+        enqueued_[s] = true;
+    }
+
+    void Dequeue() final {
+        enqueued_[front_] = false;
+        while ((front_ <= back_) && (enqueued_[front_] == false)) ++front_;
+    }
+
+    void Update(StateId) final {}
+
+    bool Empty() const final { return front_ > back_; }
+
+    void Clear() final {
+        for (StateId i = front_; i <= back_; ++i) enqueued_[i] = false;
+        front_ = 0;
+        back_ = kNoStateId;
+    }
+
+   private:
+    StateId front_;
+    StateId back_;
+    std::vector<bool> enqueued_;
+};
+
+// template <class Arc>
+// class CopyDictationVisitor {
+//    public:
+//     using StateId = typename Arc::StateId;
+
+//     CopyDictationVisitor(T* return_data) {}
+
+//     // Invoked before DFS visit.
+//     void InitVisit(const Fst<Arc>& fst);
+
+//     // Invoked when state discovered (2nd arg is DFS tree root).
+//     bool InitState(StateId s, StateId root);
+
+//     // Invoked when tree arc to white/undiscovered state examined.
+//     bool TreeArc(StateId s, const Arc& arc);
+
+//     // Invoked when back arc to grey/unfinished state examined.
+//     bool BackArc(StateId s, const Arc& arc) {  }
+
+//     // Invoked when forward or cross arc to black/finished state examined.
+//     bool ForwardOrCrossArc(StateId s, const Arc& arc);
+
+//     // Invoked when state finished ('s' is tree root, 'parent' is kNoStateId,
+//     // and 'arc' is nullptr).
+//     void FinishState(StateId s, StateId parent, const Arc* arc);
+
+//     // Invoked after DFS visit.
+//     void FinishVisit();
+// };
+
+template <class Arc>
+class CopyDictationVisitor {
+   public:
+    using StateId = typename Arc::StateId;
+    using Label = typename Arc::Label;
+
+    CopyDictationVisitor(MutableFst<Arc> *ofst, bool* ok, Label dictation_label, Label end_label)
+        : ifst_(nullptr), ofst_(ofst), ok_(ok), dictation_label_(dictation_label), end_label_(end_label) {}
+
+    void InitVisit(const ExpandedFst<Arc>& ifst) {
+        ifst_ = &ifst;
+        ofst_->DeleteStates();
+        KALDI_ASSERT(ofst_->AddState() == 0);
+        ofst_->SetStart(0);  // Dictation can't start at initial state
+        in_dictation_.resize(ifst_->NumStates(), false);
+        // after_dictation_.resize(ifst_->NumStates(), true);
+        *ok_ = true;
+    }
+
+    bool InitState(StateId state, StateId root) {
+        while (ofst_->NumStates() <= state) ofst_->AddState();
+        return true;
+    }
+
+    bool TreeArc(StateId state, const Arc& arc) {
+        if (arc.ilabel == dictation_label_) {
+            ofst_->AddArc(0, Arc(0, 0, Arc::Weight(), arc.nextstate));
+            in_dictation_[arc.nextstate] = true;
+        } else if (arc.ilabel == end_label_) {
+            ofst_->SetFinal(state, Arc::Weight::One());
+        } else if (in_dictation_[state]) {
+            ofst_->AddArc(state, arc);
+            in_dictation_[arc.nextstate] = true;
+        }
+        return true;
+    }
+
+    bool ForwardOrCrossArc(StateId state, const Arc& arc) {
+        return TreeArc(state, arc);
+    }
+
+    bool BackArc(StateId, const Arc&) { return (*ok_ = false); }  // None in a lattice!
+
+    void FinishState(StateId state, StateId parent, const Arc* arc) {
+        // ofst_->SetFinal(state, ifst_->Final(state));
+    }
+
+    void FinishVisit() {
+		return;
+	}
+
+   private:
+    const ExpandedFst<Arc> *ifst_;
+    MutableFst<Arc> *ofst_;
+    bool* ok_;
+    Label dictation_label_;
+    Label end_label_;
+    std::vector<bool> in_dictation_;
+    // std::vector<bool> after_dictation_;
+};
+
+// template <class A>
+// class CopyDictationVisitor1 : public CopyVisitor<A> {
+//     public:
+//         using Arc = A;
+//         using StateId = typename Arc::StateId;
+
+//         explicit CopyDictationVisitor1(MutableFst<Arc>* ofst) : ifst_(nullptr), ofst_(ofst) {}
+
+//         void InitVisit(const Fst<A>& ifst) {
+//             CopyVisitor<A>::InitVisit(ifst);
+//             // std::stack<> stack;
+//         }
+
+//         bool InitState(StateId state, StateId) {
+//             while (ofst_->NumStates() <= state) ofst_->AddState();
+//             return true;
+//         }
+
+//         bool WhiteArc(StateId state, const Arc& arc) {
+//             if () return CopyVisitor<A>::WhiteArc(state, arc);
+//             return true;
+//         }
+
+//         bool GreyArc(StateId state, const Arc& arc) {
+//             ofst_->AddArc(state, arc);
+//             return true;
+//         }
+
+//         bool BlackArc(StateId state, const Arc& arc) {
+//             ofst_->AddArc(state, arc);
+//             return true;
+//         }
+
+//         void FinishState(StateId state) {
+//             // ofst_->SetFinal(state, ifst_->Final(state));
+//         }
+
+//         void FinishVisit() {}
+
+//     private:
+//         bool copying_ = false;
+// };
 
 
 class AgfNNet3OnlineModelWrapper {
@@ -412,7 +591,38 @@ bool AgfNNet3OnlineModelWrapper::decode(BaseFloat samp_freq, int32 num_frames, B
             return false;
         }
 
-        // WriteLattice(clat);
+        WriteLattice(clat);
+
+        if (true) {
+            // CompactLattice dictation_clat = clat;
+
+            // StateIterator<CompactLattice> siter(dictation_clat);
+            // for (StateIterator<CompactLattice> siter(dictation_clat); !siter.Done(); siter.Next()) {
+            //     for (ArcIterator<CompactLattice> aiter(dictation_clat, siter.Value()); !aiter.Done(); aiter.Next()) {
+            //     }
+            // }
+
+            // std::vector<typename Arc::StateId> order;
+            // bool acyclic;
+            // TopOrderVisitor<Arc> top_order_visitor(&order, &acyclic);
+            // DfsVisit(*fst, &top_order_visitor);
+            // if (acyclic) {
+            // }
+
+            CompactLattice dictation_clat;
+            auto nonterm_dictation = word_syms->Find("#nonterm:dictation");
+            auto nonterm_end = word_syms->Find("#nonterm:end");
+            bool ok;
+            CopyDictationVisitor<CompactLatticeArc> visitor(&dictation_clat, &ok, nonterm_dictation, nonterm_end);
+            // LabelArcFilter<CompactLatticeArc> filter(nonterm_end, true, false);
+            AnyArcFilter<CompactLatticeArc> filter;
+            // TopOrderQueue<CompactLattice::StateId> queue(clat, filter);
+            // Visit(clat, &visitor, &queue, filter, true);
+            DfsVisit(clat, &visitor, filter, true);
+            // DfsVisit(clat, &visitor);
+            WriteLattice(dictation_clat, "lattice_dict");
+
+        }
 
         CompactLatticeShortestPath(clat, &best_path_clat);
 
