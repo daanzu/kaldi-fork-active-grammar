@@ -146,7 +146,7 @@ while [ $x -lt $num_iters ]; do
     else
       word_embedding="$dir/word_embedding.$x.mat"
     fi
-    if $use_gpu_for_diagnostics; then queue_gpu_opt="--gpu 1"; gpu_opt="--use-gpu=yes";
+    if $use_gpu_for_diagnostics; then queue_gpu_opt="--gpu 1"; gpu_opt="--use-gpu=wait";
     else gpu_opt=''; queue_gpu_opt=''; fi
     backstitch_opt="--rnnlm.backstitch-training-scale=$backstitch_training_scale \
       --rnnlm.backstitch-training-interval=$backstitch_training_interval \
@@ -155,6 +155,7 @@ while [ $x -lt $num_iters ]; do
     [ -f $dir/.error ] && rm $dir/.error
     $cmd $queue_gpu_opt $dir/log/compute_prob.$x.log \
        rnnlm-get-egs $(cat $dir/special_symbol_opts.txt) \
+                     --num-chunks-per-minibatch=32 \
                      --vocab-size=$vocab_size $dir/text/dev.txt ark:- \| \
        rnnlm-compute-prob $gpu_opt $dir/$x.raw "$word_embedding" ark:- || touch $dir/.error &
 
@@ -187,7 +188,7 @@ while [ $x -lt $num_iters ]; do
         else
           sparse_opt=''; embedding_type=word
         fi
-        if $use_gpu; then gpu_opt="--use-gpu=yes"; queue_gpu_opt="--gpu 1";
+        if $use_gpu; then gpu_opt="--use-gpu=wait"; queue_gpu_opt="--gpu 1";
         else gpu_opt="--use-gpu=no"; queue_gpu_opt=""; fi
         if [ $this_num_jobs -gt 1 ]; then dest_number=$[x+1].$n
         else dest_number=$[x+1]; fi
@@ -232,6 +233,7 @@ while [ $x -lt $num_iters ]; do
         python3 rnnlm/rnnlm_cleanup.py $dir --$cleanup_strategy --iters_to_keep $cleanup_keep_iters
       fi
     )
+    wait # wait for diagnostics above
     # the error message below is not that informative, but $cmd will
     # have printed a more specific one.
     [ -f $dir/.error ] && echo "$0: error with diagnostics on iteration $x of training" && exit 1;
