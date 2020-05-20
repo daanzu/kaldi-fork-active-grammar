@@ -62,12 +62,12 @@ namespace dragonfly {
             int32 verbosity = DEFAULT_VERBOSITY);
         ~PlainNNet3OnlineModelWrapper();
 
-        bool load_lexicon(std::string& word_syms_filename, std::string& word_align_lexicon_filename);
-        void reset_adaptation_state();
-        bool decode(BaseFloat samp_freq, int32 num_frames, BaseFloat* frames, bool finalize, bool save_adaptation_state = true);
+        bool LoadLexicon(std::string& word_syms_filename, std::string& word_align_lexicon_filename);
+        void ResetAdaptationState();
+        bool Decode(BaseFloat samp_freq, int32 num_frames, BaseFloat* frames, bool finalize, bool save_adaptation_state = true);
 
-        void get_decoded_string(std::string& decoded_string, double& likelihood);
-        bool get_word_alignment(std::vector<string>& words, std::vector<int32>& times, std::vector<int32>& lengths, bool include_eps);
+        void GetDecodedString(std::string& decoded_string, double& likelihood);
+        bool GetWordAlignment(std::vector<string>& words, std::vector<int32>& times, std::vector<int32>& lengths, bool include_eps);
 
     protected:
 
@@ -97,8 +97,8 @@ namespace dragonfly {
         std::set<int32> word_align_lexicon_words;  // contains word-ids that are in word_align_lexicon_info
         bool best_path_has_valid_word_align;
 
-        void start_decoding();
-        void free_decoder(void);
+        void StartDecoding();
+        void FreeDecoder(void);
     };
 
     PlainNNet3OnlineModelWrapper::PlainNNet3OnlineModelWrapper(
@@ -151,11 +151,11 @@ namespace dragonfly {
 
         feature_info = new OnlineNnet2FeaturePipelineInfo(feature_config);
         decodable_info = new nnet3::DecodableNnetSimpleLoopedInfo(decodable_config, &am_nnet);
-        reset_adaptation_state();
+        ResetAdaptationState();
 
         decode_fst = dynamic_cast<StdConstFst*>(ReadFstKaldiGeneric(fst_filename));
 
-        load_lexicon(word_syms_filename, word_align_lexicon_filename);
+        LoadLexicon(word_syms_filename, word_align_lexicon_filename);
 
         decoder = nullptr;
         tot_frames = 0;
@@ -163,14 +163,14 @@ namespace dragonfly {
     }
 
     PlainNNet3OnlineModelWrapper::~PlainNNet3OnlineModelWrapper() {
-        free_decoder();
+        FreeDecoder();
         delete feature_info;
         delete decodable_info;
         if (word_align_lexicon_info)
             delete word_align_lexicon_info;
     }
 
-    bool PlainNNet3OnlineModelWrapper::load_lexicon(std::string& word_syms_filename, std::string& word_align_lexicon_filename) {
+    bool PlainNNet3OnlineModelWrapper::LoadLexicon(std::string& word_syms_filename, std::string& word_align_lexicon_filename) {
         // FIXME: make more robust to errors
         
         if (word_syms_filename != "") {
@@ -200,7 +200,7 @@ namespace dragonfly {
         return true;
     }
 
-    void PlainNNet3OnlineModelWrapper::reset_adaptation_state() {
+    void PlainNNet3OnlineModelWrapper::ResetAdaptationState() {
         // NOTE: assumes single speaker; optionally maintains adaptation state
         if (adaptation_state != nullptr) {
             delete adaptation_state;
@@ -208,8 +208,8 @@ namespace dragonfly {
         adaptation_state = new OnlineIvectorExtractorAdaptationState(feature_info->ivector_extractor_info);
     }
 
-    void PlainNNet3OnlineModelWrapper::start_decoding() {
-        free_decoder();
+    void PlainNNet3OnlineModelWrapper::StartDecoding() {
+        FreeDecoder();
         feature_pipeline = new OnlineNnet2FeaturePipeline(*feature_info);
         feature_pipeline->SetAdaptationState(*adaptation_state);
         silence_weighting = new OnlineSilenceWeighting(
@@ -220,7 +220,7 @@ namespace dragonfly {
         best_path_has_valid_word_align = false;
     }
 
-    void PlainNNet3OnlineModelWrapper::free_decoder(void) {
+    void PlainNNet3OnlineModelWrapper::FreeDecoder(void) {
         if (decoder) {
             delete decoder;
             decoder = nullptr;
@@ -236,11 +236,11 @@ namespace dragonfly {
     }
 
     // grammars_activity is ignored once decoding has already started
-    bool PlainNNet3OnlineModelWrapper::decode(BaseFloat samp_freq, int32 num_frames, BaseFloat* frames, bool finalize, bool save_adaptation_state) {
+    bool PlainNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, int32 num_frames, BaseFloat* frames, bool finalize, bool save_adaptation_state) {
         using fst::VectorFst;
 
         if (!decoder)
-            start_decoding();
+            StartDecoding();
         //else if (grammars_activity.size() != 0)
         //	KALDI_WARN << "non-empty grammars_activity passed on already-started decode";
 
@@ -294,13 +294,13 @@ namespace dragonfly {
             tot_frames_decoded = tot_frames;
             tot_frames = 0;
 
-            free_decoder();
+            FreeDecoder();
         }
 
         return true;
     }
 
-    void PlainNNet3OnlineModelWrapper::get_decoded_string(std::string& decoded_string, double& likelihood) {
+    void PlainNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, double& likelihood) {
         Lattice best_path_lat;
 
         if (decoder) {
@@ -340,7 +340,7 @@ namespace dragonfly {
         }
     }
 
-    bool PlainNNet3OnlineModelWrapper::get_word_alignment(std::vector<string>& words, std::vector<int32>& times, std::vector<int32>& lengths, bool include_eps) {
+    bool PlainNNet3OnlineModelWrapper::GetWordAlignment(std::vector<string>& words, std::vector<int32>& times, std::vector<int32>& lengths, bool include_eps) {
         if (!word_align_lexicon.size() || !word_align_lexicon_info) {
             KALDI_WARN << "No word alignment lexicon loaded";
             return false;
@@ -417,7 +417,7 @@ void* init_plain_nnet3(float beam, int32_t max_active, int32_t min_active, float
 bool decode_plain_nnet3(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize, bool save_adaptation_state) {
     try {
         PlainNNet3OnlineModelWrapper* model = static_cast<PlainNNet3OnlineModelWrapper*>(model_vp);
-        bool result = model->decode(samp_freq, num_frames, frames, finalize, save_adaptation_state);
+        bool result = model->Decode(samp_freq, num_frames, frames, finalize, save_adaptation_state);
         return result;
 
     } catch(const std::exception& e) {
@@ -429,7 +429,7 @@ bool decode_plain_nnet3(void* model_vp, float samp_freq, int32_t num_frames, flo
 bool reset_adaptation_state_plain_nnet3(void* model_vp) {
     try {
         PlainNNet3OnlineModelWrapper* model = static_cast<PlainNNet3OnlineModelWrapper*>(model_vp);
-        model->reset_adaptation_state();
+        model->ResetAdaptationState();
         return true;
 
     } catch(const std::exception& e) {
@@ -444,7 +444,7 @@ bool get_output_plain_nnet3(void* model_vp, char* output, int32_t output_max_len
         PlainNNet3OnlineModelWrapper* model = static_cast<PlainNNet3OnlineModelWrapper*>(model_vp);
         std::string decoded_string;
         double likelihood;
-        model->get_decoded_string(decoded_string, likelihood);
+        model->GetDecodedString(decoded_string, likelihood);
         const char* cstr = decoded_string.c_str();
         strncpy(output, cstr, output_max_length);
         output[output_max_length - 1] = 0;
@@ -462,7 +462,7 @@ bool get_word_align_plain_nnet3(void* model_vp, int32_t* times_cp, int32_t* leng
         PlainNNet3OnlineModelWrapper* model = static_cast<PlainNNet3OnlineModelWrapper*>(model_vp);
         std::vector<string> words;
         std::vector<int32> times, lengths;
-        bool result = model->get_word_alignment(words, times, lengths, false);
+        bool result = model->GetWordAlignment(words, times, lengths, false);
 
         if (result) {
             KALDI_ASSERT(words.size() == num_words);

@@ -43,7 +43,7 @@ namespace dragonfly
 			std::string & word_syms_filename, std::string & fst_in_str, std::string & config);
 		~GmmOnlineModelWrapper();
 
-		bool decode(BaseFloat samp_freq, int32 num_frames, BaseFloat * frames, bool finalize);
+		bool Decode(BaseFloat samp_freq, int32 num_frames, BaseFloat * frames, bool finalize);
 
 		void get_decoded_string(std::string & decoded_string, double & likelihood);
 		bool get_word_alignment(std::vector<string>& words, std::vector<int32>& times, std::vector<int32>& lengths);
@@ -67,8 +67,8 @@ namespace dragonfly
 		int32 tot_frames, tot_frames_decoded;
 		CompactLattice best_path_clat;
 
-		void start_decoding(void);
-		void free_decoder(void);
+		void StartDecoding(void);
+		void FreeDecoder(void);
 	};
 
     void silent_log_handler(const LogMessageEnvelope &envelope, const char *message) {
@@ -128,7 +128,7 @@ namespace dragonfly
 
 	GmmOnlineModelWrapper::~GmmOnlineModelWrapper()
 	{
-		free_decoder();
+		FreeDecoder();
 		delete feature_config;
 		delete feature_pipeline_prototype;
 		delete gmm_models;
@@ -139,9 +139,9 @@ namespace dragonfly
 		}
 	}
 
-	void GmmOnlineModelWrapper::start_decoding(void)
+	void GmmOnlineModelWrapper::StartDecoding(void)
 	{
-		free_decoder();
+		FreeDecoder();
 		adaptation_state = new OnlineGmmAdaptationState();
 		decoder = new SingleUtteranceGmmDecoder(decode_config,
 			*gmm_models,
@@ -150,7 +150,7 @@ namespace dragonfly
 			*adaptation_state);
 	}
 
-	void GmmOnlineModelWrapper::free_decoder(void)
+	void GmmOnlineModelWrapper::FreeDecoder(void)
 	{
 		if (decoder) {
 			delete decoder;
@@ -162,12 +162,12 @@ namespace dragonfly
 		}
 	}
 
-	bool GmmOnlineModelWrapper::decode(BaseFloat samp_freq, int32 num_frames, BaseFloat * frames, bool finalize)
+	bool GmmOnlineModelWrapper::Decode(BaseFloat samp_freq, int32 num_frames, BaseFloat * frames, bool finalize)
 	{
 		using fst::VectorFst;
 
 		if (!decoder)
-			start_decoding();
+			StartDecoding();
 
 		Vector<BaseFloat> wave_part(num_frames, kUndefined);
 		for (int i = 0; i<num_frames; i++) {
@@ -203,7 +203,7 @@ namespace dragonfly
 			tot_frames_decoded = tot_frames;
 			tot_frames = 0;
 
-			free_decoder();
+			FreeDecoder();
 		}
 
 		return true;
@@ -267,7 +267,7 @@ void* init_gmm(float beam, int32_t max_active, int32_t min_active, float lattice
 bool decode_gmm(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize)
 {
 	GmmOnlineModelWrapper* model = static_cast<GmmOnlineModelWrapper*>(model_vp);
-	bool result = model->decode(samp_freq, num_frames, frames, finalize);
+	bool result = model->Decode(samp_freq, num_frames, frames, finalize);
 	return result;
 }
 

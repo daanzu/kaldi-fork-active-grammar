@@ -69,7 +69,7 @@ namespace dragonfly
 		~AgfGmmOnlineModelWrapper();
 
 		bool add_grammar_fst(std::string& grammar_fst_filename);
-		bool decode(BaseFloat samp_freq, int32 num_frames, BaseFloat* frames, bool finalize, std::vector<bool>& grammars_activity);
+		bool Decode(BaseFloat samp_freq, int32 num_frames, BaseFloat* frames, bool finalize, std::vector<bool>& grammars_activity);
 
 		void get_decoded_string(std::string& decoded_string, double& likelihood);
 		bool get_word_alignment(std::vector<string>& words, std::vector<int32>& times, std::vector<int32>& lengths);
@@ -101,7 +101,7 @@ namespace dragonfly
 		int32 tot_frames, tot_frames_decoded;
 		CompactLattice best_path_clat;
 
-		StdFst* read_fst_file(std::string filename);
+		StdFst* ReadFstFile(std::string filename);
 		void resize_grammar_fsts(size_t target);
 		StdFst* unionize_fsts(StdFst* left_fst, StdFst* right_fst);
 		StdFst* unionize_fsts(const std::vector<StdFst*>& fsts, std::vector<UnionFst<StdArc>*>& union_fsts_alloced);
@@ -109,8 +109,8 @@ namespace dragonfly
 		void build_union_pyramid(const std::vector<bool>& grammars_activity);
 		bool rebuild_union_pyramid(const std::vector<bool>& grammars_activity, bool force = false, size_t index = 0, size_t level = 0);
 
-		void start_decoding(std::vector<bool> grammars_activity);
-		void free_decoder(void);
+		void StartDecoding(std::vector<bool> grammars_activity);
+		void FreeDecoder(void);
 	};
 
 	AgfGmmOnlineModelWrapper::AgfGmmOnlineModelWrapper(BaseFloat beam, int32 max_active, int32 min_active, BaseFloat lattice_beam,
@@ -201,14 +201,14 @@ namespace dragonfly
 
 	AgfGmmOnlineModelWrapper::~AgfGmmOnlineModelWrapper()
 	{
-		free_decoder();
+		FreeDecoder();
 		delete feature_config;
 		delete feature_pipeline_prototype;
 		delete gmm_models;
 		// FIXME
 	}
 
-	StdFst* AgfGmmOnlineModelWrapper::read_fst_file(std::string filename)
+	StdFst* AgfGmmOnlineModelWrapper::ReadFstFile(std::string filename)
 	{
 		if (filename.compare(filename.length() - 4, 4, ".txt") == 0) {
 			// FIXME: fstdeterminize | fstminimize | fstrmepsilon | fstarcsort --sort_type=ilabel
@@ -231,7 +231,7 @@ namespace dragonfly
 
 	bool AgfGmmOnlineModelWrapper::add_grammar_fst(std::string& grammar_fst_filename)
 	{
-		auto grammar_fst = read_fst_file(grammar_fst_filename);
+		auto grammar_fst = ReadFstFile(grammar_fst_filename);
 		auto i = grammar_fsts_filled;
 		KALDI_LOG << "#" << i << " 0x" << grammar_fst << " " << grammar_fst_filename;
 		resize_grammar_fsts(i + 1);
@@ -351,9 +351,9 @@ namespace dragonfly
 		return true;
 	}
 
-	void AgfGmmOnlineModelWrapper::start_decoding(std::vector<bool> grammars_activity)
+	void AgfGmmOnlineModelWrapper::StartDecoding(std::vector<bool> grammars_activity)
 	{
-		free_decoder();
+		FreeDecoder();
 		adaptation_state = new OnlineGmmAdaptationState();
 		grammars_activity.resize(grammar_fsts_enabled.size(), false);
 		if (grammar_fsts_enabled != grammars_activity || false) {
@@ -369,7 +369,7 @@ namespace dragonfly
 			*adaptation_state);
 	}
 
-	void AgfGmmOnlineModelWrapper::free_decoder(void)
+	void AgfGmmOnlineModelWrapper::FreeDecoder(void)
 	{
 		if (decoder) {
 			delete decoder;
@@ -382,13 +382,13 @@ namespace dragonfly
 	}
 
 	// grammars_activity is ignored once decoding has already started
-	bool AgfGmmOnlineModelWrapper::decode(BaseFloat samp_freq, int32 num_frames, BaseFloat* frames, bool finalize,
+	bool AgfGmmOnlineModelWrapper::Decode(BaseFloat samp_freq, int32 num_frames, BaseFloat* frames, bool finalize,
 		std::vector<bool>& grammars_activity)
 	{
 		using fst::VectorFst;
 
 		if (!decoder)
-			start_decoding(grammars_activity);
+			StartDecoding(grammars_activity);
 		//else if (grammars_activity.size() != 0)
 		//	KALDI_WARN << "non-empty grammars_activity passed on already-started decode";
 
@@ -426,7 +426,7 @@ namespace dragonfly
 			tot_frames_decoded = tot_frames;
 			tot_frames = 0;
 
-			free_decoder();
+			FreeDecoder();
 		}
 
 		return true;
@@ -510,7 +510,7 @@ bool decode_agf_gmm(void* model_vp, float samp_freq, int32_t num_frames, float* 
 	{
 		grammars_activity[i] = grammars_activity_cp[i];
 	}
-	bool result = model->decode(samp_freq, num_frames, frames, finalize, grammars_activity);
+	bool result = model->Decode(samp_freq, num_frames, frames, finalize, grammars_activity);
 	return result;
 }
 
