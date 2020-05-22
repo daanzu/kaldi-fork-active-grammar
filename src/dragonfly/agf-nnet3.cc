@@ -299,7 +299,7 @@ class AgfNNet3OnlineModelWrapper {
 
         AgfNNet3OnlineModelWrapper(
             BaseFloat beam, int32 max_active, int32 min_active, BaseFloat lattice_beam, BaseFloat acoustic_scale, int32 frame_subsampling_factor,
-            std::string& mfcc_config_filename, std::string& ie_config_filename, std::string& model_filename,
+            std::string& model_dir, std::string& mfcc_config_filename, std::string& ie_config_filename, std::string& model_filename,
             int32 nonterm_phones_offset, int32 rules_nonterm_offset, int32 dictation_nonterm_offset,
             std::string& word_syms_filename, std::string& word_align_lexicon_filename,
             std::string& top_fst_filename, std::string& dictation_fst_filename,
@@ -362,12 +362,13 @@ class AgfNNet3OnlineModelWrapper {
 
 AgfNNet3OnlineModelWrapper::AgfNNet3OnlineModelWrapper(
     BaseFloat beam, int32 max_active, int32 min_active, BaseFloat lattice_beam, BaseFloat acoustic_scale, int32 frame_subsampling_factor,
-    std::string& mfcc_config_filename, std::string& ie_config_filename, std::string& model_filename,
+    std::string& model_dir, std::string& mfcc_config_filename, std::string& ie_config_filename, std::string& model_filename,
     int32 nonterm_phones_offset, int32 rules_nonterm_offset, int32 dictation_nonterm_offset,
     std::string& word_syms_filename, std::string& word_align_lexicon_filename,
     std::string& top_fst_filename, std::string& dictation_fst_filename,
     int32 verbosity) {
     if (verbosity >= 2) {
+        KALDI_LOG << "model_dir: " << model_dir;
         KALDI_LOG << "nonterm_phones_offset: " << nonterm_phones_offset;
         KALDI_LOG << "rules_nonterm_offset: " << rules_nonterm_offset;
         KALDI_LOG << "dictation_nonterm_offset: " << dictation_nonterm_offset;
@@ -820,20 +821,21 @@ bool AgfNNet3OnlineModelWrapper::GetWordAlignment(std::vector<string>& words, st
 using namespace dragonfly;
 
 void* init_agf_nnet3(float beam, int32_t max_active, int32_t min_active, float lattice_beam, float acoustic_scale, int32_t frame_subsampling_factor,
-    char* mfcc_config_filename_cp, char* ie_config_filename_cp, char* model_filename_cp,
+    char* model_dir_cp, char* mfcc_config_filename_cp, char* ie_config_filename_cp, char* model_filename_cp,
     int32_t nonterm_phones_offset, int32_t rules_nonterm_offset, int32_t dictation_nonterm_offset,
     char* word_syms_filename_cp, char* word_align_lexicon_filename_cp,
     char* top_fst_filename_cp, char* dictation_fst_filename_cp,
     int32_t verbosity) {
     std::string word_syms_filename(word_syms_filename_cp),
         word_align_lexicon_filename((word_align_lexicon_filename_cp != nullptr) ? word_align_lexicon_filename_cp : ""),
+        model_dir(model_dir_cp),
         mfcc_config_filename(mfcc_config_filename_cp),
         ie_config_filename(ie_config_filename_cp),
         model_filename(model_filename_cp),
         top_fst_filename(top_fst_filename_cp),
         dictation_fst_filename((dictation_fst_filename_cp != nullptr) ? dictation_fst_filename_cp : "");
     AgfNNet3OnlineModelWrapper* model = new AgfNNet3OnlineModelWrapper(beam, max_active, min_active, lattice_beam, acoustic_scale, frame_subsampling_factor,
-        mfcc_config_filename, ie_config_filename, model_filename,
+        model_dir, mfcc_config_filename, ie_config_filename, model_filename,
         nonterm_phones_offset, rules_nonterm_offset, dictation_nonterm_offset,
         word_syms_filename, word_align_lexicon_filename,
         top_fst_filename, dictation_fst_filename,

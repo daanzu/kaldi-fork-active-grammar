@@ -45,7 +45,7 @@ extern "C" DRAGONFLY_API bool decode_otf_gmm(void* model_vp, float samp_freq, in
 extern "C" DRAGONFLY_API bool get_output_otf_gmm(void* model_vp, char* output, int32_t output_length, double* likelihood_p);
 
 extern "C" DRAGONFLY_API void* init_plain_nnet3(float beam, int32_t max_active, int32_t min_active, float lattice_beam, float acoustic_scale, int32_t frame_subsampling_factor,
-    char* mfcc_config_filename_cp, char* ie_config_filename_cp, char* model_filename_cp,
+    char* model_dir_cp, char* mfcc_config_filename_cp, char* ie_config_filename_cp, char* model_filename_cp,
     char* word_syms_filename_cp, char* word_align_lexicon_filename_cp, char* fst_filename_cp,
     int32_t verbosity);
 extern "C" DRAGONFLY_API bool decode_plain_nnet3(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize, bool save_adaptation_state);
@@ -54,7 +54,7 @@ extern "C" DRAGONFLY_API bool get_word_align_plain_nnet3(void* model_vp, int32_t
 extern "C" DRAGONFLY_API bool reset_adaptation_state_plain_nnet3(void* model_vp);
 
 extern "C" DRAGONFLY_API void* init_agf_nnet3(float beam, int32_t max_active, int32_t min_active, float lattice_beam, float acoustic_scale, int32_t frame_subsampling_factor,
-    char* mfcc_config_filename_cp, char* ie_config_filename_cp, char* model_filename_cp,
+    char* model_dir_cp, char* mfcc_config_filename_cp, char* ie_config_filename_cp, char* model_filename_cp,
     int32_t nonterm_phones_offset, int32_t rules_nonterm_offset, int32_t dictation_nonterm_offset,
     char* word_syms_filename_cp, char* word_align_lexicon_filename_cp,
     char* top_fst_filename_cp, char* dictation_fst_filename_cp,
