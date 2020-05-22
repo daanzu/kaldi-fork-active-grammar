@@ -651,7 +651,7 @@ bool AgfNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, int32 num_frames, B
         if (true) {
             int32 num_paths;
             float conf = SentenceLevelConfidence(clat, &num_paths, NULL, NULL);
-            KALDI_LOG << "SLC(" << num_paths << "): " << conf;
+            KALDI_LOG << "SLC(" << num_paths << "paths): " << conf;
         }
 
         if (true) {
@@ -741,7 +741,7 @@ void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, f
     int32 num_words = words.size();
     lm_score = weight.Value1();
     am_score = weight.Value2();
-    likelihood = std::expf(-(lm_score + am_score) / num_frames);
+    likelihood = expf(-(lm_score + am_score) / num_frames);
 
     decoded_string = "";
     best_path_has_valid_word_align = true;
