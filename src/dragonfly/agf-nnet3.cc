@@ -58,6 +58,7 @@ void WriteLattice(const CompactLattice clat_in, std::string name = "lattice") {
     auto filename = name + "_%Y-%m-%d_%H-%M-%S.fst";
     ss << std::put_time(std::localtime(&time), filename.c_str());
     WriteFstKaldi(fst, ss.str());
+    KALDI_WARN << "Wrote " << filename;
 }
 
 // ConstFst<StdArc>* CastOrConvertToConstFst(Fst<StdArc>* fst) {
@@ -156,59 +157,95 @@ class CopyDictationVisitor {
     using StateId = typename Arc::StateId;
     using Label = typename Arc::Label;
 
-    CopyDictationVisitor(MutableFst<Arc> *ofst, bool* ok, Label dictation_label, Label end_label)
-        : ifst_(nullptr), ofst_(ofst), ok_(ok), dictation_label_(dictation_label), end_label_(end_label) {}
+    CopyDictationVisitor(MutableFst<Arc> *ofst_pre_dictation, MutableFst<Arc> *ofst_in_dictation, MutableFst<Arc> *ofst_post_dictation,
+            bool* ok, Label dictation_label, Label end_label)
+        : ofst_pre_dictation_(ofst_pre_dictation), ofst_in_dictation_(ofst_in_dictation), ofst_post_dictation_(ofst_post_dictation),
+        ok_(ok), dictation_label_(dictation_label), end_label_(end_label) {}
 
     void InitVisit(const ExpandedFst<Arc>& ifst) {
         ifst_ = &ifst;
-        ofst_->DeleteStates();
-        KALDI_ASSERT(ofst_->AddState() == 0);
-        ofst_->SetStart(0);  // Dictation can't start at initial state
-        in_dictation_.resize(ifst_->NumStates(), false);
-        // after_dictation_.resize(ifst_->NumStates(), true);
+        auto num_states = ifst_->NumStates();
+        std::vector<MutableFst<Arc>*> ofsts = {ofst_pre_dictation_, ofst_in_dictation_, ofst_post_dictation_};
+        for (auto ofst : ofsts) {
+            ofst->DeleteStates();
+            KALDI_ASSERT(ofst->AddState() == 0);
+            ofst->SetStart(0);  // Dictation can't start at initial state
+            while (ofst->NumStates() <= num_states) ofst->AddState();
+        }
+        // in_dictation_.resize(num_states, false);
+        // after_dictation_.resize(num_states, true);
+        state_map_.resize(num_states, StateType::Unknown);
         *ok_ = true;
     }
 
     bool InitState(StateId state, StateId root) {
-        while (ofst_->NumStates() <= state) ofst_->AddState();
-        return true;
-    }
-
-    bool TreeArc(StateId state, const Arc& arc) {
-        if (arc.ilabel == dictation_label_) {
-            ofst_->AddArc(0, Arc(0, 0, Arc::Weight(), arc.nextstate));
-            in_dictation_[arc.nextstate] = true;
-        } else if (arc.ilabel == end_label_) {
-            ofst_->SetFinal(state, Arc::Weight::One());
-        } else if (in_dictation_[state]) {
-            ofst_->AddArc(state, arc);
-            in_dictation_[arc.nextstate] = true;
+        if (state == root) {
+            state_map_[state] = StateType::PreDictation;
         }
         return true;
     }
 
-    bool ForwardOrCrossArc(StateId state, const Arc& arc) {
-        return TreeArc(state, arc);
+    bool TreeArc(StateId state, const Arc& arc) {
+        // Arc callback is called before State callback
+        if (arc.ilabel == dictation_label_) {
+            // Transition Pre->In
+            KALDI_ASSERT(state_map_[state] == StateType::PreDictation);
+            ofst_pre_dictation_->SetFinal(state, Arc::Weight::One());
+            ofst_in_dictation_->AddArc(0, Arc(0, 0, Arc::Weight(), arc.nextstate));
+            state_map_[arc.nextstate] = StateType::InDictation;
+        } else if (arc.ilabel == end_label_) {
+            // Transition In->Post
+            ofst_in_dictation_->SetFinal(state, Arc::Weight::One());
+            ofst_post_dictation_->AddArc(0, Arc(0, 0, Arc::Weight(), arc.nextstate));
+            state_map_[arc.nextstate] = StateType::PostDictation;
+        } else switch (state_map_[state]) {
+            case StateType::PreDictation:
+                ofst_pre_dictation_->AddArc(state, arc);
+                state_map_[arc.nextstate] = StateType::PreDictation;
+                break;
+            case StateType::InDictation:
+                ofst_in_dictation_->AddArc(state, arc);
+                state_map_[arc.nextstate] = StateType::InDictation;
+                break;
+            case StateType::PostDictation:
+                ofst_post_dictation_->AddArc(state, arc);
+                state_map_[arc.nextstate] = StateType::PostDictation;
+                break;
+            case StateType::Unknown:
+                KALDI_ASSERT(false);
+        }
+        return true;
     }
+
+    bool ForwardOrCrossArc(StateId state, const Arc& arc) { return TreeArc(state, arc); }
 
     bool BackArc(StateId, const Arc&) { return (*ok_ = false); }  // None in a lattice!
 
     void FinishState(StateId state, StateId parent, const Arc* arc) {
-        // ofst_->SetFinal(state, ifst_->Final(state));
+        KALDI_ASSERT(state_map_[state] != StateType::Unknown);
+        if (state_map_[state] == StateType::PostDictation)
+            ofst_post_dictation_->SetFinal(state, ifst_->Final(state));
     }
 
-    void FinishVisit() {
-		return;
-	}
+    void FinishVisit() {}
 
    private:
-    const ExpandedFst<Arc> *ifst_;
-    MutableFst<Arc> *ofst_;
+    const ExpandedFst<Arc>* ifst_;
+    MutableFst<Arc>* ofst_pre_dictation_;
+    MutableFst<Arc>* ofst_in_dictation_;
+    MutableFst<Arc>* ofst_post_dictation_;
     bool* ok_;
     Label dictation_label_;
     Label end_label_;
-    std::vector<bool> in_dictation_;
+    // std::vector<bool> in_dictation_;
     // std::vector<bool> after_dictation_;
+
+	enum class StateType : uint8 { Unknown, PreDictation, InDictation, PostDictation };
+    std::vector<StateType> state_map_;
+    // static constexpr uint8 kStateUnknown = 0;
+    // static constexpr uint8 kStatePreDictation = 1;
+    // static constexpr uint8 kStateInDictation = 2;
+    // static constexpr uint8 kStatePostDictation = 3;
 };
 
 // template <class A>
@@ -591,7 +628,7 @@ bool AgfNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, int32 num_frames, B
             return false;
         }
 
-        WriteLattice(clat);
+        WriteLattice(clat, "tmp/lattice");
 
         if (true) {
             // CompactLattice dictation_clat = clat;
@@ -609,19 +646,21 @@ bool AgfNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, int32 num_frames, B
             // if (acyclic) {
             // }
 
-            CompactLattice dictation_clat;
+            CompactLattice pre_dictation_clat, dictation_clat, post_dictation_clat;
             auto nonterm_dictation = word_syms->Find("#nonterm:dictation");
             auto nonterm_end = word_syms->Find("#nonterm:end");
             bool ok;
-            CopyDictationVisitor<CompactLatticeArc> visitor(&dictation_clat, &ok, nonterm_dictation, nonterm_end);
+            // CopyDictationVisitor<CompactLatticeArc> visitor(&dictation_clat, &ok, nonterm_dictation, nonterm_end);
+            CopyDictationVisitor<CompactLatticeArc> visitor(&pre_dictation_clat, &dictation_clat, &post_dictation_clat, &ok, nonterm_dictation, nonterm_end);
             // LabelArcFilter<CompactLatticeArc> filter(nonterm_end, true, false);
             AnyArcFilter<CompactLatticeArc> filter;
             // TopOrderQueue<CompactLattice::StateId> queue(clat, filter);
             // Visit(clat, &visitor, &queue, filter, true);
             DfsVisit(clat, &visitor, filter, true);
             // DfsVisit(clat, &visitor);
-            WriteLattice(dictation_clat, "lattice_dict");
-
+            WriteLattice(dictation_clat, "tmp/lattice_dict");
+            WriteLattice(pre_dictation_clat, "tmp/lattice_dictpre");
+            WriteLattice(post_dictation_clat, "tmp/lattice_dictpost");
         }
 
         CompactLatticeShortestPath(clat, &best_path_clat);
