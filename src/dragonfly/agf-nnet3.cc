@@ -172,8 +172,6 @@ class CopyDictationVisitor {
             ofst->SetStart(0);  // Dictation can't start at initial state
             while (ofst->NumStates() <= num_states) ofst->AddState();
         }
-        // in_dictation_.resize(num_states, false);
-        // after_dictation_.resize(num_states, true);
         state_map_.resize(num_states, StateType::Unknown);
         *ok_ = true;
     }
@@ -187,18 +185,22 @@ class CopyDictationVisitor {
 
     bool TreeArc(StateId state, const Arc& arc) {
         // Arc callback is called before State callback
-        if (arc.ilabel == dictation_label_) {
+        if ((state_map_[state] == StateType::PreDictation) && (arc.ilabel == dictation_label_)) {
             // Transition Pre->In
-            KALDI_ASSERT(state_map_[state] == StateType::PreDictation);
-            ofst_pre_dictation_->SetFinal(state, Arc::Weight::One());
-            ofst_in_dictation_->AddArc(0, Arc(0, 0, Arc::Weight(), arc.nextstate));
+            // KALDI_ASSERT(state_map_[state] == StateType::PreDictation);
+            ofst_pre_dictation_->AddArc(state, arc);
+            ofst_pre_dictation_->SetFinal(arc.nextstate, Arc::Weight::One());
+            ofst_in_dictation_->AddArc(0, Arc(0, 0, Arc::Weight::One(), arc.nextstate));
             state_map_[arc.nextstate] = StateType::InDictation;
-        } else if (arc.ilabel == end_label_) {
+        } else if ((state_map_[state] == StateType::InDictation) && (arc.ilabel == end_label_)) {
             // Transition In->Post
+            // KALDI_ASSERT(state_map_[state] == StateType::InDictation);
             ofst_in_dictation_->SetFinal(state, Arc::Weight::One());
-            ofst_post_dictation_->AddArc(0, Arc(0, 0, Arc::Weight(), arc.nextstate));
+            ofst_post_dictation_->AddArc(0, Arc(0, 0, Arc::Weight::One(), state));
+            ofst_post_dictation_->AddArc(state, arc);
             state_map_[arc.nextstate] = StateType::PostDictation;
         } else switch (state_map_[state]) {
+            // Copy arc within same segment
             case StateType::PreDictation:
                 ofst_pre_dictation_->AddArc(state, arc);
                 state_map_[arc.nextstate] = StateType::PreDictation;
@@ -631,34 +633,15 @@ bool AgfNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, int32 num_frames, B
         WriteLattice(clat, "tmp/lattice");
 
         if (true) {
-            // CompactLattice dictation_clat = clat;
-
-            // StateIterator<CompactLattice> siter(dictation_clat);
-            // for (StateIterator<CompactLattice> siter(dictation_clat); !siter.Done(); siter.Next()) {
-            //     for (ArcIterator<CompactLattice> aiter(dictation_clat, siter.Value()); !aiter.Done(); aiter.Next()) {
-            //     }
-            // }
-
-            // std::vector<typename Arc::StateId> order;
-            // bool acyclic;
-            // TopOrderVisitor<Arc> top_order_visitor(&order, &acyclic);
-            // DfsVisit(*fst, &top_order_visitor);
-            // if (acyclic) {
-            // }
-
-            CompactLattice pre_dictation_clat, dictation_clat, post_dictation_clat;
+            CompactLattice pre_dictation_clat, in_dictation_clat, post_dictation_clat;
             auto nonterm_dictation = word_syms->Find("#nonterm:dictation");
             auto nonterm_end = word_syms->Find("#nonterm:end");
             bool ok;
-            // CopyDictationVisitor<CompactLatticeArc> visitor(&dictation_clat, &ok, nonterm_dictation, nonterm_end);
-            CopyDictationVisitor<CompactLatticeArc> visitor(&pre_dictation_clat, &dictation_clat, &post_dictation_clat, &ok, nonterm_dictation, nonterm_end);
-            // LabelArcFilter<CompactLatticeArc> filter(nonterm_end, true, false);
+            CopyDictationVisitor<CompactLatticeArc> visitor(&pre_dictation_clat, &in_dictation_clat, &post_dictation_clat, &ok, nonterm_dictation, nonterm_end);
+            KALDI_ASSERT(ok);
             AnyArcFilter<CompactLatticeArc> filter;
-            // TopOrderQueue<CompactLattice::StateId> queue(clat, filter);
-            // Visit(clat, &visitor, &queue, filter, true);
             DfsVisit(clat, &visitor, filter, true);
-            // DfsVisit(clat, &visitor);
-            WriteLattice(dictation_clat, "tmp/lattice_dict");
+            WriteLattice(in_dictation_clat, "tmp/lattice_dict");
             WriteLattice(pre_dictation_clat, "tmp/lattice_dictpre");
             WriteLattice(post_dictation_clat, "tmp/lattice_dictpost");
         }
