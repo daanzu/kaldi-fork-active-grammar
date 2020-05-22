@@ -32,6 +32,7 @@ extern "C" {
 #include "lat/word-align-lattice-lexicon.h"
 #include "rnnlm/rnnlm-lattice-rescoring.h"
 #include "nnet3/nnet-utils.h"
+#include "utils.h"
 
 #define DEFAULT_VERBOSITY 0
 
@@ -173,16 +174,15 @@ namespace dragonfly {
         LoadLexicon(word_syms_filename, word_align_lexicon_filename);
 
         if (enable_rnnlm_) {
-            std::string rnnlm_dir = "../../../../CompCom-edge/kaldi_model_daanzu.standard1-unk/";
-            // std::string rnnlm_dir = std::filesystem::path(model_filename).replace_filename("rnnlm");
-            VectorFst<StdArc> *lm_to_subtract_fst = ReadAndPrepareLmFst(rnnlm_dir + "G.fst");
+            ExecutionTimer timer("loading rnnlm");
+            VectorFst<StdArc> *lm_to_subtract_fst = ReadAndPrepareLmFst(model_dir + "/G.fst");
             BackoffDeterministicOnDemandFst<StdArc> *lm_to_subtract_det_backoff = new BackoffDeterministicOnDemandFst<StdArc>(*lm_to_subtract_fst);
             rnnlm_scale_ = 1.0;
             lm_to_subtract_det_scale_ = new ScaleDeterministicOnDemandFst(-rnnlm_scale_, lm_to_subtract_det_backoff);
 
-            ReadKaldiObject(rnnlm_dir + "rnnlm/" + "final.raw", &rnnlm_);
+            ReadKaldiObject((model_dir + "/rnnlm/" + "final.raw"), &rnnlm_);
             KALDI_ASSERT(IsSimpleNnet(rnnlm_));
-            ReadKaldiObject(rnnlm_dir + "rnnlm/" + "word_embedding.mat", &word_embedding_mat_);
+            ReadKaldiObject((model_dir + "/rnnlm/" + "word_embedding.mat"), &word_embedding_mat_);
 
             rnnlm_opts_.bos_index = word_syms->Find("<s>");
             rnnlm_opts_.eos_index = word_syms->Find("</s>");
@@ -314,11 +314,13 @@ namespace dragonfly {
             }
 
             if (enable_rnnlm_) {
+                ExecutionTimer timer("rnnlm rescoring");
                 rnnlm::KaldiRnnlmDeterministicFst lm_to_add_orig(rnnlm_max_ngram_order_, *rnnlm_info_);
                 // std::vector<int32> precontext({(int32)word_syms->Find("invoice")});
                 // std::vector<int32> precontext(10, word_syms->Find("invoice"));
                 // lm_to_add_orig.Prime(precontext);
                 DeterministicOnDemandFst<StdArc> *lm_to_add = new ScaleDeterministicOnDemandFst(rnnlm_scale_, &lm_to_add_orig);
+                ComposeDeterministicOnDemandFst<StdArc> combined_lms(lm_to_subtract_det_scale_, lm_to_add);
 
                 // Before composing with the LM FST, we scale the lattice weights
                 // by the inverse of "lm_scale".  We'll later scale by "lm_scale".
@@ -329,8 +331,6 @@ namespace dragonfly {
                 if (decodable_config.acoustic_scale != 1.0)
                     ScaleLattice(AcousticLatticeScale(decodable_config.acoustic_scale), &clat);
                 TopSortCompactLatticeIfNeeded(&clat);
-
-                ComposeDeterministicOnDemandFst<StdArc> combined_lms(lm_to_subtract_det_scale_, lm_to_add);
 
                 // Composes lattice with language model.
                 CompactLattice composed_clat;
