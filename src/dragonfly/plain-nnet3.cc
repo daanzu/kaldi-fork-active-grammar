@@ -33,7 +33,7 @@ extern "C" {
 #include "rnnlm/rnnlm-lattice-rescoring.h"
 #include "nnet3/nnet-utils.h"
 
-#define DEFAULT_VERBOSITY 1
+#define DEFAULT_VERBOSITY 0
 
 namespace dragonfly {
     using namespace kaldi;
@@ -118,7 +118,8 @@ namespace dragonfly {
         std::string& model_dir, std::string& mfcc_config_filename, std::string& ie_config_filename, std::string& model_filename,
         std::string& word_syms_filename, std::string& word_align_lexicon_filename, std::string& fst_filename,
         int32 verbosity) {
-        if (verbosity >= 2) {
+        SetVerboseLevel(verbosity);
+        if (verbosity >= 0) {
             KALDI_LOG << "model_dir: " << model_dir;
             KALDI_LOG << "word_syms_filename: " << word_syms_filename;
             KALDI_LOG << "word_align_lexicon_filename: " << word_align_lexicon_filename;
@@ -126,7 +127,8 @@ namespace dragonfly {
             KALDI_LOG << "ie_config_filename: " << ie_config_filename;
             KALDI_LOG << "model_filename: " << model_filename;
             KALDI_LOG << "fst_filename: " << fst_filename;
-        } else if (verbosity == 1) {
+            KALDI_LOG << "verbosity: " << verbosity;
+        } else if (verbosity == -1) {
             SetLogHandler([](const LogMessageEnvelope& envelope, const char* message) {
                 if (envelope.severity <= LogMessageEnvelope::kWarning) {
                     std::cerr << "[KALDI severity=" << envelope.severity << "] " << message << "\n";

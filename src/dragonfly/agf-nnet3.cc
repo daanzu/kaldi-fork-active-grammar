@@ -36,7 +36,7 @@ extern "C" {
 #include "nnet3/nnet-utils.h"
 #include "decoder/active-grammar-fst.h"
 
-#define DEFAULT_VERBOSITY 1
+#define DEFAULT_VERBOSITY 0
 
 namespace dragonfly {
 
@@ -367,7 +367,8 @@ AgfNNet3OnlineModelWrapper::AgfNNet3OnlineModelWrapper(
     std::string& word_syms_filename, std::string& word_align_lexicon_filename,
     std::string& top_fst_filename, std::string& dictation_fst_filename,
     int32 verbosity) {
-    if (verbosity >= 2) {
+    SetVerboseLevel(verbosity);
+    if (verbosity >= 0) {
         KALDI_LOG << "model_dir: " << model_dir;
         KALDI_LOG << "nonterm_phones_offset: " << nonterm_phones_offset;
         KALDI_LOG << "rules_nonterm_offset: " << rules_nonterm_offset;
@@ -379,8 +380,9 @@ AgfNNet3OnlineModelWrapper::AgfNNet3OnlineModelWrapper(
         KALDI_LOG << "model_filename: " << model_filename;
         KALDI_LOG << "top_fst_filename: " << top_fst_filename;
         KALDI_LOG << "dictation_fst_filename: " << dictation_fst_filename;
+        KALDI_LOG << "verbosity: " << verbosity;
         KALDI_LOG << "kNontermBigNumber, GetEncodingMultiple: " << kNontermBigNumber << ", " << GetEncodingMultiple(nonterm_phones_offset);
-    } else if (verbosity == 1) {
+    } else if (verbosity == -1) {
         SetLogHandler([](const LogMessageEnvelope& envelope, const char* message) {
             if (envelope.severity <= LogMessageEnvelope::kWarning) {
                 std::cerr << "[KALDI severity=" << envelope.severity << "] " << message << "\n";
