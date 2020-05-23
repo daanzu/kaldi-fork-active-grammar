@@ -1,6 +1,6 @@
 // rnnlm/rnnlm-lattice-rescoring.cc
 
-// Copyright 2017 Johns Hopkins University (author: Daniel Povey) 
+// Copyright 2017 Johns Hopkins University (author: Daniel Povey)
 //           2017 Yiming Wang
 //           2017 Hainan Xu
 //
@@ -32,7 +32,7 @@ KaldiRnnlmDeterministicFst::~KaldiRnnlmDeterministicFst() {
   int32 size = state_to_rnnlm_state_.size();
   for (int32 i = 0; i < size; i++)
     delete state_to_rnnlm_state_[i];
-  
+
   state_to_rnnlm_state_.resize(0);
   state_to_wseq_.resize(0);
   wseq_to_state_.clear();
@@ -44,27 +44,43 @@ void KaldiRnnlmDeterministicFst::Clear() {
   int32 size = state_to_rnnlm_state_.size();
   for (int32 i = 1; i < size; i++)
     delete state_to_rnnlm_state_[i];
-  
+
   state_to_rnnlm_state_.resize(1);
   state_to_wseq_.resize(1);
   wseq_to_state_.clear();
   wseq_to_state_[state_to_wseq_[0]] = 0;
+
+  // Reset priming
+  delete state_to_rnnlm_state_[0];
+  state_to_rnnlm_state_[0] = new RnnlmComputeState(info_, bos_index_);
 }
 
 KaldiRnnlmDeterministicFst::KaldiRnnlmDeterministicFst(int32 max_ngram_order,
-    const RnnlmComputeStateInfo &info) {
-  max_ngram_order_ = max_ngram_order;
+      const RnnlmComputeStateInfo &info):
+    max_ngram_order_(max_ngram_order), info_(info) {
   bos_index_ = info.opts.bos_index;
   eos_index_ = info.opts.eos_index;
 
   std::vector<Label> bos_seq;
   bos_seq.push_back(bos_index_);
   state_to_wseq_.push_back(bos_seq);
-  RnnlmComputeState *decodable_rnnlm = new RnnlmComputeState(info, bos_index_);
+  RnnlmComputeState *decodable_rnnlm = new RnnlmComputeState(info_, bos_index_);
   wseq_to_state_[bos_seq] = 0;
   start_state_ = 0;
 
   state_to_rnnlm_state_.push_back(decodable_rnnlm);
+}
+
+void KaldiRnnlmDeterministicFst::Prime(const std::vector<Label> &words) {
+  // RNNLM is empty other than bos_index_
+  KALDI_ASSERT(state_to_rnnlm_state_.size() == 1);
+  KALDI_ASSERT(wseq_to_state_.size() == 1);
+  std::vector<Label> bos_seq({bos_index_});
+  KALDI_ASSERT(wseq_to_state_[bos_seq] == 0);
+  auto rnnlm = state_to_rnnlm_state_[0];
+  for (auto word : words) {
+    rnnlm->AddWord(word);
+  }
 }
 
 fst::StdArc::Weight KaldiRnnlmDeterministicFst::Final(StateId s) {

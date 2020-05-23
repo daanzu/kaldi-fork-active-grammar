@@ -216,6 +216,9 @@
     <ProjectReference Include="..\kaldi-online2\kaldi-online2.vcxproj">
       <Project>{8266fdc8-7bd2-4c10-844b-2f76431d6a35}</Project>
     </ProjectReference>
+    <ProjectReference Include="..\kaldi-rnnlm\kaldi-rnnlm.vcxproj">
+      <Project>{8d494799-85e2-4e4f-a140-6ec9b2c8aa90}</Project>
+    </ProjectReference>
     <ProjectReference Include="..\kaldi-transform\kaldi-transform.vcxproj">
       <Project>{a918adab-47b4-4983-b290-280dc9de76c8}</Project>
     </ProjectReference>

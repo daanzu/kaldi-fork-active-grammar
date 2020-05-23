@@ -45,6 +45,7 @@ class KaldiRnnlmDeterministicFst
       const RnnlmComputeStateInfo &info);
   ~KaldiRnnlmDeterministicFst();
 
+  void Prime(const std::vector<Label> &words);
   void Clear();
 
   // We cannot use "const" because the pure virtual function in the interface is
@@ -64,6 +65,7 @@ class KaldiRnnlmDeterministicFst
   int32 max_ngram_order_;
   int32 bos_index_;
   int32 eos_index_;
+  const RnnlmComputeStateInfo &info_;
 
   MapType wseq_to_state_;
 

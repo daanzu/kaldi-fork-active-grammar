@@ -27,8 +27,10 @@ extern "C" {
 #include "online2/online-timing.h"
 #include "online2/online-endpoint.h"
 #include "fstext/fstext-lib.h"
+#include "lat/compose-lattice-pruned.h"
 #include "lat/lattice-functions.h"
 #include "lat/word-align-lattice-lexicon.h"
+#include "rnnlm/rnnlm-lattice-rescoring.h"
 #include "nnet3/nnet-utils.h"
 
 #define DEFAULT_VERBOSITY 1
@@ -97,6 +99,16 @@ namespace dragonfly {
         std::set<int32> word_align_lexicon_words;  // contains word-ids that are in word_align_lexicon_info
         bool best_path_has_valid_word_align;
 
+        bool enable_rnnlm_ = true;
+        nnet3::Nnet rnnlm_;
+        CuMatrix<BaseFloat> word_embedding_mat_;
+        fst::ScaleDeterministicOnDemandFst* lm_to_subtract_det_scale_ = nullptr;
+        rnnlm::RnnlmComputeStateComputationOptions rnnlm_opts_;
+        rnnlm::RnnlmComputeStateInfo* rnnlm_info_ = nullptr;
+        int32 rnnlm_max_ngram_order_;
+        ComposeLatticePrunedOptions rnnlm_compose_opts_;
+        BaseFloat rnnlm_scale_;
+
         void StartDecoding();
         void FreeDecoder(void);
     };
@@ -156,6 +168,24 @@ namespace dragonfly {
         decode_fst = dynamic_cast<StdConstFst*>(ReadFstKaldiGeneric(fst_filename));
 
         LoadLexicon(word_syms_filename, word_align_lexicon_filename);
+
+        if (enable_rnnlm_) {
+            std::string rnnlm_dir = "../../../../CompCom-edge/kaldi_model_daanzu.standard1-unk/";
+            // std::string rnnlm_dir = std::filesystem::path(model_filename).replace_filename("rnnlm");
+            VectorFst<StdArc> *lm_to_subtract_fst = ReadAndPrepareLmFst(rnnlm_dir + "G.fst");
+            BackoffDeterministicOnDemandFst<StdArc> *lm_to_subtract_det_backoff = new BackoffDeterministicOnDemandFst<StdArc>(*lm_to_subtract_fst);
+            rnnlm_scale_ = 1.0;
+            lm_to_subtract_det_scale_ = new ScaleDeterministicOnDemandFst(-rnnlm_scale_, lm_to_subtract_det_backoff);
+
+            ReadKaldiObject(rnnlm_dir + "rnnlm/" + "final.raw", &rnnlm_);
+            KALDI_ASSERT(IsSimpleNnet(rnnlm_));
+            ReadKaldiObject(rnnlm_dir + "rnnlm/" + "word_embedding.mat", &word_embedding_mat_);
+
+            rnnlm_opts_.bos_index = word_syms->Find("<s>");
+            rnnlm_opts_.eos_index = word_syms->Find("</s>");
+            rnnlm_info_ = new rnnlm::RnnlmComputeStateInfo(rnnlm_opts_, rnnlm_, word_embedding_mat_);
+            rnnlm_max_ngram_order_ = 4;
+        }
 
         decoder = nullptr;
         tot_frames = 0;
@@ -258,8 +288,8 @@ namespace dragonfly {
         }
 
         if (silence_weighting->Active()
-            && feature_pipeline->NumFramesReady() > 0
-            && feature_pipeline->IvectorFeature() != nullptr) {
+                && feature_pipeline->NumFramesReady() > 0
+                && feature_pipeline->IvectorFeature() != nullptr) {
             std::vector<std::pair<int32, BaseFloat> > delta_weights;
             silence_weighting->ComputeCurrentTraceback(decoder->Decoder());
             silence_weighting->GetDeltaWeights(feature_pipeline->NumFramesReady(), &delta_weights);
@@ -278,6 +308,45 @@ namespace dragonfly {
             if (clat.NumStates() == 0) {
                 KALDI_WARN << "Empty lattice.";
                 return false;
+            }
+
+            if (enable_rnnlm_) {
+                rnnlm::KaldiRnnlmDeterministicFst lm_to_add_orig(rnnlm_max_ngram_order_, *rnnlm_info_);
+                // std::vector<int32> precontext({(int32)word_syms->Find("invoice")});
+                // std::vector<int32> precontext(10, word_syms->Find("invoice"));
+                // lm_to_add_orig.Prime(precontext);
+                DeterministicOnDemandFst<StdArc> *lm_to_add = new ScaleDeterministicOnDemandFst(rnnlm_scale_, &lm_to_add_orig);
+
+                // Before composing with the LM FST, we scale the lattice weights
+                // by the inverse of "lm_scale".  We'll later scale by "lm_scale".
+                // We do it this way so we can determinize and it will give the
+                // right effect (taking the "best path" through the LM) regardless
+                // of the sign of lm_scale.
+                // NOTE: The above comment is incorrect, but the below code is correct.
+                if (decodable_config.acoustic_scale != 1.0)
+                    ScaleLattice(AcousticLatticeScale(decodable_config.acoustic_scale), &clat);
+                TopSortCompactLatticeIfNeeded(&clat);
+
+                ComposeDeterministicOnDemandFst<StdArc> combined_lms(lm_to_subtract_det_scale_, lm_to_add);
+
+                // Composes lattice with language model.
+                CompactLattice composed_clat;
+                ComposeCompactLatticePruned(rnnlm_compose_opts_, clat, &combined_lms, &composed_clat);
+
+                if (composed_clat.NumStates() == 0) {
+                    // Something went wrong.  A warning will already have been printed.
+                    KALDI_WARN << "Empty lattice after RNNLM rescoring.";
+                    // FIXME: fall back to original?
+                } else {
+                    if (decodable_config.acoustic_scale != 1.0) {
+                        if (decodable_config.acoustic_scale == 0.0)
+                            KALDI_ERR << "Acoustic scale cannot be zero.";
+                        ScaleLattice(AcousticLatticeScale(1.0 / decodable_config.acoustic_scale), &composed_clat);
+                    }
+                    clat = composed_clat;
+                }
+
+                delete lm_to_add;
             }
 
             CompactLatticeShortestPath(clat, &best_path_clat);
