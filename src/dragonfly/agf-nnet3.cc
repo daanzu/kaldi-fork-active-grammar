@@ -35,6 +35,7 @@ extern "C" {
 #include "lat/word-align-lattice-lexicon.h"
 #include "nnet3/nnet-utils.h"
 #include "decoder/active-grammar-fst.h"
+#include "utils.h"
 
 #define DEFAULT_VERBOSITY 0
 
@@ -358,6 +359,7 @@ class AgfNNet3OnlineModelWrapper {
         StdConstFst* ReadFstFile(std::string filename);
         void StartDecoding(std::vector<bool> grammars_activity);
         void FreeDecoder(bool keep_feature_pipeline = false);
+        std::string WordIdsToString(const std::vector<int32> &wordIds);
 };
 
 AgfNNet3OnlineModelWrapper::AgfNNet3OnlineModelWrapper(
@@ -589,7 +591,8 @@ void AgfNNet3OnlineModelWrapper::FreeDecoder(bool keep_feature_pipeline) {
 
 // grammars_activity is ignored once decoding has already started
 bool AgfNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, int32 num_frames, BaseFloat* frames, bool finalize,
-    std::vector<bool>& grammars_activity, bool save_adaptation_state) {
+        std::vector<bool>& grammars_activity, bool save_adaptation_state) {
+    ExecutionTimer timer("Decode", 2);
 
     if (!decoder || decoder_finalized_)
         StartDecoding(grammars_activity);
@@ -633,7 +636,7 @@ bool AgfNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, int32 num_frames, B
             return false;
         }
 
-        WriteLattice(clat, "tmp/lattice");
+        // WriteLattice(clat, "tmp/lattice");
 
         if (true) {
             CompactLattice pre_dictation_clat, in_dictation_clat, post_dictation_clat;
@@ -652,12 +655,20 @@ bool AgfNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, int32 num_frames, B
         CompactLatticeShortestPath(clat, &best_path_clat);
 
         if (true) {
+            // Difference between best path and second best path
+            ExecutionTimer timer("confidence");
             int32 num_paths;
-            float conf = SentenceLevelConfidence(clat, &num_paths, NULL, NULL);
+            // float conf = SentenceLevelConfidence(clat, &num_paths, NULL, NULL);
+            std::vector<int32> best_sentence, second_best_sentence;
+            float conf = SentenceLevelConfidence(clat, &num_paths, &best_sentence, &second_best_sentence);
             KALDI_LOG << "SLC(" << num_paths << "paths): " << conf;
+            if (num_paths >= 1) KALDI_LOG << "    1st best: " << WordIdsToString(best_sentence);
+            if (num_paths >= 2) KALDI_LOG << "    2nd best: " << WordIdsToString(second_best_sentence);
         }
 
         if (true) {
+            // Expected sentence error rate
+            ExecutionTimer timer("expected_ser");
             MinimumBayesRiskOptions mbr_opts;
             mbr_opts.decode_mbr = false;
             MinimumBayesRisk mbr(clat, mbr_opts);
@@ -669,10 +680,12 @@ bool AgfNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, int32 num_frames, B
             for (size_t i = 0; i < words.size(); i++) {
                 text << " " << word_syms->Find(words[i]);
             }
-            KALDI_LOG << "MBR(false): " << mbr.GetBayesRisk() << text.str();
+            KALDI_LOG << "MBR(SER): " << mbr.GetBayesRisk() << text.str();
         }
 
         if (true) {
+            // Expected word error rate
+            ExecutionTimer timer("expected_wer");
             MinimumBayesRiskOptions mbr_opts;
             mbr_opts.decode_mbr = true;
             MinimumBayesRisk mbr(clat, mbr_opts);
@@ -684,7 +697,18 @@ bool AgfNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, int32 num_frames, B
             for (size_t i = 0; i < words.size(); i++) {
                 text << " " << word_syms->Find(words[i]);
             }
-            KALDI_LOG << "MBR(true): " << mbr.GetBayesRisk() << text.str();
+            KALDI_LOG << "MBR(WER): " << mbr.GetBayesRisk() << text.str();
+            timer.stop();
+
+            if (true) {
+                ExecutionTimer timer("compare mbr");
+                MinimumBayesRiskOptions mbr_opts;
+                mbr_opts.decode_mbr = false;
+                MinimumBayesRisk mbr_ser(clat, mbr_opts);
+                const vector<int32> &words_ser = mbr_ser.GetOneBest();
+                if (mbr.GetBayesRisk() != mbr_ser.GetBayesRisk()) KALDI_WARN << "MBR risks differ";
+                if (words != words_ser) KALDI_WARN << "MBR words differ";
+            }
         }
 
         // BaseFloat inv_acoustic_scale = 1.0 / decodable_config.acoustic_scale;
@@ -714,6 +738,15 @@ bool AgfNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, int32 num_frames, B
     }
 
     return true;
+}
+
+std::string AgfNNet3OnlineModelWrapper::WordIdsToString(const std::vector<int32> &wordIds) {
+    stringstream text;
+    for (size_t i = 0; i < wordIds.size(); i++) {
+        if (i != 0) text << " ";
+        text << word_syms->Find(wordIds[i]);
+    }
+    return text.str();
 }
 
 void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, float& likelihood, float& confidence, float& am_score, float& lm_score) {
