@@ -748,18 +748,22 @@ std::string AgfNNet3OnlineModelWrapper::WordIdsToString(const std::vector<int32>
     return text.str();
 }
 
-void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, float& likelihood, float& confidence, float& am_score, float& lm_score) {
-    Lattice best_path_lat;
+void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, float& likelihood, float& confidence, float& expected_wer, float& am_score, float& lm_score) {
     ExecutionTimer timer("GetDecodedString", 2);
 
-    if (decoder) {
+    if (!decoder) KALDI_ERR << "No decoder!";
+
+    if (decoder->NumFramesDecoded() == 0) {
+        if (decoder_finalized_) KALDI_WARN << "GetDecodedString on empty decoder";
+        // else KALDI_VLOG(2) << "GetDecodedString on empty decoder";
+        decoded_string = "";
+        likelihood = confidence = expected_wer = lm_score = am_score = NAN;
+        return;
+    }
+
+    Lattice best_path_lat;
+    if (!decoder_finalized_) {
         // Decoding is not finished yet, so we will look up the best partial result so far
-        if (decoder->NumFramesDecoded() == 0) {
-            likelihood = 0.0;
-            lm_score = 0.0;
-            am_score = 0.0;
-            return;
-        }
         decoder->GetBestPath(false, &best_path_lat);
     } else {
         ConvertLattice(best_path_clat, &best_path_lat);
@@ -942,19 +946,20 @@ bool reset_adaptation_state_agf_nnet3(void* model_vp) {
     }
 }
 
-bool get_output_agf_nnet3(void* model_vp, char* output, int32_t output_max_length, float* likelihood_p, float* confidence_p, float* am_score_p, float* lm_score_p) {
+bool get_output_agf_nnet3(void* model_vp, char* output, int32_t output_max_length, float* likelihood_p, float* confidence_p, float* expected_wer_p, float* am_score_p, float* lm_score_p) {
     try {
         if (output_max_length < 1) return false;
         AgfNNet3OnlineModelWrapper* model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
         std::string decoded_string;
-	    float likelihood, confidence, am_score, lm_score;
-	    model->GetDecodedString(decoded_string, likelihood, confidence, am_score, lm_score);
+	    float likelihood, confidence, expected_wer, am_score, lm_score;
+	    model->GetDecodedString(decoded_string, likelihood, confidence, expected_wer, am_score, lm_score);
 
         const char* cstr = decoded_string.c_str();
         strncpy(output, cstr, output_max_length);
         output[output_max_length - 1] = 0;
         if (likelihood_p != nullptr) *likelihood_p = likelihood;
         if (confidence_p != nullptr) *confidence_p = confidence;
+        if (expected_wer_p != nullptr) *expected_wer_p = expected_wer;
         if (am_score_p != nullptr) *am_score_p = am_score;
         if (lm_score_p != nullptr) *lm_score_p = lm_score;
         return true;
