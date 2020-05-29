@@ -315,7 +315,7 @@ class AgfNNet3OnlineModelWrapper {
         void ResetAdaptationState();
         bool Decode(BaseFloat samp_freq, int32 num_frames, BaseFloat* frames, bool finalize, std::vector<bool>& grammars_activity, bool save_adaptation_state = true);
 
-        void GetDecodedString(std::string& decoded_string, float& likelihood, float& confidence, float& am_score, float& lm_score);
+        void GetDecodedString(std::string& decoded_string, float& likelihood, float& confidence, float& expected_wer, float& am_score, float& lm_score);
         bool GetWordAlignment(std::vector<string>& words, std::vector<int32>& times, std::vector<int32>& lengths, bool include_eps);
 
     protected:
@@ -358,7 +358,7 @@ class AgfNNet3OnlineModelWrapper {
 
         StdConstFst* ReadFstFile(std::string filename);
         void StartDecoding(std::vector<bool> grammars_activity);
-        void FreeDecoder(bool keep_feature_pipeline = false);
+        void FreeDecoder();
         std::string WordIdsToString(const std::vector<int32> &wordIds);
 };
 
@@ -574,7 +574,7 @@ void AgfNNet3OnlineModelWrapper::StartDecoding(std::vector<bool> grammars_activi
     best_path_has_valid_word_align = false;
 }
 
-void AgfNNet3OnlineModelWrapper::FreeDecoder(bool keep_feature_pipeline) {
+void AgfNNet3OnlineModelWrapper::FreeDecoder() {
     if (decoder) {
         delete decoder;
         decoder = nullptr;
@@ -583,7 +583,7 @@ void AgfNNet3OnlineModelWrapper::FreeDecoder(bool keep_feature_pipeline) {
         delete silence_weighting;
         silence_weighting = nullptr;
     }
-    if (feature_pipeline && !keep_feature_pipeline) {
+    if (feature_pipeline) {
         delete feature_pipeline;
         feature_pipeline = nullptr;
     }
@@ -594,9 +594,10 @@ bool AgfNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, int32 num_frames, B
         std::vector<bool>& grammars_activity, bool save_adaptation_state) {
     ExecutionTimer timer("Decode", 2);
 
-    if (!decoder || decoder_finalized_)
+    if (!decoder || decoder_finalized_) {
+        FreeDecoder();
         StartDecoding(grammars_activity);
-    else if (grammars_activity.size() != 0)
+    } else if (grammars_activity.size() != 0)
     	KALDI_LOG << "non-empty grammars_activity passed on already-started decode";
 
     Vector<BaseFloat> wave_part(num_frames, kUndefined);
@@ -613,8 +614,8 @@ bool AgfNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, int32 num_frames, B
     }
 
     if (silence_weighting->Active()
-        && feature_pipeline->NumFramesReady() > 0
-        && feature_pipeline->IvectorFeature() != nullptr) {
+            && feature_pipeline->NumFramesReady() > 0
+            && feature_pipeline->IvectorFeature() != nullptr) {
         std::vector<std::pair<int32, BaseFloat> > delta_weights;
         silence_weighting->ComputeCurrentTraceback(decoder->Decoder());
         silence_weighting->GetDeltaWeights(feature_pipeline->NumFramesReady(), &delta_weights);
@@ -624,6 +625,7 @@ bool AgfNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, int32 num_frames, B
     decoder->AdvanceDecoding();
 
     if (finalize) {
+        ExecutionTimer timer("Decode finalize", 2);
         decoder->FinalizeDecoding();
         decoder_finalized_ = true;
 
@@ -638,7 +640,7 @@ bool AgfNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, int32 num_frames, B
 
         // WriteLattice(clat, "tmp/lattice");
 
-        if (true) {
+        if (false) {
             CompactLattice pre_dictation_clat, in_dictation_clat, post_dictation_clat;
             auto nonterm_dictation = word_syms->Find("#nonterm:dictation");
             auto nonterm_end = word_syms->Find("#nonterm:end");
@@ -717,12 +719,9 @@ bool AgfNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, int32 num_frames, B
         tot_frames_decoded = tot_frames;
         tot_frames = 0;
 
-        FreeDecoder(true);
-
         if (save_adaptation_state) {
             feature_pipeline->GetAdaptationState(adaptation_state);
-            KALDI_LOG << "Saved adaptation state.";
-            FreeDecoder();
+            KALDI_LOG << "Saved adaptation state";
             // std::string output;
             // double likelihood;
             // GetDecodedString(output, likelihood);
@@ -751,6 +750,7 @@ std::string AgfNNet3OnlineModelWrapper::WordIdsToString(const std::vector<int32>
 
 void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, float& likelihood, float& confidence, float& am_score, float& lm_score) {
     Lattice best_path_lat;
+    ExecutionTimer timer("GetDecodedString", 2);
 
     if (decoder) {
         // Decoding is not finished yet, so we will look up the best partial result so far
@@ -769,9 +769,7 @@ void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, f
     std::vector<int32> alignment;
     LatticeWeight weight;
     bool ok = GetLinearSymbolSequence(best_path_lat, &alignment, &words, &weight);
-    if (!ok) {
-        KALDI_WARN << "GetLinearSymbolSequence returned false";
-    }
+    if (!ok) KALDI_ERR << "GetLinearSymbolSequence returned false";
 
     int32 num_frames = alignment.size();
     int32 num_words = words.size();
@@ -799,13 +797,11 @@ void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, f
 
 bool AgfNNet3OnlineModelWrapper::GetWordAlignment(std::vector<string>& words, std::vector<int32>& times, std::vector<int32>& lengths, bool include_eps) {
     if (!word_align_lexicon.size() || !word_align_lexicon_info) {
-        KALDI_WARN << "No word alignment lexicon loaded";
-        return false;
+        KALDI_ERR << "No word alignment lexicon loaded";
     }
 
     if (!best_path_has_valid_word_align) {
-        KALDI_WARN << "There was a word not in word alignment lexicon";
-        return false;
+        KALDI_ERR << "There was a word not in word alignment lexicon";
     }
 
     CompactLattice aligned_clat;
