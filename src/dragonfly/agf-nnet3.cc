@@ -632,16 +632,6 @@ bool AgfNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, int32 num_frames, B
         decoder->FinalizeDecoding();
         decoder_finalized_ = true;
 
-        bool end_of_utterance = true;
-        decoder->GetLattice(end_of_utterance, &decoded_clat);
-
-        if (decoded_clat.NumStates() == 0) {
-            KALDI_WARN << "Empty lattice.";
-            return false;
-        }
-
-        // WriteLattice(decoded_clat, "tmp/lattice");
-
         tot_frames_decoded += tot_frames;
         tot_frames = 0;
 
@@ -667,6 +657,7 @@ bool AgfNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, int32 num_frames, B
 
 void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, float* likelihood, float* am_score, float* lm_score, float* confidence, float* expected_error_rate) {
     ExecutionTimer timer("GetDecodedString", 2);
+
     decoded_string = "";
     if (likelihood) *likelihood = NAN;
     if (confidence) *confidence = NAN;
@@ -681,58 +672,57 @@ void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, f
         return;
     }
 
-    CompactLattice& clat = decoded_clat;
-    if (clat.NumStates() == 0) KALDI_ERR << "No decoded lattice";
-    CompactLatticeShortestPath(clat, &best_path_clat);
-
     Lattice best_path_lat;
     if (!decoder_finalized_) {
         // Decoding is not finished yet, so we will look up the best partial result so far
         decoder->GetBestPath(false, &best_path_lat);
+
     } else {
+        decoder->GetLattice(true, &decoded_clat);
+        if (decoded_clat.NumStates() == 0) KALDI_ERR << "Empty decoded lattice";
+        CompactLatticeShortestPath(decoded_clat, &best_path_clat);
         ConvertLattice(best_path_clat, &best_path_lat);
-    }
+        // WriteLattice(decoded_clat, "tmp/lattice");
 
-    // BaseFloat inv_acoustic_scale = 1.0 / decodable_config.acoustic_scale;
-    // ScaleLattice(AcousticLatticeScale(inv_acoustic_scale), &clat);
+        // BaseFloat inv_acoustic_scale = 1.0 / decodable_config.acoustic_scale;
+        // ScaleLattice(AcousticLatticeScale(inv_acoustic_scale), &decoded_clat);
 
-    if (decoder_finalized_) {
-        if (false) {
+        if (false || (true && (GetVerboseLevel() >= 1))) {
             // Difference between best path and second best path
             ExecutionTimer timer("confidence");
             int32 num_paths;
-            // float conf = SentenceLevelConfidence(clat, &num_paths, NULL, NULL);
+            // float conf = SentenceLevelConfidence(decoded_clat, &num_paths, NULL, NULL);
             std::vector<int32> best_sentence, second_best_sentence;
-            float conf = SentenceLevelConfidence(clat, &num_paths, &best_sentence, &second_best_sentence);
+            float conf = SentenceLevelConfidence(decoded_clat, &num_paths, &best_sentence, &second_best_sentence);
             KALDI_LOG << "SLC(" << num_paths << "paths): " << conf;
             if (num_paths >= 1) KALDI_LOG << "    1st best: " << WordIdsToString(best_sentence);
             if (num_paths >= 2) KALDI_LOG << "    2nd best: " << WordIdsToString(second_best_sentence);
             if (confidence) *confidence = conf;
         }
 
-        if (true) {
+        if (false || (true && (GetVerboseLevel() >= 1))) {
             // Expected sentence error rate
             ExecutionTimer timer("expected_ser");
             MinimumBayesRiskOptions mbr_opts;
             mbr_opts.decode_mbr = false;
-            MinimumBayesRisk mbr(clat, mbr_opts);
+            MinimumBayesRisk mbr(decoded_clat, mbr_opts);
             const vector<int32> &words = mbr.GetOneBest();
             // const vector<BaseFloat> &conf = mbr.GetOneBestConfidences();
             // const vector<pair<BaseFloat, BaseFloat> > &times = mbr.GetOneBestTimes();
-            KALDI_LOG << "MBR(SER): " << mbr.GetBayesRisk() << WordIdsToString(words);
+            KALDI_LOG << "MBR(SER): " << mbr.GetBayesRisk() << " : " << WordIdsToString(words);
             if (expected_error_rate) *expected_error_rate = mbr.GetBayesRisk();
         }
 
-        if (true) {
+        if (false || (true && (GetVerboseLevel() >= 1))) {
             // Expected word error rate
             ExecutionTimer timer("expected_wer");
             MinimumBayesRiskOptions mbr_opts;
             mbr_opts.decode_mbr = true;
-            MinimumBayesRisk mbr(clat, mbr_opts);
+            MinimumBayesRisk mbr(decoded_clat, mbr_opts);
             const vector<int32> &words = mbr.GetOneBest();
             // const vector<BaseFloat> &conf = mbr.GetOneBestConfidences();
             // const vector<pair<BaseFloat, BaseFloat> > &times = mbr.GetOneBestTimes();
-            KALDI_LOG << "MBR(WER): " << mbr.GetBayesRisk() << WordIdsToString(words);
+            KALDI_LOG << "MBR(WER): " << mbr.GetBayesRisk() << " : " << WordIdsToString(words);
             if (expected_error_rate) *expected_error_rate = mbr.GetBayesRisk();
             timer.stop();
 
@@ -740,7 +730,7 @@ void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, f
                 ExecutionTimer timer("compare mbr");
                 MinimumBayesRiskOptions mbr_opts;
                 mbr_opts.decode_mbr = false;
-                MinimumBayesRisk mbr_ser(clat, mbr_opts);
+                MinimumBayesRisk mbr_ser(decoded_clat, mbr_opts);
                 const vector<int32> &words_ser = mbr_ser.GetOneBest();
                 if (mbr.GetBayesRisk() != mbr_ser.GetBayesRisk()) KALDI_WARN << "MBR risks differ";
                 if (words != words_ser) KALDI_WARN << "MBR words differ";
@@ -748,10 +738,11 @@ void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, f
         }
 
         if (true) {
+            // Use MAP (SER) as expected error rate
             ExecutionTimer timer("expected_error_rate");
             MinimumBayesRiskOptions mbr_opts;
             mbr_opts.decode_mbr = false;
-            MinimumBayesRisk mbr(clat, mbr_opts);
+            MinimumBayesRisk mbr(decoded_clat, mbr_opts);
             // const vector<int32> &words = mbr.GetOneBest();
             if (expected_error_rate) *expected_error_rate = mbr.GetBayesRisk();
         }
@@ -764,7 +755,7 @@ void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, f
             CopyDictationVisitor<CompactLatticeArc> visitor(&pre_dictation_clat, &in_dictation_clat, &post_dictation_clat, &ok, nonterm_dictation, nonterm_end);
             KALDI_ASSERT(ok);
             AnyArcFilter<CompactLatticeArc> filter;
-            DfsVisit(clat, &visitor, filter, true);
+            DfsVisit(decoded_clat, &visitor, filter, true);
             WriteLattice(in_dictation_clat, "tmp/lattice_dict");
             WriteLattice(pre_dictation_clat, "tmp/lattice_dictpre");
             WriteLattice(post_dictation_clat, "tmp/lattice_dictpost");
