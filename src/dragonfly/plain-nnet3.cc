@@ -100,7 +100,7 @@ namespace dragonfly {
         std::set<int32> word_align_lexicon_words;  // contains word-ids that are in word_align_lexicon_info
         bool best_path_has_valid_word_align;
 
-        bool enable_rnnlm_ = true;
+        bool enable_rnnlm_ = false;
         nnet3::Nnet rnnlm_;
         CuMatrix<BaseFloat> word_embedding_mat_;
         fst::ScaleDeterministicOnDemandFst* lm_to_subtract_det_scale_ = nullptr;
