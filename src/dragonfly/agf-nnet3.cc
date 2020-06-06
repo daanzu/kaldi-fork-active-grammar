@@ -313,7 +313,7 @@ class AgfNNet3OnlineModelWrapper {
         bool RemoveGrammarFst(int32 grammar_fst_index);
         bool SaveAdaptationState();
         void ResetAdaptationState();
-        bool Decode(BaseFloat samp_freq, int32 num_frames, BaseFloat* frames, bool finalize, std::vector<bool>& grammars_activity, bool save_adaptation_state = true);
+        bool Decode(BaseFloat samp_freq, const Vector<BaseFloat>& frames, bool finalize, std::vector<bool>& grammars_activity, bool save_adaptation_state = true);
 
         void GetDecodedString(std::string& decoded_string, float* likelihood, float* am_score, float* lm_score, float* confidence, float* expected_error_rate);
         bool GetWordAlignment(std::vector<string>& words, std::vector<int32>& times, std::vector<int32>& lengths, bool include_eps);
@@ -594,7 +594,7 @@ void AgfNNet3OnlineModelWrapper::FreeDecoder() {
 }
 
 // grammars_activity is ignored once decoding has already started
-bool AgfNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, int32 num_frames, BaseFloat* frames, bool finalize,
+bool AgfNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, const Vector<BaseFloat>& frames, bool finalize,
         std::vector<bool>& grammars_activity, bool save_adaptation_state) {
     ExecutionTimer timer("Decode", 2);
 
@@ -605,17 +605,13 @@ bool AgfNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, int32 num_frames, B
     	KALDI_LOG << "non-empty grammars_activity passed on already-started decode";
     }
 
-    Vector<BaseFloat> wave_part(num_frames, kUndefined);
-    for (int i = 0; i < num_frames; i++)
-        wave_part(i) = frames[i];
-    tot_frames += num_frames;
-
-    feature_pipeline->AcceptWaveform(samp_freq, wave_part);
-
-    if (finalize) {
-        // No more input, so flush out last frames.
-        feature_pipeline->InputFinished();
+    if (frames.Dim() > 0) {
+        feature_pipeline->AcceptWaveform(samp_freq, frames);
+        tot_frames += frames.Dim();
     }
+
+    if (finalize)
+        feature_pipeline->InputFinished();  // No more input, so flush out last frames.
 
     if (silence_weighting->Active()
             && feature_pipeline->NumFramesReady() > 0
@@ -747,6 +743,7 @@ void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, f
             MinimumBayesRisk mbr(decoded_clat, mbr_opts);
             // const vector<int32> &words = mbr.GetOneBest();
             if (expected_error_rate) *expected_error_rate = mbr.GetBayesRisk();
+            // FIXME: also do confidence?
         }
 
         if (false) {
@@ -822,7 +819,7 @@ bool AgfNNet3OnlineModelWrapper::GetWordAlignment(std::vector<string>& words, st
 
     // lattice-1best
     CompactLattice best_path_aligned;
-    CompactLatticeShortestPath(aligned_clat, &best_path_aligned); 
+    CompactLatticeShortestPath(aligned_clat, &best_path_aligned);
 
     // nbest-to-ctm
     std::vector<int32> word_idxs, times_raw, lengths_raw;
@@ -906,10 +903,17 @@ bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_frames, float
     try {
         AgfNNet3OnlineModelWrapper* model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
         std::vector<bool> grammars_activity(grammars_activity_cp_size, false);
-        for (size_t i = 0; i < grammars_activity_cp_size; i++) {
+        for (size_t i = 0; i < grammars_activity_cp_size; i++)
             grammars_activity[i] = grammars_activity_cp[i];
-        }
-        bool result = model->Decode(samp_freq, num_frames, frames, finalize, grammars_activity, save_adaptation_state);
+        if (num_frames > 1600)
+            KALDI_WARN << "Decoding large block of " << num_frames << " frames!";
+        Vector<BaseFloat> wave_part(num_frames, kUndefined);
+        for (int i = 0; i < num_frames; i++)
+            wave_part(i) = frames[i];
+        bool result = model->Decode(samp_freq, wave_part, finalize, grammars_activity, save_adaptation_state);
+        // bool result = false;
+        // for (int32_t i = 0; i < num_frames; i += 1000)
+        //     result = model->Decode(samp_freq, min(1000, num_frames - i), frames + i, finalize, grammars_activity, save_adaptation_state);
         return result;
 
     } catch(const std::exception& e) {
