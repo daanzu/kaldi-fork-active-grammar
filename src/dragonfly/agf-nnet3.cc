@@ -1,4 +1,4 @@
-// Defines the exported functions for the DLL application.
+// NNet3 AGF
 
 // Copyright   2019  David Zurow
 
@@ -363,12 +363,12 @@ class AgfNNet3OnlineModelWrapper {
 };
 
 AgfNNet3OnlineModelWrapper::AgfNNet3OnlineModelWrapper(
-    BaseFloat beam, int32 max_active, int32 min_active, BaseFloat lattice_beam, BaseFloat acoustic_scale, int32 frame_subsampling_factor,
-    std::string& model_dir, std::string& mfcc_config_filename, std::string& ie_config_filename, std::string& model_filename,
-    int32 nonterm_phones_offset, int32 rules_nonterm_offset, int32 dictation_nonterm_offset,
-    std::string& word_syms_filename, std::string& word_align_lexicon_filename,
-    std::string& top_fst_filename, std::string& dictation_fst_filename,
-    int32 verbosity) {
+        BaseFloat beam, int32 max_active, int32 min_active, BaseFloat lattice_beam, BaseFloat acoustic_scale, int32 frame_subsampling_factor,
+        std::string& model_dir, std::string& mfcc_config_filename, std::string& ie_config_filename, std::string& model_filename,
+        int32 nonterm_phones_offset, int32 rules_nonterm_offset, int32 dictation_nonterm_offset,
+        std::string& word_syms_filename, std::string& word_align_lexicon_filename,
+        std::string& top_fst_filename, std::string& dictation_fst_filename,
+        int32 verbosity) {
     SetVerboseLevel(verbosity);
     if (verbosity >= 0) {
         KALDI_LOG << "model_dir: " << model_dir;
@@ -489,7 +489,7 @@ StdConstFst* AgfNNet3OnlineModelWrapper::ReadFstFile(std::string filename) {
 int32 AgfNNet3OnlineModelWrapper::AddGrammarFst(std::string& grammar_fst_filename) {
     auto grammar_fst_index = grammar_fsts.size();
     auto grammar_fst = ReadFstFile(grammar_fst_filename);
-    KALDI_LOG << "adding FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst_filename;
+    KALDI_VLOG(2) << "adding FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst_filename;
     grammar_fsts.emplace_back(grammar_fst);
     grammar_fsts_filename_map[grammar_fst] = grammar_fst_filename;
     if (active_grammar_fst) {
@@ -505,7 +505,7 @@ bool AgfNNet3OnlineModelWrapper::ReloadGrammarFst(int32 grammar_fst_index, std::
     delete old_grammar_fst;
 
     auto grammar_fst = ReadFstFile(grammar_fst_filename);
-    KALDI_LOG << "reloading FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst_filename;
+    KALDI_VLOG(2) << "reloading FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst_filename;
     grammar_fsts.at(grammar_fst_index) = grammar_fst;
     grammar_fsts_filename_map[grammar_fst] = grammar_fst_filename;
     if (active_grammar_fst) {
@@ -517,7 +517,7 @@ bool AgfNNet3OnlineModelWrapper::ReloadGrammarFst(int32 grammar_fst_index, std::
 
 bool AgfNNet3OnlineModelWrapper::RemoveGrammarFst(int32 grammar_fst_index) {
     auto grammar_fst = grammar_fsts.at(grammar_fst_index);
-    KALDI_LOG << "removing FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fsts_filename_map.at(grammar_fst);
+    KALDI_VLOG(2) << "removing FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fsts_filename_map.at(grammar_fst);
     grammar_fsts.erase(grammar_fsts.begin() + grammar_fst_index);
     grammar_fsts_filename_map.erase(grammar_fst);
     delete grammar_fst;
@@ -546,6 +546,7 @@ void AgfNNet3OnlineModelWrapper::ResetAdaptationState() {
 
 void AgfNNet3OnlineModelWrapper::StartDecoding(std::vector<bool> grammars_activity) {
     FreeDecoder();
+    ExecutionTimer timer("StartDecoding", 2);
 
     if (active_grammar_fst == nullptr) {
         // Timer timer(true);
@@ -600,19 +601,19 @@ bool AgfNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, int32 num_frames, B
     if (!decoder || decoder_finalized_) {
         FreeDecoder();
         StartDecoding(grammars_activity);
-    } else if (grammars_activity.size() != 0)
+    } else if (grammars_activity.size() != 0) {
     	KALDI_LOG << "non-empty grammars_activity passed on already-started decode";
+    }
 
     Vector<BaseFloat> wave_part(num_frames, kUndefined);
-    for (int i = 0; i<num_frames; i++) {
+    for (int i = 0; i < num_frames; i++)
         wave_part(i) = frames[i];
-    }
     tot_frames += num_frames;
 
     feature_pipeline->AcceptWaveform(samp_freq, wave_part);
 
     if (finalize) {
-        // no more input; flush out last frames
+        // No more input, so flush out last frames.
         feature_pipeline->InputFinished();
     }
 
@@ -621,7 +622,7 @@ bool AgfNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, int32 num_frames, B
             && feature_pipeline->IvectorFeature() != nullptr) {
         std::vector<std::pair<int32, BaseFloat> > delta_weights;
         silence_weighting->ComputeCurrentTraceback(decoder->Decoder());
-        silence_weighting->GetDeltaWeights(feature_pipeline->NumFramesReady(), &delta_weights);
+        silence_weighting->GetDeltaWeights(feature_pipeline->NumFramesReady(), &delta_weights);  // FIXME: reuse decoder?
         feature_pipeline->IvectorFeature()->UpdateFrameWeights(delta_weights);
     }
 
@@ -674,7 +675,7 @@ void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, f
 
     Lattice best_path_lat;
     if (!decoder_finalized_) {
-        // Decoding is not finished yet, so we will look up the best partial result so far
+        // Decoding is not finished yet, so we will just look up the best partial result so far
         decoder->GetBestPath(false, &best_path_lat);
 
     } else {
@@ -684,6 +685,7 @@ void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, f
         ConvertLattice(best_path_clat, &best_path_lat);
         // WriteLattice(decoded_clat, "tmp/lattice");
 
+        // FIXME
         // BaseFloat inv_acoustic_scale = 1.0 / decodable_config.acoustic_scale;
         // ScaleLattice(AcousticLatticeScale(inv_acoustic_scale), &decoded_clat);
 
