@@ -677,8 +677,7 @@ void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, f
     } else {
         decoder->GetLattice(true, &decoded_clat);
         if (decoded_clat.NumStates() == 0) KALDI_ERR << "Empty decoded lattice";
-        CompactLatticeShortestPath(decoded_clat, &best_path_clat);
-        ConvertLattice(best_path_clat, &best_path_lat);
+        ScaleLattice(LatticeScale(7.0, 10.0), &decoded_clat);
         // WriteLattice(decoded_clat, "tmp/lattice");
 
         // FIXME
@@ -759,6 +758,9 @@ void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, f
             WriteLattice(pre_dictation_clat, "tmp/lattice_dictpre");
             WriteLattice(post_dictation_clat, "tmp/lattice_dictpost");
         }
+
+        CompactLatticeShortestPath(decoded_clat, &best_path_clat);
+        ConvertLattice(best_path_clat, &best_path_lat);
     } // if (decoder_finalized_)
 
     std::vector<int32> words;
