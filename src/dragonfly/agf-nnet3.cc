@@ -395,6 +395,11 @@ AgfNNet3OnlineModelWrapper::AgfNNet3OnlineModelWrapper(
         SetLogHandler([](const LogMessageEnvelope& envelope, const char* message) {});
     }
 
+    if (true && verbosity >= 1) {
+        ExecutionTimer timer("testing output latency");
+        std::cerr << "[testing output latency][testing output latency][testing output latency]" << endl;
+    }
+
     ParseOptions po("");
     feature_config.Register(&po);
     decodable_config.Register(&po);
@@ -691,6 +696,7 @@ void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, f
             // float conf = SentenceLevelConfidence(decoded_clat, &num_paths, NULL, NULL);
             std::vector<int32> best_sentence, second_best_sentence;
             float conf = SentenceLevelConfidence(decoded_clat, &num_paths, &best_sentence, &second_best_sentence);
+            timer.stop();
             KALDI_LOG << "SLC(" << num_paths << "paths): " << conf;
             if (num_paths >= 1) KALDI_LOG << "    1st best: " << WordIdsToString(best_sentence);
             if (num_paths >= 2) KALDI_LOG << "    2nd best: " << WordIdsToString(second_best_sentence);
@@ -706,8 +712,10 @@ void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, f
             const vector<int32> &words = mbr.GetOneBest();
             // const vector<BaseFloat> &conf = mbr.GetOneBestConfidences();
             // const vector<pair<BaseFloat, BaseFloat> > &times = mbr.GetOneBestTimes();
-            KALDI_LOG << "MBR(SER): " << mbr.GetBayesRisk() << " : " << WordIdsToString(words);
-            if (expected_error_rate) *expected_error_rate = mbr.GetBayesRisk();
+            auto risk = mbr.GetBayesRisk();
+            timer.stop();
+            KALDI_LOG << "MBR(SER): " << risk << " : " << WordIdsToString(words);
+            if (expected_error_rate) *expected_error_rate = risk;
         }
 
         if (false || (true && (GetVerboseLevel() >= 1))) {
@@ -719,9 +727,10 @@ void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, f
             const vector<int32> &words = mbr.GetOneBest();
             // const vector<BaseFloat> &conf = mbr.GetOneBestConfidences();
             // const vector<pair<BaseFloat, BaseFloat> > &times = mbr.GetOneBestTimes();
-            KALDI_LOG << "MBR(WER): " << mbr.GetBayesRisk() << " : " << WordIdsToString(words);
-            if (expected_error_rate) *expected_error_rate = mbr.GetBayesRisk();
+            auto risk = mbr.GetBayesRisk();
             timer.stop();
+            KALDI_LOG << "MBR(WER): " << risk << " : " << WordIdsToString(words);
+            if (expected_error_rate) *expected_error_rate = risk;
 
             if (true) {
                 ExecutionTimer timer("compare mbr");
@@ -729,6 +738,7 @@ void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, f
                 mbr_opts.decode_mbr = false;
                 MinimumBayesRisk mbr_ser(decoded_clat, mbr_opts);
                 const vector<int32> &words_ser = mbr_ser.GetOneBest();
+                timer.stop();
                 if (mbr.GetBayesRisk() != mbr_ser.GetBayesRisk()) KALDI_WARN << "MBR risks differ";
                 if (words != words_ser) KALDI_WARN << "MBR words differ";
             }
@@ -955,6 +965,10 @@ bool get_output_agf_nnet3(void* model_vp, char* output, int32_t output_max_lengt
         AgfNNet3OnlineModelWrapper* model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
         std::string decoded_string;
 	    model->GetDecodedString(decoded_string, likelihood_p, am_score_p, lm_score_p, confidence_p, expected_error_rate_p);
+
+        // KALDI_LOG << "sleeping";
+        // std::this_thread::sleep_for(std::chrono::milliseconds(25));
+        // KALDI_LOG << "slept";
 
         const char* cstr = decoded_string.c_str();
         strncpy(output, cstr, output_max_length);
