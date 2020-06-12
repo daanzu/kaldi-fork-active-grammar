@@ -339,7 +339,7 @@ class AgfNNet3OnlineModelWrapper {
         OnlineEndpointConfig endpoint_config;
         TransitionModel trans_model;
         nnet3::AmNnetSimple am_nnet;
-        OnlineNnet2FeaturePipelineInfo* feature_info = nullptr;
+        OnlineNnet2FeaturePipelineInfo* feature_info = nullptr;  // TODO: doesn't really need to be dynamically allocated (pointer)
         nnet3::DecodableNnetSimpleLoopedInfo* decodable_info = nullptr;  // contains precomputed stuff that is used by all decodable objects
         ActiveGrammarFst* active_grammar_fst = nullptr;
 
@@ -408,6 +408,8 @@ AgfNNet3OnlineModelWrapper::AgfNNet3OnlineModelWrapper(
 
     feature_config.mfcc_config = mfcc_config_filename;
     feature_config.ivector_extraction_config = ie_config_filename;
+    feature_config.silence_weighting_config.silence_weight = 1e-3;
+    feature_config.silence_weighting_config.silence_phones_str = "1:2:3:4:5:6:7:8:9:10:11:12:13:14:15";  // FIXME: from lang/phones/silence.csl
     decoder_config.max_active = max_active;
     decoder_config.min_active = min_active;
     decoder_config.beam = beam;
