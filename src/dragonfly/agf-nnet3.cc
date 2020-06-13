@@ -358,7 +358,7 @@ class AgfNNet3OnlineModelWrapper {
 
         StdConstFst* ReadFstFile(std::string filename);
         void StartDecoding(std::vector<bool> grammars_activity);
-        void FreeDecoder();
+        void CleanupDecoder();
         std::string WordIdsToString(const std::vector<int32> &wordIds);
 };
 
@@ -446,7 +446,7 @@ AgfNNet3OnlineModelWrapper::AgfNNet3OnlineModelWrapper(
 }
 
 AgfNNet3OnlineModelWrapper::~AgfNNet3OnlineModelWrapper() {
-    FreeDecoder();
+    CleanupDecoder();
     delete feature_info;
     delete decodable_info;
     if (word_align_lexicon_info)
@@ -552,7 +552,7 @@ void AgfNNet3OnlineModelWrapper::ResetAdaptationState() {
 }
 
 void AgfNNet3OnlineModelWrapper::StartDecoding(std::vector<bool> grammars_activity) {
-    FreeDecoder();
+    CleanupDecoder();
     ExecutionTimer timer("StartDecoding", 2);
 
     if (active_grammar_fst == nullptr) {
@@ -585,7 +585,7 @@ void AgfNNet3OnlineModelWrapper::StartDecoding(std::vector<bool> grammars_activi
     best_path_clat.DeleteStates();
 }
 
-void AgfNNet3OnlineModelWrapper::FreeDecoder() {
+void AgfNNet3OnlineModelWrapper::CleanupDecoder() {
     if (decoder) {
         delete decoder;
         decoder = nullptr;
@@ -601,20 +601,23 @@ void AgfNNet3OnlineModelWrapper::FreeDecoder() {
 }
 
 // grammars_activity is ignored once decoding has already started
-bool AgfNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, const Vector<BaseFloat>& frames, bool finalize,
+bool AgfNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, const Vector<BaseFloat>& samples, bool finalize,
         std::vector<bool>& grammars_activity, bool save_adaptation_state) {
     ExecutionTimer timer("Decode", 2);
 
     if (!decoder || decoder_finalized_) {
-        FreeDecoder();
+        CleanupDecoder();
         StartDecoding(grammars_activity);
     } else if (grammars_activity.size() != 0) {
     	KALDI_LOG << "non-empty grammars_activity passed on already-started decode";
     }
 
-    if (frames.Dim() > 0) {
-        feature_pipeline->AcceptWaveform(samp_freq, frames);
-        tot_frames += frames.Dim();
+    if (samp_freq != feature_info->GetSamplingFrequency())
+        KALDI_WARN << "Mismatched sampling frequency: " << samp_freq << " != " << feature_info->GetSamplingFrequency() << " (model's)";
+
+    if (samples.Dim() > 0) {
+        feature_pipeline->AcceptWaveform(samp_freq, samples);
+        tot_frames += samples.Dim();
     }
 
     if (finalize)
@@ -912,22 +915,22 @@ bool remove_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index) {
     return result;
 }
 
-bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,
+bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_samples, float* samples, bool finalize,
     bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state) {
     try {
         AgfNNet3OnlineModelWrapper* model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
         std::vector<bool> grammars_activity(grammars_activity_cp_size, false);
         for (size_t i = 0; i < grammars_activity_cp_size; i++)
             grammars_activity[i] = grammars_activity_cp[i];
-        if (num_frames > 1600)
-            KALDI_WARN << "Decoding large block of " << num_frames << " frames!";
-        Vector<BaseFloat> wave_part(num_frames, kUndefined);
-        for (int i = 0; i < num_frames; i++)
-            wave_part(i) = frames[i];
-        bool result = model->Decode(samp_freq, wave_part, finalize, grammars_activity, save_adaptation_state);
+        if (num_samples > 3200)
+            KALDI_WARN << "Decoding large block of " << num_samples << " samples!";
+        Vector<BaseFloat> wave_data(num_samples, kUndefined);
+        for (int i = 0; i < num_samples; i++)
+            wave_data(i) = samples[i];
+        bool result = model->Decode(samp_freq, wave_data, finalize, grammars_activity, save_adaptation_state);
         // bool result = false;
-        // for (int32_t i = 0; i < num_frames; i += 1000)
-        //     result = model->Decode(samp_freq, min(1000, num_frames - i), frames + i, finalize, grammars_activity, save_adaptation_state);
+        // for (int32_t i = 0; i < num_samples; i += 1000)
+        //     result = model->Decode(samp_freq, min(1000, num_samples - i), samples + i, finalize, grammars_activity, save_adaptation_state);
         return result;
 
     } catch(const std::exception& e) {
