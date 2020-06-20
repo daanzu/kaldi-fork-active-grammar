@@ -681,6 +681,8 @@ bool AgfNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, const Vector<BaseFl
     if (silence_weighting->Active()
             && feature_pipeline->NumFramesReady() > 0
             && feature_pipeline->IvectorFeature() != nullptr) {
+        if (config_.silence_weight == 1.0)
+            KALDI_WARN << "Computing silence weighting despite silence_weight == 1.0";
         std::vector<std::pair<int32, BaseFloat> > delta_weights;
         silence_weighting->ComputeCurrentTraceback(decoder->Decoder());
         silence_weighting->GetDeltaWeights(feature_pipeline->NumFramesReady(), &delta_weights);  // FIXME: reuse decoder?
@@ -961,15 +963,12 @@ bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_samples, floa
         std::vector<bool> grammars_activity(grammars_activity_cp_size, false);
         for (size_t i = 0; i < grammars_activity_cp_size; i++)
             grammars_activity[i] = grammars_activity_cp[i];
-        if (num_samples > 3200)
-            KALDI_WARN << "Decoding large block of " << num_samples << " samples!";
+        // if (num_samples > 3200)
+        //     KALDI_WARN << "Decoding large block of " << num_samples << " samples!";
         Vector<BaseFloat> wave_data(num_samples, kUndefined);
         for (int i = 0; i < num_samples; i++)
             wave_data(i) = samples[i];
         bool result = model->Decode(samp_freq, wave_data, finalize, grammars_activity, save_adaptation_state);
-        // bool result = false;
-        // for (int32_t i = 0; i < num_samples; i += 1000)
-        //     result = model->Decode(samp_freq, min(1000, num_samples - i), samples + i, finalize, grammars_activity, save_adaptation_state);
         return result;
 
     } catch(const std::exception& e) {
