@@ -35,6 +35,8 @@ extern "C" {
 #include "lat/word-align-lattice-lexicon.h"
 #include "nnet3/nnet-utils.h"
 #include "decoder/active-grammar-fst.h"
+
+#include "nlohmann_json.hpp"
 #include "utils.h"
 
 #define DEFAULT_VERBOSITY 0
@@ -295,16 +297,75 @@ class CopyDictationVisitor {
 // };
 
 
+struct AgfNNet3OnlineModelConfig {
+
+    BaseFloat beam = 14.0;  // normally 7.0
+    int32 max_active = 14000;  // normally 7000
+    int32 min_active = 200;
+    BaseFloat lattice_beam = 8.0;
+    BaseFloat acoustic_scale = 1.0;
+    int32 frame_subsampling_factor = 3;
+    std::string model_dir;
+    std::string mfcc_config_filename;
+    std::string ie_config_filename;
+    std::string model_filename;
+    int32 nonterm_phones_offset = -1;  // offset from start of phones that start of nonterms are
+    int32 rules_phones_offset = -1;  // offset from start of phones that the dictation nonterms are
+    int32 dictation_phones_offset = -1;  // offset from start of phones that the kaldi_rules nonterms are
+    std::string word_syms_filename;
+    std::string word_align_lexicon_filename;
+    std::string top_fst_filename;
+    std::string dictation_fst_filename;
+
+    bool Set(const std::string& name, const nlohmann::json& value) {
+        if (name == "beam") { beam = value.get<BaseFloat>(); return true; }
+        if (name == "max_active") { max_active = value.get<int32>(); return true; }
+        if (name == "min_active") { min_active = value.get<int32>(); return true; }
+        if (name == "lattice_beam") { lattice_beam = value.get<BaseFloat>(); return true; }
+        if (name == "acoustic_scale") { acoustic_scale = value.get<BaseFloat>(); return true; }
+        if (name == "frame_subsampling_factor") { frame_subsampling_factor = value.get<int32>(); return true; }
+        if (name == "model_dir") { model_dir = value.get<std::string>(); return true; }
+        if (name == "mfcc_config_filename") { mfcc_config_filename = value.get<std::string>(); return true; }
+        if (name == "ie_config_filename") { ie_config_filename = value.get<std::string>(); return true; }
+        if (name == "model_filename") { model_filename = value.get<std::string>(); return true; }
+        if (name == "nonterm_phones_offset") { nonterm_phones_offset = value.get<int32>(); return true; }
+        if (name == "rules_phones_offset") { rules_phones_offset = value.get<int32>(); return true; }
+        if (name == "dictation_phones_offset") { dictation_phones_offset = value.get<int32>(); return true; }
+        if (name == "word_syms_filename") { word_syms_filename = value.get<std::string>(); return true; }
+        if (name == "word_align_lexicon_filename") { word_align_lexicon_filename = value.get<std::string>(); return true; }
+        if (name == "top_fst_filename") { top_fst_filename = value.get<std::string>(); return true; }
+        if (name == "dictation_fst_filename") { dictation_fst_filename = value.get<std::string>(); return true; }
+        return false;
+    }
+
+    std::string ToString() {
+        stringstream ss;
+        ss << "AgfNNet3OnlineModelConfig...";
+        ss << "\n    " << "beam: " << beam;
+        ss << "\n    " << "max_active: " << max_active;
+        ss << "\n    " << "min_active: " << min_active;
+        ss << "\n    " << "lattice_beam: " << lattice_beam;
+        ss << "\n    " << "acoustic_scale: " << acoustic_scale;
+        ss << "\n    " << "frame_subsampling_factor: " << frame_subsampling_factor;
+        ss << "\n    " << "model_dir: " << model_dir;
+        ss << "\n    " << "mfcc_config_filename: " << mfcc_config_filename;
+        ss << "\n    " << "ie_config_filename: " << ie_config_filename;
+        ss << "\n    " << "model_filename: " << model_filename;
+        ss << "\n    " << "nonterm_phones_offset: " << nonterm_phones_offset;
+        ss << "\n    " << "rules_phones_offset: " << rules_phones_offset;
+        ss << "\n    " << "dictation_phones_offset: " << dictation_phones_offset;
+        ss << "\n    " << "word_syms_filename: " << word_syms_filename;
+        ss << "\n    " << "word_align_lexicon_filename: " << word_align_lexicon_filename;
+        ss << "\n    " << "top_fst_filename: " << top_fst_filename;
+        ss << "\n    " << "dictation_fst_filename: " << dictation_fst_filename;
+        return ss.str();
+    }
+};
+
 class AgfNNet3OnlineModelWrapper {
     public:
 
-        AgfNNet3OnlineModelWrapper(
-            BaseFloat beam, int32 max_active, int32 min_active, BaseFloat lattice_beam, BaseFloat acoustic_scale, int32 frame_subsampling_factor,
-            std::string& model_dir, std::string& mfcc_config_filename, std::string& ie_config_filename, std::string& model_filename,
-            int32 nonterm_phones_offset, int32 rules_nonterm_offset, int32 dictation_nonterm_offset,
-            std::string& word_syms_filename, std::string& word_align_lexicon_filename,
-            std::string& top_fst_filename, std::string& dictation_fst_filename,
-            int32 verbosity = DEFAULT_VERBOSITY);
+        AgfNNet3OnlineModelWrapper(const std::string& model_dir, const std::string& config_str = ""s, int32 verbosity = DEFAULT_VERBOSITY);
         ~AgfNNet3OnlineModelWrapper();
 
         bool LoadLexicon(std::string& word_syms_filename, std::string& word_align_lexicon_filename);
@@ -320,10 +381,9 @@ class AgfNNet3OnlineModelWrapper {
 
     protected:
 
+        AgfNNet3OnlineModelConfig config_;
+
         // Model
-        int32 nonterm_phones_offset;
-        int32 dictation_phones_offset;  // offset from nonterm_phones_offset that the dictation nonterms are
-        int32 rules_phones_offset;  // offset from nonterm_phones_offset that the kaldi_rules nonterms are
         fst::SymbolTable *word_syms = nullptr;
         std::vector<std::vector<int32> > word_align_lexicon;  // for each word, its word-id + word-id + a list of its phones
         StdConstFst *top_fst = nullptr;
@@ -362,28 +422,12 @@ class AgfNNet3OnlineModelWrapper {
         std::string WordIdsToString(const std::vector<int32> &wordIds);
 };
 
-AgfNNet3OnlineModelWrapper::AgfNNet3OnlineModelWrapper(
-        BaseFloat beam, int32 max_active, int32 min_active, BaseFloat lattice_beam, BaseFloat acoustic_scale, int32 frame_subsampling_factor,
-        std::string& model_dir, std::string& mfcc_config_filename, std::string& ie_config_filename, std::string& model_filename,
-        int32 nonterm_phones_offset, int32 rules_nonterm_offset, int32 dictation_nonterm_offset,
-        std::string& word_syms_filename, std::string& word_align_lexicon_filename,
-        std::string& top_fst_filename, std::string& dictation_fst_filename,
-        int32 verbosity) {
+AgfNNet3OnlineModelWrapper::AgfNNet3OnlineModelWrapper(const std::string& model_dir, const std::string& config_str, int32 verbosity) {
     SetVerboseLevel(verbosity);
     if (verbosity >= 0) {
         KALDI_LOG << "model_dir: " << model_dir;
-        KALDI_LOG << "nonterm_phones_offset: " << nonterm_phones_offset;
-        KALDI_LOG << "rules_nonterm_offset: " << rules_nonterm_offset;
-        KALDI_LOG << "dictation_nonterm_offset: " << dictation_nonterm_offset;
-        KALDI_LOG << "word_syms_filename: " << word_syms_filename;
-        KALDI_LOG << "word_align_lexicon_filename: " << word_align_lexicon_filename;
-        KALDI_LOG << "mfcc_config_filename: " << mfcc_config_filename;
-        KALDI_LOG << "ie_config_filename: " << ie_config_filename;
-        KALDI_LOG << "model_filename: " << model_filename;
-        KALDI_LOG << "top_fst_filename: " << top_fst_filename;
-        KALDI_LOG << "dictation_fst_filename: " << dictation_fst_filename;
+        KALDI_LOG << "config_str: " << config_str;
         KALDI_LOG << "verbosity: " << verbosity;
-        KALDI_LOG << "kNontermBigNumber, GetEncodingMultiple: " << kNontermBigNumber << ", " << GetEncodingMultiple(nonterm_phones_offset);
     } else if (verbosity == -1) {
         SetLogHandler([](const LogMessageEnvelope& envelope, const char* message) {
             if (envelope.severity <= LogMessageEnvelope::kWarning) {
@@ -394,6 +438,18 @@ AgfNNet3OnlineModelWrapper::AgfNNet3OnlineModelWrapper(
         // Silence kaldi output as well
         SetLogHandler([](const LogMessageEnvelope& envelope, const char* message) {});
     }
+
+    config_.model_dir = model_dir;
+    if (!config_str.empty()) {
+        auto config_json = nlohmann::json::parse(config_str);
+        if (!config_json.is_object())
+            KALDI_ERR << "config_str must be a valid JSON object";
+        for (const auto& it : config_json.items()) {
+            if (!config_.Set(it.key(), it.value()))
+                KALDI_WARN << "Bad config key: " << it.key() << " = " << it.value();
+        }
+    }
+    KALDI_LOG << config_.ToString();
 
     if (true && verbosity >= 1) {
         ExecutionTimer timer("testing output latency");
@@ -406,20 +462,22 @@ AgfNNet3OnlineModelWrapper::AgfNNet3OnlineModelWrapper(
     decoder_config.Register(&po);
     endpoint_config.Register(&po);
 
-    feature_config.mfcc_config = mfcc_config_filename;
-    feature_config.ivector_extraction_config = ie_config_filename;
+    feature_config.mfcc_config = config_.mfcc_config_filename;
+    feature_config.ivector_extraction_config = config_.ie_config_filename;
     feature_config.silence_weighting_config.silence_weight = 1e-3;
     feature_config.silence_weighting_config.silence_phones_str = "1:2:3:4:5:6:7:8:9:10:11:12:13:14:15";  // FIXME: from lang/phones/silence.csl
-    decoder_config.max_active = max_active;
-    decoder_config.min_active = min_active;
-    decoder_config.beam = beam;
-    decoder_config.lattice_beam = lattice_beam;
-    decodable_config.acoustic_scale = acoustic_scale;
-    decodable_config.frame_subsampling_factor = frame_subsampling_factor;
+    decoder_config.max_active = config_.max_active;
+    decoder_config.min_active = config_.min_active;
+    decoder_config.beam = config_.beam;
+    decoder_config.lattice_beam = config_.lattice_beam;
+    decodable_config.acoustic_scale = config_.acoustic_scale;
+    decodable_config.frame_subsampling_factor = config_.frame_subsampling_factor;
+
+    KALDI_VLOG(2) << "kNontermBigNumber, GetEncodingMultiple: " << kNontermBigNumber << ", " << GetEncodingMultiple(config_.nonterm_phones_offset);
 
     {
         bool binary;
-        Input ki(model_filename, &binary);
+        Input ki(config_.model_filename, &binary);
         trans_model.Read(ki.Stream(), binary);
         am_nnet.Read(ki.Stream(), binary);
         SetBatchnormTestMode(true, &(am_nnet.GetNnet()));
@@ -430,19 +488,12 @@ AgfNNet3OnlineModelWrapper::AgfNNet3OnlineModelWrapper(
     feature_info = new OnlineNnet2FeaturePipelineInfo(feature_config);
     decodable_info = new nnet3::DecodableNnetSimpleLoopedInfo(decodable_config, &am_nnet);
     ResetAdaptationState();
-    top_fst = dynamic_cast<StdConstFst*>(ReadFstKaldiGeneric(top_fst_filename));
+    top_fst = dynamic_cast<StdConstFst*>(ReadFstKaldiGeneric(config_.top_fst_filename));
 
-    this->nonterm_phones_offset = nonterm_phones_offset;
-    rules_phones_offset = nonterm_phones_offset + rules_nonterm_offset;
-    if (!dictation_fst_filename.empty()) {
-        dictation_phones_offset = nonterm_phones_offset + dictation_nonterm_offset;
-        dictation_fst = ReadFstFile(dictation_fst_filename);
-    } else {
-        dictation_phones_offset = 0;
-        dictation_fst = nullptr;
-    }
+    if (!config_.dictation_fst_filename.empty())
+        dictation_fst = ReadFstFile(config_.dictation_fst_filename);
 
-    LoadLexicon(word_syms_filename, word_align_lexicon_filename);
+    LoadLexicon(config_.word_syms_filename, config_.word_align_lexicon_filename);
 }
 
 AgfNNet3OnlineModelWrapper::~AgfNNet3OnlineModelWrapper() {
@@ -556,17 +607,15 @@ void AgfNNet3OnlineModelWrapper::StartDecoding(std::vector<bool> grammars_activi
     ExecutionTimer timer("StartDecoding", 2);
 
     if (active_grammar_fst == nullptr) {
-        // Timer timer(true);
         std::vector<std::pair<int32, const StdConstFst *> > ifsts;
         for (auto grammar_fst : grammar_fsts) {
-            int32 nonterm_phone = rules_phones_offset + ifsts.size();
+            int32 nonterm_phone = config_.rules_phones_offset + ifsts.size();
             ifsts.emplace_back(std::make_pair(nonterm_phone, grammar_fst));
         }
         if (dictation_fst != nullptr) {
-            ifsts.emplace_back(std::make_pair(dictation_phones_offset, dictation_fst));
+            ifsts.emplace_back(std::make_pair(config_.dictation_phones_offset, dictation_fst));
         }
-        active_grammar_fst = new ActiveGrammarFst(nonterm_phones_offset, *top_fst, ifsts);
-        // KALDI_LOG << "built new ActiveGrammarFst" << " in " << (timer.Elapsed() * 1000) << "ms.";
+        active_grammar_fst = new ActiveGrammarFst(config_.nonterm_phones_offset, *top_fst, ifsts);
     }
     grammars_activity.push_back(dictation_fst != nullptr);  // dictation_fst is only enabled if present
     active_grammar_fst->UpdateActivity(grammars_activity);
@@ -865,26 +914,10 @@ bool AgfNNet3OnlineModelWrapper::GetWordAlignment(std::vector<string>& words, st
 
 using namespace dragonfly;
 
-void* init_agf_nnet3(float beam, int32_t max_active, int32_t min_active, float lattice_beam, float acoustic_scale, int32_t frame_subsampling_factor,
-    char* model_dir_cp, char* mfcc_config_filename_cp, char* ie_config_filename_cp, char* model_filename_cp,
-    int32_t nonterm_phones_offset, int32_t rules_nonterm_offset, int32_t dictation_nonterm_offset,
-    char* word_syms_filename_cp, char* word_align_lexicon_filename_cp,
-    char* top_fst_filename_cp, char* dictation_fst_filename_cp,
-    int32_t verbosity) {
-    std::string word_syms_filename(word_syms_filename_cp),
-        word_align_lexicon_filename((word_align_lexicon_filename_cp != nullptr) ? word_align_lexicon_filename_cp : ""),
-        model_dir(model_dir_cp),
-        mfcc_config_filename(mfcc_config_filename_cp),
-        ie_config_filename(ie_config_filename_cp),
-        model_filename(model_filename_cp),
-        top_fst_filename(top_fst_filename_cp),
-        dictation_fst_filename((dictation_fst_filename_cp != nullptr) ? dictation_fst_filename_cp : "");
-    AgfNNet3OnlineModelWrapper* model = new AgfNNet3OnlineModelWrapper(beam, max_active, min_active, lattice_beam, acoustic_scale, frame_subsampling_factor,
-        model_dir, mfcc_config_filename, ie_config_filename, model_filename,
-        nonterm_phones_offset, rules_nonterm_offset, dictation_nonterm_offset,
-        word_syms_filename, word_align_lexicon_filename,
-        top_fst_filename, dictation_fst_filename,
-        verbosity);
+void* init_agf_nnet3(char* model_dir_cp, char* config_str_cp, int32_t verbosity) {
+    std::string model_dir(model_dir_cp),
+        config_str((config_str_cp != nullptr) ? config_str_cp : "");
+    AgfNNet3OnlineModelWrapper* model = new AgfNNet3OnlineModelWrapper(model_dir, config_str, verbosity);
     return model;
 }
 

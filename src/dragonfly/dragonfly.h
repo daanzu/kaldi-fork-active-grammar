@@ -53,12 +53,7 @@ extern "C" DRAGONFLY_API bool get_output_plain_nnet3(void* model_vp, char* outpu
 extern "C" DRAGONFLY_API bool get_word_align_plain_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words);
 extern "C" DRAGONFLY_API bool reset_adaptation_state_plain_nnet3(void* model_vp);
 
-extern "C" DRAGONFLY_API void* init_agf_nnet3(float beam, int32_t max_active, int32_t min_active, float lattice_beam, float acoustic_scale, int32_t frame_subsampling_factor,
-    char* model_dir_cp, char* mfcc_config_filename_cp, char* ie_config_filename_cp, char* model_filename_cp,
-    int32_t nonterm_phones_offset, int32_t rules_nonterm_offset, int32_t dictation_nonterm_offset,
-    char* word_syms_filename_cp, char* word_align_lexicon_filename_cp,
-    char* top_fst_filename_cp, char* dictation_fst_filename_cp,
-    int32_t verbosity);
+extern "C" DRAGONFLY_API void* init_agf_nnet3(char* model_dir_cp, char* config_str_cp, int32_t verbosity);
 extern "C" DRAGONFLY_API bool load_lexicon_agf_nnet3(void* model_vp, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp);
 extern "C" DRAGONFLY_API int32_t add_grammar_fst_agf_nnet3(void* model_vp, char* grammar_fst_filename_cp);
 extern "C" DRAGONFLY_API bool reload_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp);
