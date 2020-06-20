@@ -304,6 +304,7 @@ struct AgfNNet3OnlineModelConfig {
     int32 min_active = 200;
     BaseFloat lattice_beam = 8.0;
     BaseFloat acoustic_scale = 1.0;
+    BaseFloat silence_weight = 1.0;  // default means silence weighting disabled
     int32 frame_subsampling_factor = 3;
     std::string model_dir;
     std::string mfcc_config_filename;
@@ -312,6 +313,7 @@ struct AgfNNet3OnlineModelConfig {
     int32 nonterm_phones_offset = -1;  // offset from start of phones that start of nonterms are
     int32 rules_phones_offset = -1;  // offset from start of phones that the dictation nonterms are
     int32 dictation_phones_offset = -1;  // offset from start of phones that the kaldi_rules nonterms are
+    std::string silence_phones_str = "1:2:3:4:5:6:7:8:9:10:11:12:13:14:15";  // FIXME: from lang/phones/silence.csl
     std::string word_syms_filename;
     std::string word_align_lexicon_filename;
     std::string top_fst_filename;
@@ -323,6 +325,7 @@ struct AgfNNet3OnlineModelConfig {
         if (name == "min_active") { min_active = value.get<int32>(); return true; }
         if (name == "lattice_beam") { lattice_beam = value.get<BaseFloat>(); return true; }
         if (name == "acoustic_scale") { acoustic_scale = value.get<BaseFloat>(); return true; }
+        if (name == "silence_weight") { silence_weight = value.get<BaseFloat>(); return true; }
         if (name == "frame_subsampling_factor") { frame_subsampling_factor = value.get<int32>(); return true; }
         if (name == "model_dir") { model_dir = value.get<std::string>(); return true; }
         if (name == "mfcc_config_filename") { mfcc_config_filename = value.get<std::string>(); return true; }
@@ -331,6 +334,7 @@ struct AgfNNet3OnlineModelConfig {
         if (name == "nonterm_phones_offset") { nonterm_phones_offset = value.get<int32>(); return true; }
         if (name == "rules_phones_offset") { rules_phones_offset = value.get<int32>(); return true; }
         if (name == "dictation_phones_offset") { dictation_phones_offset = value.get<int32>(); return true; }
+        if (name == "silence_phones_str") { silence_phones_str = value.get<std::string>(); return true; }
         if (name == "word_syms_filename") { word_syms_filename = value.get<std::string>(); return true; }
         if (name == "word_align_lexicon_filename") { word_align_lexicon_filename = value.get<std::string>(); return true; }
         if (name == "top_fst_filename") { top_fst_filename = value.get<std::string>(); return true; }
@@ -346,6 +350,7 @@ struct AgfNNet3OnlineModelConfig {
         ss << "\n    " << "min_active: " << min_active;
         ss << "\n    " << "lattice_beam: " << lattice_beam;
         ss << "\n    " << "acoustic_scale: " << acoustic_scale;
+        ss << "\n    " << "silence_weight: " << silence_weight;
         ss << "\n    " << "frame_subsampling_factor: " << frame_subsampling_factor;
         ss << "\n    " << "model_dir: " << model_dir;
         ss << "\n    " << "mfcc_config_filename: " << mfcc_config_filename;
@@ -354,6 +359,7 @@ struct AgfNNet3OnlineModelConfig {
         ss << "\n    " << "nonterm_phones_offset: " << nonterm_phones_offset;
         ss << "\n    " << "rules_phones_offset: " << rules_phones_offset;
         ss << "\n    " << "dictation_phones_offset: " << dictation_phones_offset;
+        ss << "\n    " << "silence_phones_str: " << silence_phones_str;
         ss << "\n    " << "word_syms_filename: " << word_syms_filename;
         ss << "\n    " << "word_align_lexicon_filename: " << word_align_lexicon_filename;
         ss << "\n    " << "top_fst_filename: " << top_fst_filename;
@@ -365,7 +371,7 @@ struct AgfNNet3OnlineModelConfig {
 class AgfNNet3OnlineModelWrapper {
     public:
 
-        AgfNNet3OnlineModelWrapper(const std::string& model_dir, const std::string& config_str = ""s, int32 verbosity = DEFAULT_VERBOSITY);
+        AgfNNet3OnlineModelWrapper(const std::string& model_dir, const std::string& config_str = "", int32 verbosity = DEFAULT_VERBOSITY);
         ~AgfNNet3OnlineModelWrapper();
 
         bool LoadLexicon(std::string& word_syms_filename, std::string& word_align_lexicon_filename);
@@ -464,8 +470,8 @@ AgfNNet3OnlineModelWrapper::AgfNNet3OnlineModelWrapper(const std::string& model_
 
     feature_config.mfcc_config = config_.mfcc_config_filename;
     feature_config.ivector_extraction_config = config_.ie_config_filename;
-    feature_config.silence_weighting_config.silence_weight = 1e-3;
-    feature_config.silence_weighting_config.silence_phones_str = "1:2:3:4:5:6:7:8:9:10:11:12:13:14:15";  // FIXME: from lang/phones/silence.csl
+    feature_config.silence_weighting_config.silence_weight = config_.silence_weight;
+    feature_config.silence_weighting_config.silence_phones_str = config_.silence_phones_str;
     decoder_config.max_active = config_.max_active;
     decoder_config.min_active = config_.min_active;
     decoder_config.beam = config_.beam;
