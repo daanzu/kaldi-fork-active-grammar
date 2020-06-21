@@ -304,6 +304,7 @@ struct AgfNNet3OnlineModelConfig {
     int32 min_active = 200;
     BaseFloat lattice_beam = 8.0;
     BaseFloat acoustic_scale = 1.0;
+    BaseFloat lm_weight = 7.0;  // 10.0 would be "neutral", with no scaling
     BaseFloat silence_weight = 1.0;  // default means silence weighting disabled
     int32 frame_subsampling_factor = 3;
     std::string model_dir;
@@ -325,6 +326,7 @@ struct AgfNNet3OnlineModelConfig {
         if (name == "min_active") { min_active = value.get<int32>(); return true; }
         if (name == "lattice_beam") { lattice_beam = value.get<BaseFloat>(); return true; }
         if (name == "acoustic_scale") { acoustic_scale = value.get<BaseFloat>(); return true; }
+        if (name == "lm_weight") { lm_weight = value.get<BaseFloat>(); return true; }
         if (name == "silence_weight") { silence_weight = value.get<BaseFloat>(); return true; }
         if (name == "frame_subsampling_factor") { frame_subsampling_factor = value.get<int32>(); return true; }
         if (name == "model_dir") { model_dir = value.get<std::string>(); return true; }
@@ -350,6 +352,7 @@ struct AgfNNet3OnlineModelConfig {
         ss << "\n    " << "min_active: " << min_active;
         ss << "\n    " << "lattice_beam: " << lattice_beam;
         ss << "\n    " << "acoustic_scale: " << acoustic_scale;
+        ss << "\n    " << "lm_weight: " << lm_weight;
         ss << "\n    " << "silence_weight: " << silence_weight;
         ss << "\n    " << "frame_subsampling_factor: " << frame_subsampling_factor;
         ss << "\n    " << "model_dir: " << model_dir;
@@ -744,7 +747,7 @@ void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, f
     } else {
         decoder->GetLattice(true, &decoded_clat);
         if (decoded_clat.NumStates() == 0) KALDI_ERR << "Empty decoded lattice";
-        ScaleLattice(LatticeScale(7.0, 10.0), &decoded_clat);
+        ScaleLattice(LatticeScale(config_.lm_weight, 10.0), &decoded_clat);
         // WriteLattice(decoded_clat, "tmp/lattice");
 
         // FIXME
