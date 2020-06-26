@@ -419,6 +419,7 @@ class AgfNNet3OnlineModelWrapper {
         SingleUtteranceNnet3DecoderTpl<fst::ActiveGrammarFst>* decoder = nullptr;
         WordAlignLatticeLexiconInfo* word_align_lexicon_info = nullptr;
         std::set<int32> word_align_lexicon_words;  // contains word-ids that are in word_align_lexicon_info
+        std::vector<std::pair<CompactLattice::Arc::Label, CompactLattice::Arc::Label>> rule_relabel_ipairs_, rule_relabel_opairs_;
 
         int32 tot_frames = 0, tot_frames_decoded = 0;
         bool decoder_finalized_ = false;
@@ -503,6 +504,11 @@ AgfNNet3OnlineModelWrapper::AgfNNet3OnlineModelWrapper(const std::string& model_
         dictation_fst = ReadFstFile(config_.dictation_fst_filename);
 
     LoadLexicon(config_.word_syms_filename, config_.word_align_lexicon_filename);
+
+    auto first_rule_sym = word_syms->Find("#nonterm:rule0"),
+        last_rule_sym = first_rule_sym + 9999;
+    for (auto i = first_rule_sym; i <= last_rule_sym; ++i)
+        rule_relabel_ipairs_.emplace_back(std::make_pair(i, first_rule_sym));
 }
 
 AgfNNet3OnlineModelWrapper::~AgfNNet3OnlineModelWrapper() {
@@ -758,20 +764,9 @@ void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, f
         if (true) {
             // Relabel all nonterm:rules to nonterm:rule0, so redundant/ambiguous rules don't count as differing for measuring confidence
             ExecutionTimer timer("relabel");
-            std::vector<std::pair<CompactLattice::Arc::Label, CompactLattice::Arc::Label>> ipairs, opairs;
-            auto first_rule_sym = word_syms->Find("#nonterm:rule0"),
-                last_rule_sym = first_rule_sym + 9999;
-            for (auto i = first_rule_sym; i <= last_rule_sym; ++i)
-                ipairs.emplace_back(std::make_pair(i, first_rule_sym));
-            Relabel(&decoded_clat_relabeled, ipairs, ipairs);
-            // WriteLattice(clat, "tmp/lattice_relabeled");
-            // CompactLattice clat_det;
-            // Determinize(decoded_clat_relabeled, &clat_det);
-            // Lattice lat, lat_det;
-            // ConvertLattice(clat, &lat);
-            // DeterminizeLattice(lat, &clat_det);
-            // WriteLattice(clat_det, "tmp/lattice_relabeled_det");
-            // decoded_clat = clat;
+            Relabel(&decoded_clat_relabeled, rule_relabel_ipairs_, rule_relabel_opairs_);
+            // FIXME: write a custom ArcMapper to do relabeling faster by checking if isym is in the range of nonterm:rules?
+            // TODO: write a custom Visitor to coalesce the nonterm:rules arcs, and possibly erase them?
         }
 
         if (false || (true && (GetVerboseLevel() >= 1))) {
