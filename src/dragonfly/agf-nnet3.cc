@@ -754,13 +754,33 @@ void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, f
         // BaseFloat inv_acoustic_scale = 1.0 / decodable_config.acoustic_scale;
         // ScaleLattice(AcousticLatticeScale(inv_acoustic_scale), &decoded_clat);
 
+        CompactLattice decoded_clat_relabeled = decoded_clat;
+        if (true) {
+            // Relabel all nonterm:rules to nonterm:rule0, so redundant/ambiguous rules don't count as differing for measuring confidence
+            ExecutionTimer timer("relabel");
+            std::vector<std::pair<CompactLattice::Arc::Label, CompactLattice::Arc::Label>> ipairs, opairs;
+            auto first_rule_sym = word_syms->Find("#nonterm:rule0"),
+                last_rule_sym = first_rule_sym + 9999;
+            for (auto i = first_rule_sym; i <= last_rule_sym; ++i)
+                ipairs.emplace_back(std::make_pair(i, first_rule_sym));
+            Relabel(&decoded_clat_relabeled, ipairs, ipairs);
+            // WriteLattice(clat, "tmp/lattice_relabeled");
+            // CompactLattice clat_det;
+            // Determinize(decoded_clat_relabeled, &clat_det);
+            // Lattice lat, lat_det;
+            // ConvertLattice(clat, &lat);
+            // DeterminizeLattice(lat, &clat_det);
+            // WriteLattice(clat_det, "tmp/lattice_relabeled_det");
+            // decoded_clat = clat;
+        }
+
         if (false || (true && (GetVerboseLevel() >= 1))) {
             // Difference between best path and second best path
             ExecutionTimer timer("confidence");
             int32 num_paths;
             // float conf = SentenceLevelConfidence(decoded_clat, &num_paths, NULL, NULL);
             std::vector<int32> best_sentence, second_best_sentence;
-            float conf = SentenceLevelConfidence(decoded_clat, &num_paths, &best_sentence, &second_best_sentence);
+            float conf = SentenceLevelConfidence(decoded_clat_relabeled, &num_paths, &best_sentence, &second_best_sentence);
             timer.stop();
             KALDI_LOG << "SLC(" << num_paths << "paths): " << conf;
             if (num_paths >= 1) KALDI_LOG << "    1st best: " << WordIdsToString(best_sentence);
@@ -773,7 +793,7 @@ void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, f
             ExecutionTimer timer("expected_ser");
             MinimumBayesRiskOptions mbr_opts;
             mbr_opts.decode_mbr = false;
-            MinimumBayesRisk mbr(decoded_clat, mbr_opts);
+            MinimumBayesRisk mbr(decoded_clat_relabeled, mbr_opts);
             const vector<int32> &words = mbr.GetOneBest();
             // const vector<BaseFloat> &conf = mbr.GetOneBestConfidences();
             // const vector<pair<BaseFloat, BaseFloat> > &times = mbr.GetOneBestTimes();
@@ -788,7 +808,7 @@ void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, f
             ExecutionTimer timer("expected_wer");
             MinimumBayesRiskOptions mbr_opts;
             mbr_opts.decode_mbr = true;
-            MinimumBayesRisk mbr(decoded_clat, mbr_opts);
+            MinimumBayesRisk mbr(decoded_clat_relabeled, mbr_opts);
             const vector<int32> &words = mbr.GetOneBest();
             // const vector<BaseFloat> &conf = mbr.GetOneBestConfidences();
             // const vector<pair<BaseFloat, BaseFloat> > &times = mbr.GetOneBestTimes();
@@ -801,7 +821,7 @@ void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, f
                 ExecutionTimer timer("compare mbr");
                 MinimumBayesRiskOptions mbr_opts;
                 mbr_opts.decode_mbr = false;
-                MinimumBayesRisk mbr_ser(decoded_clat, mbr_opts);
+                MinimumBayesRisk mbr_ser(decoded_clat_relabeled, mbr_opts);
                 const vector<int32> &words_ser = mbr_ser.GetOneBest();
                 timer.stop();
                 if (mbr.GetBayesRisk() != mbr_ser.GetBayesRisk()) KALDI_WARN << "MBR risks differ";
@@ -814,7 +834,7 @@ void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, f
             ExecutionTimer timer("expected_error_rate");
             MinimumBayesRiskOptions mbr_opts;
             mbr_opts.decode_mbr = false;
-            MinimumBayesRisk mbr(decoded_clat, mbr_opts);
+            MinimumBayesRisk mbr(decoded_clat_relabeled, mbr_opts);
             // const vector<int32> &words = mbr.GetOneBest();
             if (expected_error_rate) *expected_error_rate = mbr.GetBayesRisk();
             // FIXME: also do confidence?
