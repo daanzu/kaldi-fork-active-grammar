@@ -164,10 +164,10 @@ class AgfNNet3OnlineModelWrapper {
         ActiveGrammarFst* active_grammar_fst = nullptr;
 
         // Decoder objects
-        OnlineNnet2FeaturePipeline* feature_pipeline = nullptr;
+        OnlineNnet2FeaturePipeline* feature_pipeline = nullptr;  // reinstantiated per utterance
         OnlineSilenceWeighting* silence_weighting = nullptr;  // reinstantiated per utterance
         OnlineIvectorExtractorAdaptationState* adaptation_state = nullptr;
-        SingleUtteranceNnet3DecoderTpl<fst::ActiveGrammarFst>* decoder = nullptr;
+        SingleUtteranceNnet3DecoderTpl<fst::ActiveGrammarFst>* decoder = nullptr;  // reinstantiated per utterance
         WordAlignLatticeLexiconInfo* word_align_lexicon_info = nullptr;
         std::set<int32> word_align_lexicon_words;  // contains word-ids that are in word_align_lexicon_info
         CombineRuleNontermMapper<CompactLatticeArc>* rule_relabel_mapper_ = nullptr;
@@ -263,10 +263,14 @@ AgfNNet3OnlineModelWrapper::AgfNNet3OnlineModelWrapper(const std::string& model_
 
 AgfNNet3OnlineModelWrapper::~AgfNNet3OnlineModelWrapper() {
     CleanupDecoder();
+    delete word_syms;
+    delete top_fst;
+    delete dictation_fst;
     delete feature_info;
     delete decodable_info;
-    if (word_align_lexicon_info)
-        delete word_align_lexicon_info;
+    delete active_grammar_fst;
+    delete adaptation_state;
+    delete word_align_lexicon_info;
     delete rule_relabel_mapper_;
 }
 
@@ -362,9 +366,7 @@ bool AgfNNet3OnlineModelWrapper::SaveAdaptationState() {
 }
 
 void AgfNNet3OnlineModelWrapper::ResetAdaptationState() {
-    if (adaptation_state != nullptr) {
-        delete adaptation_state;
-    }
+    delete adaptation_state;
     adaptation_state = new OnlineIvectorExtractorAdaptationState(feature_info->ivector_extractor_info);
 }
 
@@ -401,18 +403,12 @@ void AgfNNet3OnlineModelWrapper::StartDecoding(std::vector<bool> grammars_activi
 }
 
 void AgfNNet3OnlineModelWrapper::CleanupDecoder() {
-    if (decoder) {
-        delete decoder;
-        decoder = nullptr;
-    }
-    if (silence_weighting) {
-        delete silence_weighting;
-        silence_weighting = nullptr;
-    }
-    if (feature_pipeline) {
-        delete feature_pipeline;
-        feature_pipeline = nullptr;
-    }
+    delete decoder;
+    decoder = nullptr;
+    delete silence_weighting;
+    silence_weighting = nullptr;
+    delete feature_pipeline;
+    feature_pipeline = nullptr;
 }
 
 // grammars_activity is ignored once decoding has already started
