@@ -170,7 +170,7 @@ class AgfNNet3OnlineModelWrapper {
         SingleUtteranceNnet3DecoderTpl<fst::ActiveGrammarFst>* decoder = nullptr;
         WordAlignLatticeLexiconInfo* word_align_lexicon_info = nullptr;
         std::set<int32> word_align_lexicon_words;  // contains word-ids that are in word_align_lexicon_info
-        std::vector<std::pair<CompactLattice::Arc::Label, CompactLattice::Arc::Label>> rule_relabel_ipairs_, rule_relabel_opairs_;
+        CombineRuleNontermMapper<CompactLatticeArc>* rule_relabel_mapper_ = nullptr;
 
         int32 tot_frames = 0, tot_frames_decoded = 0;
         bool decoder_finalized_ = false;
@@ -258,8 +258,7 @@ AgfNNet3OnlineModelWrapper::AgfNNet3OnlineModelWrapper(const std::string& model_
 
     auto first_rule_sym = word_syms->Find("#nonterm:rule0"),
         last_rule_sym = first_rule_sym + 9999;
-    for (auto i = first_rule_sym; i <= last_rule_sym; ++i)
-        rule_relabel_ipairs_.emplace_back(std::make_pair(i, first_rule_sym));
+    rule_relabel_mapper_ = new CombineRuleNontermMapper<CompactLatticeArc>(first_rule_sym, last_rule_sym);
 }
 
 AgfNNet3OnlineModelWrapper::~AgfNNet3OnlineModelWrapper() {
@@ -268,6 +267,7 @@ AgfNNet3OnlineModelWrapper::~AgfNNet3OnlineModelWrapper() {
     delete decodable_info;
     if (word_align_lexicon_info)
         delete word_align_lexicon_info;
+    delete rule_relabel_mapper_;
 }
 
 bool AgfNNet3OnlineModelWrapper::LoadLexicon(std::string& word_syms_filename, std::string& word_align_lexicon_filename) {
@@ -513,8 +513,7 @@ void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, f
         if (true) {
             // Relabel all nonterm:rules to nonterm:rule0, so redundant/ambiguous rules don't count as differing for measuring confidence
             ExecutionTimer timer("relabel");
-            Relabel(&decoded_clat_relabeled, rule_relabel_ipairs_, rule_relabel_opairs_);
-            // FIXME: write a custom ArcMapper to do relabeling faster by checking if isym is in the range of nonterm:rules?
+            ArcMap(&decoded_clat_relabeled, rule_relabel_mapper_);
             // TODO: write a custom Visitor to coalesce the nonterm:rules arcs, and possibly erase them?
         }
 

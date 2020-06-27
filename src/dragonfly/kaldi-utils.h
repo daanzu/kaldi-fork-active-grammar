@@ -57,6 +57,41 @@ void WriteLattice(const CompactLattice clat_in, std::string name = "lattice") {
     KALDI_WARN << "Wrote " << filename;
 }
 
+// ArcMapper that takes acceptor and relabels all nonterm:rules to nonterm:rule0, so redundant/ambiguous rules don't count as differing for measuring
+// confidence.
+template <class A>
+class CombineRuleNontermMapper {
+   public:
+    using FromArc = A;
+    using ToArc = A;
+    using Label = typename FromArc::Label;
+
+    explicit CombineRuleNontermMapper(Label first_rule_sym, Label last_rule_sym) : first_rule_sym_(first_rule_sym), last_rule_sym_(last_rule_sym) {}
+
+    ToArc operator()(const FromArc& arc) const {
+        // KALDI_ASSERT(arc.ilabel == arc.olabel);
+        if ((arc.ilabel >= first_rule_sym_) && (arc.ilabel <= last_rule_sym_))
+            return ToArc(first_rule_sym_, first_rule_sym_, arc.weight, arc.nextstate);
+        else
+            return arc;
+    }
+
+    constexpr MapFinalAction FinalAction() const { return MAP_NO_SUPERFINAL; }
+
+    constexpr MapSymbolsAction InputSymbolsAction() const { return MAP_NOOP_SYMBOLS; }
+
+    constexpr MapSymbolsAction OutputSymbolsAction() const { return MAP_NOOP_SYMBOLS; }
+
+    constexpr uint64 Properties(uint64 props) const {
+        KALDI_ASSERT(props & kAcceptor);
+        return (props & kSetArcProperties);
+    }
+
+   private:
+    Label first_rule_sym_;
+    Label last_rule_sym_;
+};
+
 template <class Arc>
 class CopyDictationVisitor {
    public:
