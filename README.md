@@ -1,5 +1,5 @@
-Kaldi Fork for Active Grammar
-=============================
+Kaldi Fork for Kaldi Active Grammar
+===================================
 
 [![Donate](https://img.shields.io/badge/donate-GitHub-pink.svg)](https://github.com/sponsors/daanzu)
 [![Donate](https://img.shields.io/badge/donate-Patreon-orange.svg)](https://www.patreon.com/daanzu)
@@ -17,3 +17,6 @@ v3 (AGPL-3.0-or-later)**, while the original is licensed under its original
 terms (Apache-2.0).
 
 The original README is available in [README.orig.md](README.orig.md).
+
+NOTE: The default branch for this repository used to be `dragonfly`, but has
+been changed to the standard `master`.
