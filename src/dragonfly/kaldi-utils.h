@@ -82,7 +82,7 @@ class CombineRuleNontermMapper {
 
     constexpr MapSymbolsAction OutputSymbolsAction() const { return MAP_NOOP_SYMBOLS; }
 
-    constexpr uint64 Properties(uint64 props) const {
+    uint64 Properties(uint64 props) const {
         KALDI_ASSERT(props & kAcceptor);
         return (props & kSetArcProperties);
     }
