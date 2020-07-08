@@ -46,15 +46,10 @@ AgfNNet3OnlineModelWrapper::AgfNNet3OnlineModelWrapper(const std::string& model_
     : BaseNNet3OnlineModelWrapper(model_dir, config_str, verbosity) {
     KALDI_VLOG(2) << "kNontermBigNumber, GetEncodingMultiple: " << kNontermBigNumber << ", " << GetEncodingMultiple(config_.nonterm_phones_offset);
 
-    feature_info_ = new OnlineNnet2FeaturePipelineInfo(feature_config_);
-    decodable_info_ = new nnet3::DecodableNnetSimpleLoopedInfo(decodable_config_, &am_nnet_);
-    ResetAdaptationState();
     top_fst_ = dynamic_cast<StdConstFst*>(ReadFstKaldiGeneric(config_.top_fst_filename));
 
     if (!config_.dictation_fst_filename.empty())
         dictation_fst_ = ReadFstFile(config_.dictation_fst_filename);
-
-    LoadLexicon(config_.word_syms_filename, config_.word_align_lexicon_filename);
 
     auto first_rule_sym = word_syms_->Find("#nonterm:rule0"),
         last_rule_sym = first_rule_sym + 9999;
@@ -63,55 +58,10 @@ AgfNNet3OnlineModelWrapper::AgfNNet3OnlineModelWrapper(const std::string& model_
 
 AgfNNet3OnlineModelWrapper::~AgfNNet3OnlineModelWrapper() {
     CleanupDecoder();
-    delete word_syms_;
     delete top_fst_;
     delete dictation_fst_;
-    delete feature_info_;
-    delete decodable_info_;
     delete active_grammar_fst_;
-    delete adaptation_state_;
-    delete word_align_lexicon_info_;
     delete rule_relabel_mapper_;
-}
-
-bool AgfNNet3OnlineModelWrapper::LoadLexicon(std::string& word_syms_filename, std::string& word_align_lexicon_filename) {
-    // FIXME: make more robust to errors
-
-    if (word_syms_filename != "") {
-        if (!(word_syms_ = fst::SymbolTable::ReadText(word_syms_filename))) {
-            KALDI_ERR << "Could not read symbol table from file " << word_syms_filename;
-            return false;
-        }
-    }
-
-    if (word_align_lexicon_filename != "") {
-        bool binary_in;
-        Input ki(word_align_lexicon_filename, &binary_in);
-        KALDI_ASSERT(!binary_in && "Not expecting binary file for lexicon");
-        if (!ReadLexiconForWordAlign(ki.Stream(), &word_align_lexicon_)) {
-            KALDI_ERR << "Error reading word alignment lexicon from file " << word_align_lexicon_filename;
-            return false;
-        }
-        if (word_align_lexicon_info_)
-            delete word_align_lexicon_info_;
-        word_align_lexicon_info_ = new WordAlignLatticeLexiconInfo(word_align_lexicon_);
-
-        word_align_lexicon_words_.clear();
-        for (auto entry : word_align_lexicon_)
-            word_align_lexicon_words_.insert(entry.at(0));
-    }
-
-    return true;
-}
-
-StdConstFst* AgfNNet3OnlineModelWrapper::ReadFstFile(std::string filename) {
-    if (filename.compare(filename.length() - 4, 4, ".txt") == 0) {
-        // FIXME: fstdeterminize | fstminimize | fstrmepsilon | fstarcsort --sort_type=ilabel
-        KALDI_WARN << "cannot read text fst file " << filename;
-        return nullptr;
-    } else {
-        return dynamic_cast<StdConstFst*>(ReadFstKaldiGeneric(filename));
-    }
 }
 
 int32 AgfNNet3OnlineModelWrapper::AddGrammarFst(std::string& grammar_fst_filename) {
@@ -156,20 +106,6 @@ bool AgfNNet3OnlineModelWrapper::RemoveGrammarFst(int32 grammar_fst_index) {
     return true;
 }
 
-bool AgfNNet3OnlineModelWrapper::SaveAdaptationState() {
-    if (feature_pipeline_ != nullptr) {
-        feature_pipeline_->GetAdaptationState(adaptation_state_);
-        KALDI_LOG << "Saved adaptation state.";
-        return true;
-    }
-    return false;
-}
-
-void AgfNNet3OnlineModelWrapper::ResetAdaptationState() {
-    delete adaptation_state_;
-    adaptation_state_ = new OnlineIvectorExtractorAdaptationState(feature_info_->ivector_extractor_info);
-}
-
 void AgfNNet3OnlineModelWrapper::StartDecoding(std::vector<bool> grammars_activity) {
     CleanupDecoder();
     ExecutionTimer timer("StartDecoding", 2);
@@ -205,10 +141,7 @@ void AgfNNet3OnlineModelWrapper::StartDecoding(std::vector<bool> grammars_activi
 void AgfNNet3OnlineModelWrapper::CleanupDecoder() {
     delete decoder_;
     decoder_ = nullptr;
-    delete silence_weighting_;
-    silence_weighting_ = nullptr;
-    delete feature_pipeline_;
-    feature_pipeline_ = nullptr;
+    BaseNNet3OnlineModelWrapper::CleanupDecoder();
 }
 
 // grammars_activity is ignored once decoding has already started
@@ -228,7 +161,7 @@ bool AgfNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, const Vector<BaseFl
 
     if (samples.Dim() > 0) {
         feature_pipeline_->AcceptWaveform(samp_freq, samples);
-        tot_frames += samples.Dim();
+        tot_frames_ += samples.Dim();
     }
 
     if (finalize)
@@ -252,8 +185,8 @@ bool AgfNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, const Vector<BaseFl
         decoder_->FinalizeDecoding();
         decoder_finalized_ = true;
 
-        tot_frames_decoded += tot_frames;
-        tot_frames = 0;
+        tot_frames_decoded_ += tot_frames_;
+        tot_frames_ = 0;
 
         if (save_adaptation_state) {
             feature_pipeline_->GetAdaptationState(adaptation_state_);
@@ -410,20 +343,6 @@ void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, f
     if (likelihood) *likelihood = expf(-(*lm_score + *am_score) / num_frames);
 
     decoded_string = WordIdsToString(words);
-}
-
-std::string AgfNNet3OnlineModelWrapper::WordIdsToString(const std::vector<int32> &wordIds) {
-    stringstream text;
-    for (size_t i = 0; i < wordIds.size(); i++) {
-        std::string s = word_syms_->Find(wordIds[i]);
-        if (s == "") {
-            KALDI_WARN << "Word-id " << wordIds[i] << " not in symbol table";
-            s = "MISSING_WORD";
-        }
-        if (i != 0) text << " ";
-        text << word_syms_->Find(wordIds[i]);
-    }
-    return text.str();
 }
 
 bool AgfNNet3OnlineModelWrapper::GetWordAlignment(std::vector<string>& words, std::vector<int32>& times, std::vector<int32>& lengths, bool include_eps) {

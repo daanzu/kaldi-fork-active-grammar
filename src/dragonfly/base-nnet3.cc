@@ -93,8 +93,6 @@ BaseNNet3OnlineModelWrapper::BaseNNet3OnlineModelWrapper(const std::string& mode
     decodable_config_.acoustic_scale = config_.acoustic_scale;
     decodable_config_.frame_subsampling_factor = config_.frame_subsampling_factor;
 
-    KALDI_VLOG(2) << "kNontermBigNumber, GetEncodingMultiple: " << kNontermBigNumber << ", " << GetEncodingMultiple(config_.nonterm_phones_offset);
-
     {
         bool binary;
         Input ki(config_.model_filename, &binary);
@@ -108,29 +106,17 @@ BaseNNet3OnlineModelWrapper::BaseNNet3OnlineModelWrapper(const std::string& mode
     feature_info_ = new OnlineNnet2FeaturePipelineInfo(feature_config_);
     decodable_info_ = new nnet3::DecodableNnetSimpleLoopedInfo(decodable_config_, &am_nnet_);
     ResetAdaptationState();
-    top_fst_ = dynamic_cast<StdConstFst*>(ReadFstKaldiGeneric(config_.top_fst_filename));
-
-    if (!config_.dictation_fst_filename.empty())
-        dictation_fst_ = ReadFstFile(config_.dictation_fst_filename);
 
     LoadLexicon(config_.word_syms_filename, config_.word_align_lexicon_filename);
-
-    auto first_rule_sym = word_syms_->Find("#nonterm:rule0"),
-        last_rule_sym = first_rule_sym + 9999;
-    rule_relabel_mapper_ = new CombineRuleNontermMapper<CompactLatticeArc>(first_rule_sym, last_rule_sym);
 }
 
 BaseNNet3OnlineModelWrapper::~BaseNNet3OnlineModelWrapper() {
     CleanupDecoder();
     delete word_syms_;
-    delete top_fst_;
-    delete dictation_fst_;
     delete feature_info_;
     delete decodable_info_;
-    delete active_grammar_fst_;
     delete adaptation_state_;
     delete word_align_lexicon_info_;
-    delete rule_relabel_mapper_;
 }
 
 bool BaseNNet3OnlineModelWrapper::LoadLexicon(std::string& word_syms_filename, std::string& word_align_lexicon_filename) {
@@ -173,60 +159,18 @@ StdConstFst* BaseNNet3OnlineModelWrapper::ReadFstFile(std::string filename) {
     }
 }
 
-int32 BaseNNet3OnlineModelWrapper::AddGrammarFst(std::string& grammar_fst_filename) {
-    auto grammar_fst_index = grammar_fsts_.size();
-    auto grammar_fst = ReadFstFile(grammar_fst_filename);
-    KALDI_VLOG(2) << "adding FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst_filename;
-    grammar_fsts_.emplace_back(grammar_fst);
-    grammar_fsts_filename_map_[grammar_fst] = grammar_fst_filename;
-    if (active_grammar_fst_) {
-        delete active_grammar_fst_;
-        active_grammar_fst_ = nullptr;
+std::string BaseNNet3OnlineModelWrapper::WordIdsToString(const std::vector<int32> &wordIds) {
+    stringstream text;
+    for (size_t i = 0; i < wordIds.size(); i++) {
+        std::string s = word_syms_->Find(wordIds[i]);
+        if (s == "") {
+            KALDI_WARN << "Word-id " << wordIds[i] << " not in symbol table";
+            s = "MISSING_WORD";
+        }
+        if (i != 0) text << " ";
+        text << word_syms_->Find(wordIds[i]);
     }
-    return grammar_fst_index;
-}
-
-bool BaseNNet3OnlineModelWrapper::ReloadGrammarFst(int32 grammar_fst_index, std::string& grammar_fst_filename) {
-    auto old_grammar_fst = grammar_fsts_.at(grammar_fst_index);
-    grammar_fsts_filename_map_.erase(old_grammar_fst);
-    delete old_grammar_fst;
-
-    auto grammar_fst = ReadFstFile(grammar_fst_filename);
-    KALDI_VLOG(2) << "reloading FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst_filename;
-    grammar_fsts_.at(grammar_fst_index) = grammar_fst;
-    grammar_fsts_filename_map_[grammar_fst] = grammar_fst_filename;
-    if (active_grammar_fst_) {
-        delete active_grammar_fst_;
-        active_grammar_fst_ = nullptr;
-    }
-    return true;
-}
-
-bool BaseNNet3OnlineModelWrapper::RemoveGrammarFst(int32 grammar_fst_index) {
-    auto grammar_fst = grammar_fsts_.at(grammar_fst_index);
-    KALDI_VLOG(2) << "removing FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fsts_filename_map_.at(grammar_fst);
-    grammar_fsts_.erase(grammar_fsts_.begin() + grammar_fst_index);
-    grammar_fsts_filename_map_.erase(grammar_fst);
-    delete grammar_fst;
-    if (active_grammar_fst_) {
-        delete active_grammar_fst_;
-        active_grammar_fst_ = nullptr;
-    }
-    return true;
-}
-
-bool BaseNNet3OnlineModelWrapper::SaveAdaptationState() {
-    if (feature_pipeline_ != nullptr) {
-        feature_pipeline_->GetAdaptationState(adaptation_state_);
-        KALDI_LOG << "Saved adaptation state.";
-        return true;
-    }
-    return false;
-}
-
-void BaseNNet3OnlineModelWrapper::ResetAdaptationState() {
-    delete adaptation_state_;
-    adaptation_state_ = new OnlineIvectorExtractorAdaptationState(feature_info_->ivector_extractor_info);
+    return text.str();
 }
 
 void BaseNNet3OnlineModelWrapper::StartDecoding(std::vector<bool> grammars_activity) {
@@ -270,6 +214,20 @@ void BaseNNet3OnlineModelWrapper::CleanupDecoder() {
     feature_pipeline_ = nullptr;
 }
 
+bool BaseNNet3OnlineModelWrapper::SaveAdaptationState() {
+    if (feature_pipeline_ != nullptr) {
+        feature_pipeline_->GetAdaptationState(adaptation_state_);
+        KALDI_LOG << "Saved adaptation state.";
+        return true;
+    }
+    return false;
+}
+
+void BaseNNet3OnlineModelWrapper::ResetAdaptationState() {
+    delete adaptation_state_;
+    adaptation_state_ = new OnlineIvectorExtractorAdaptationState(feature_info_->ivector_extractor_info);
+}
+
 // grammars_activity is ignored once decoding has already started
 bool BaseNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, const Vector<BaseFloat>& samples, bool finalize,
         std::vector<bool>& grammars_activity, bool save_adaptation_state) {
@@ -287,7 +245,7 @@ bool BaseNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, const Vector<BaseF
 
     if (samples.Dim() > 0) {
         feature_pipeline_->AcceptWaveform(samp_freq, samples);
-        tot_frames += samples.Dim();
+        tot_frames_ += samples.Dim();
     }
 
     if (finalize)
@@ -311,8 +269,8 @@ bool BaseNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, const Vector<BaseF
         decoder_->FinalizeDecoding();
         decoder_finalized_ = true;
 
-        tot_frames_decoded += tot_frames;
-        tot_frames = 0;
+        tot_frames_decoded_ += tot_frames_;
+        tot_frames_ = 0;
 
         if (save_adaptation_state) {
             feature_pipeline_->GetAdaptationState(adaptation_state_);
@@ -471,20 +429,6 @@ void BaseNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, 
     decoded_string = WordIdsToString(words);
 }
 
-std::string BaseNNet3OnlineModelWrapper::WordIdsToString(const std::vector<int32> &wordIds) {
-    stringstream text;
-    for (size_t i = 0; i < wordIds.size(); i++) {
-        std::string s = word_syms_->Find(wordIds[i]);
-        if (s == "") {
-            KALDI_WARN << "Word-id " << wordIds[i] << " not in symbol table";
-            s = "MISSING_WORD";
-        }
-        if (i != 0) text << " ";
-        text << word_syms_->Find(wordIds[i]);
-    }
-    return text.str();
-}
-
 bool BaseNNet3OnlineModelWrapper::GetWordAlignment(std::vector<string>& words, std::vector<int32>& times, std::vector<int32>& lengths, bool include_eps) {
     if (!word_align_lexicon_.size() || !word_align_lexicon_info_) KALDI_ERR << "No word alignment lexicon loaded";
     if (best_path_clat_.NumStates() == 0) KALDI_ERR << "No best path lattice";
@@ -558,26 +502,6 @@ bool load_lexicon_agf_nnet3(void* model_vp, char* word_syms_filename_cp, char* w
     BaseNNet3OnlineModelWrapper* model = static_cast<BaseNNet3OnlineModelWrapper*>(model_vp);
     std::string word_syms_filename(word_syms_filename_cp), word_align_lexicon_filename(word_align_lexicon_filename_cp);
     bool result = model->LoadLexicon(word_syms_filename, word_align_lexicon_filename);
-    return result;
-}
-
-int32_t add_grammar_fst_agf_nnet3(void* model_vp, char* grammar_fst_filename_cp) {
-    BaseNNet3OnlineModelWrapper* model = static_cast<BaseNNet3OnlineModelWrapper*>(model_vp);
-    std::string grammar_fst_filename(grammar_fst_filename_cp);
-    int32_t grammar_fst_index = model->AddGrammarFst(grammar_fst_filename);
-    return grammar_fst_index;
-}
-
-bool reload_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp) {
-    BaseNNet3OnlineModelWrapper* model = static_cast<BaseNNet3OnlineModelWrapper*>(model_vp);
-    std::string grammar_fst_filename(grammar_fst_filename_cp);
-    bool result = model->ReloadGrammarFst(grammar_fst_index, grammar_fst_filename);
-    return result;
-}
-
-bool remove_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index) {
-    BaseNNet3OnlineModelWrapper* model = static_cast<BaseNNet3OnlineModelWrapper*>(model_vp);
-    bool result = model->RemoveGrammarFst(grammar_fst_index);
     return result;
 }
 
