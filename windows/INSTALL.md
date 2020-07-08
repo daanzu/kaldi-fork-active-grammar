@@ -81,7 +81,10 @@ In the directory `build64`, find the file `openfst.sln` and open it using Visual
 
  If either of the two won't build, you should stop here and start figuring what's different!
 
-## Compiling PortAudio
+## Compiling PortAudio (Optional)
+
+Skip this step (and pass the `--noportaudio` option to `generate_solution.pl` below) if you don't want/need PortAudio and the parts of Kaldi that depend on it.
+
 1. Download PortAudio from http://www.portaudio.com/download.html and extract the folder
 2. (Optional) Add ASIO Support: http://www.steinberg.net/en/company/developer.html
 3. Open an instance or Powershell or Command Prompt, navigate to the portaudio directory and type:
@@ -154,10 +157,11 @@ for their processors. It isn't free, but you can get [Community Licensing for In
 
 8. Call the script that generates the MSVC solution
 
-         generate_solution.pl --vsver <default|vs2019|vs2017|vs2015> [--enable-cuda] [--enable-openblas] [--enable-mkl]
+         generate_solution.pl --vsver <default|vs2019|vs2017|vs2015> [--enable-cuda] [--enable-openblas] [--enable-mkl] [--portaudio] [--noportaudio]
 
     `--enable-mkl` is the default so you shouldn't need to use it. If `--enable-openblas` is passed it disables MKL support.
-    CUDA is disabled by default. The default Visual Studio version is 15.0 (Visual Studio 2017).
+    CUDA is disabled by default. PortAudio is enabled by default; pass `--noportaudio` to disable it.
+    The default Visual Studio version is 15.0 (Visual Studio 2017).
     Please note that while we support generating the project for Visual Studio 2015, the C++11 support for that compiler
     is rather sub-par, i.e. it won't probably compile. When choosing Visual Studio 2015, you are on your own!
 
