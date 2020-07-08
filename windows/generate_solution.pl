@@ -25,13 +25,15 @@ my $vsver="vs2017";
 
 my %ENABLED = (CUDA => 0,
                OPENBLAS => 0,
-               MKL => 1 );
+               MKL => 1,
+               PORTAUDIO => 1 );
 
 GetOptions ("vsver=s" => \$vsver,
             "enable-cuda" => \$ENABLED{CUDA},
-			"enable-openblas" => sub {$ENABLED{OPENBLAS}=1; $ENABLED{MKL}=0;},
-			"enable-mkl" => sub {$ENABLED{OPENBLAS}=0; $ENABLED{MKL}=1;},
-			);
+            "enable-openblas" => sub {$ENABLED{OPENBLAS}=1; $ENABLED{MKL}=0;},
+            "enable-mkl" => sub {$ENABLED{OPENBLAS}=0; $ENABLED{MKL}=1;},
+            "portaudio!" => \$ENABLED{PORTAUDIO},
+            );
 
 my %TOOLS=( default=> "14.1",
             vs2015 => "14.0",
@@ -88,11 +90,10 @@ my @propsFiles = (
   "$Bin/openfstwin_release.props",
   "$Bin/openfstwin_debug_win32.props",
   "$Bin/openfstwin_release_win32.props",
-  "$Bin/portaudio_release.props",
-  "$Bin/portaudio_debug.props"
 );
 
 my %optionalProps = (
+  PORTAUDIO => "$Bin/portaudio.props",
 	CUDA => "$Bin/cuda_7.0.props"
 	);
 
@@ -535,10 +536,14 @@ sub writeProjectFiles {
 "    <Import Project=\"..\\cuda_7.0.props\" />
 "
   }
+  if ($ENABLED{PORTAUDIO}) {
+  print PROJ
+"    <Import Project=\"..\\portaudio.props\" />
+"
+  }
   print PROJ
 "    <Import Project=\"..\\kaldiwin_win32.props\" />
     <Import Project=\"..\\openfstwin_debug_win32.props\" />
-    <Import Project=\"..\\portaudio_debug.props\" />
   </ImportGroup>
   <ImportGroup Condition=\"'\$(Configuration)|\$(Platform)'=='Debug|x64'\" Label=\"PropertySheets\">
     <Import Project=\"..\\variables.props\" />
@@ -552,7 +557,6 @@ sub writeProjectFiles {
   print PROJ
 "    <Import Project=\"..\\kaldiwin.props\" />
     <Import Project=\"..\\openfstwin_debug.props\" />
-    <Import Project=\"..\\portaudio_debug.props\" />
   </ImportGroup>
   <ImportGroup Condition=\"'\$(Configuration)|\$(Platform)'=='Release|Win32'\" Label=\"PropertySheets\">
     <Import Project=\"..\\variables.props\" />
@@ -563,10 +567,14 @@ sub writeProjectFiles {
 "    <Import Project=\"..\\cuda_7.0.props\" />
 ";
   }
+  if ($ENABLED{PORTAUDIO}) {
+  print PROJ
+"    <Import Project=\"..\\portaudio.props\" />
+"
+  }
   print PROJ
 "    <Import Project=\"..\\kaldiwin_win32.props\" />
     <Import Project=\"..\\openfstwin_release_win32.props\" />
-    <Import Project=\"..\\portaudio_release.props\" />
   </ImportGroup>
   <ImportGroup Condition=\"'\$(Configuration)|\$(Platform)'=='Release|x64'\" Label=\"PropertySheets\">
     <Import Project=\"..\\variables.props\" />
@@ -577,10 +585,14 @@ sub writeProjectFiles {
 "    <Import Project=\"..\\cuda_7.0.props\" />
 ";
   }
+  if ($ENABLED{PORTAUDIO}) {
+  print PROJ
+"    <Import Project=\"..\\portaudio.props\" />
+"
+  }
   print PROJ
 "    <Import Project=\"..\\kaldiwin.props\" />
     <Import Project=\"..\\openfstwin_release.props\" />
-    <Import Project=\"..\\portaudio_release.props\" />
   </ImportGroup>
 ";
 
