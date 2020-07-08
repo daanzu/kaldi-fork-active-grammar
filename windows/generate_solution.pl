@@ -261,6 +261,34 @@ sub parseMakefile {
       }
     }
 
+    if (my ($items) = $line =~ /^\s*DynamicLibrary\s+=(.+?)$/) {
+      my @items = $items =~ /(\S+)/g;
+      foreach my $item (@items) {
+        my $type = 'DynamicLibrary';
+        $list->{$type}->{$item} = 1;
+        $list->{ALL}->{$item}->{'type'} = $type;
+        $list->{ALL}->{$item}->{'path'} = $path;
+      }
+    }
+
+    if (my ($items) = $line =~ /^\s*DynamicLibraryExtras\s+=(.+?)$/) {
+      if (scalar keys %{$alibs} != 1) {
+        print STDERR "ERROR: less or more than one libfile, cannot assign DynamicLibraryExtras\n";
+      } else {
+        my $alib = join('', keys %{$alibs}); # $alibs obsahuje nazev pouze jedne knihovny
+        my @items = $items =~ /(\S+)/g;
+        foreach my $item (@items) {
+          if ($item =~ /\.cc$/) {
+            $list->{ALL}->{$alib}->{'cfiles'}->{$item} = 1;
+          } elsif ($item =~ /\.h$/) {
+            $list->{ALL}->{$alib}->{'hfiles'}->{$item} = 1;
+          } else {
+            print STDERR "Unknown DynamicLibraryExtras: $item\n";
+          }
+        }
+      }
+    }
+
     if (my ($items) = $line =~ /^ADDLIBS[^=]*?=(.+?)$/) {
       my @items = $items =~ /(\S+)/g;
 
@@ -384,8 +412,20 @@ sub writeProjectFiles {
   my $conftype = "";
 
   # set projtype-specific params and add .cc files
-  if ($projlist->{ALL}->{$projname}->{'type'} =~ /LIBNAME/) {
+  if ($projlist->{ALL}->{$projname}->{'type'} =~ /LIBNAME|DynamicLibrary/) {
     $conftype = "StaticLibrary";
+
+    if ($projlist->{ALL}->{$projname}->{'type'} =~ /DynamicLibrary/) {
+      $conftype = "DynamicLibrary";
+      foreach my $file (keys %{$projlist->{ALL}->{$projname}->{'cfiles'}}) {
+        $file = winPath($projlist->{ALL}->{$projname}->{'path'} . $file);
+        $srcfiles->{'cc'}->{$file} = 1;
+      }
+      foreach my $file (keys %{$projlist->{ALL}->{$projname}->{'hfiles'}}) {
+        $file = winPath($projlist->{ALL}->{$projname}->{'path'} . $file);
+        $srcfiles->{'h'}->{$file} = 1;
+      }
+    }
 
     foreach my $obj (keys %{$projlist->{ALL}->{$projname}->{'objs'}}) {
       my $cfile = winPath($projlist->{ALL}->{$projname}->{'path'} . $obj . '.cc');
@@ -686,6 +726,14 @@ sub writeProjectFiles {
   </ItemDefinitionGroup>
 ";
   } else {  # ItemDefinitionGroup Conditions - Binfile
+    my $extraPreprocessorDefinitions = '_CONSOLE';
+    my $subSystem = 'Console';
+    my $extraCompile = '';
+    if ($projlist->{ALL}->{$projname}->{'type'} =~ /DynamicLibrary/) {
+      $extraPreprocessorDefinitions = '_WINDOWS;_USRDLL;KALDI_DYNAMICLIBRARY_EXPORTS';
+      $subSystem = 'Windows';
+      $extraCompile = "<ConformanceMode>true</ConformanceMode>";
+    }
     print PROJ
 "  <ItemDefinitionGroup Condition=\"'\$(Configuration)|\$(Platform)'=='Debug|Win32'\">
     <ClCompile>
@@ -693,10 +741,11 @@ sub writeProjectFiles {
       </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_DEBUG;$extraPreprocessorDefinitions;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      $extraCompile
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>$subSystem</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
   </ItemDefinitionGroup>
@@ -706,25 +755,27 @@ sub writeProjectFiles {
        </PrecompiledHeader>
        <WarningLevel>Level3</WarningLevel>
        <Optimization>Disabled</Optimization>
-       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+       <PreprocessorDefinitions>WIN32;_DEBUG;$extraPreprocessorDefinitions;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+       $extraCompile
      </ClCompile>
      <Link>
-       <SubSystem>Console</SubSystem>
+       <SubSystem>$subSystem</SubSystem>
        <GenerateDebugInformation>true</GenerateDebugInformation>
      </Link>
    </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition=\"'\$(Configuration)|\$(Platform)'=='Release|Win32'\">
     <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
       <PrecompiledHeader>
       </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;$extraPreprocessorDefinitions;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      $extraCompile
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>$subSystem</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
@@ -732,16 +783,17 @@ sub writeProjectFiles {
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition=\"'\$(Configuration)|\$(Platform)'=='Release|x64'\">
     <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
       <PrecompiledHeader>
       </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;$extraPreprocessorDefinitions;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      $extraCompile
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>$subSystem</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
@@ -801,6 +853,7 @@ sub writeProjectFiles {
 "  <ItemGroup>
 ";
     foreach my $lib (sort { $a cmp $b } keys%{$projdeps->{$projlist->{ALL}->{$projname}->{'path'}}}) {
+      if ($lib eq $projname) { next; }  # Don't reference yourself
       my $refProjFileName = makeRelPath(winPath(getProjFileDir($lib) . "/$lib.vcxproj"), $projFileName);
       print PROJ
 "    <ProjectReference Include=\"" . $refProjFileName . "\">
