@@ -210,6 +210,59 @@ void BaseNNet3OnlineModelWrapper::ResetAdaptationState() {
     adaptation_state_ = new OnlineIvectorExtractorAdaptationState(feature_info_->ivector_extractor_info);
 }
 
+bool BaseNNet3OnlineModelWrapper::GetWordAlignment(std::vector<string>& words, std::vector<int32>& times, std::vector<int32>& lengths, bool include_eps) {
+    if (!word_align_lexicon_.size() || !word_align_lexicon_info_) KALDI_ERR << "No word alignment lexicon loaded";
+    if (best_path_clat_.NumStates() == 0) KALDI_ERR << "No best path lattice";
+
+    // if (!best_path_has_valid_word_align) {
+    //     KALDI_ERR << "There was a word not in word alignment lexicon";
+    // }
+    // if (!word_align_lexicon_words_.count(words[i])) {
+    //     KALDI_LOG << "Word " << s << " (id #" << words[i] << ") not in word alignment lexicon";
+    // }
+
+    CompactLattice aligned_clat;
+    WordAlignLatticeLexiconOpts opts;
+    bool ok = WordAlignLatticeLexicon(best_path_clat_, trans_model_, *word_align_lexicon_info_, opts, &aligned_clat);
+
+    if (!ok) {
+        KALDI_WARN << "Lattice did not align correctly";
+        return false;
+    }
+
+    if (aligned_clat.Start() == fst::kNoStateId) {
+        KALDI_WARN << "Lattice was empty";
+        return false;
+    }
+
+    TopSortCompactLatticeIfNeeded(&aligned_clat);
+
+    // lattice-1best
+    CompactLattice best_path_aligned;
+    CompactLatticeShortestPath(aligned_clat, &best_path_aligned);
+
+    // nbest-to-ctm
+    std::vector<int32> word_idxs, times_raw, lengths_raw;
+    ok = CompactLatticeToWordAlignment(best_path_aligned, &word_idxs, &times_raw, &lengths_raw);
+    if (!ok) {
+        KALDI_WARN << "CompactLatticeToWordAlignment failed.";
+        return false;
+    }
+
+    // lexicon lookup
+    words.clear();
+    for (size_t i = 0; i < word_idxs.size(); i++) {
+        std::string s = word_syms_->Find(word_idxs[i]);  // Must be found, or CompactLatticeToWordAlignment would have crashed
+        // KALDI_LOG << "align: " << s << " - " << times_raw[i] << " - " << lengths_raw[i];
+        if (include_eps || (word_idxs[i] != 0)) {
+            words.push_back(s);
+            times.push_back(times_raw[i]);
+            lengths.push_back(lengths_raw[i]);
+        }
+    }
+    return true;
+}
+
 template <typename Decoder>
 bool BaseNNet3OnlineModelWrapper::Decode(Decoder& decoder_, BaseFloat samp_freq, const Vector<BaseFloat>& samples, bool finalize, bool save_adaptation_state) {
     ExecutionTimer timer("Decode", 2);
@@ -270,196 +323,6 @@ bool BaseNNet3OnlineModelWrapper::Decode(Decoder& decoder_, BaseFloat samp_freq,
         }
     }
 
-    return true;
-}
-
-void BaseNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, float* likelihood, float* am_score, float* lm_score, float* confidence, float* expected_error_rate) {
-    ExecutionTimer timer("GetDecodedString", 2);
-
-    decoded_string = "";
-    if (likelihood) *likelihood = NAN;
-    if (confidence) *confidence = NAN;
-    if (expected_error_rate) *expected_error_rate = NAN;
-    if (lm_score) *lm_score = NAN;
-    if (am_score) *am_score = NAN;
-
-    if (!decoder_) KALDI_ERR << "No decoder";
-    if (decoder_->NumFramesDecoded() == 0) {
-        if (decoder_finalized_) KALDI_WARN << "GetDecodedString on empty decoder";
-        // else KALDI_VLOG(2) << "GetDecodedString on empty decoder";
-        return;
-    }
-
-    Lattice best_path_lat;
-    if (!decoder_finalized_) {
-        // Decoding is not finished yet, so we will just look up the best partial result so far
-        decoder_->GetBestPath(false, &best_path_lat);
-
-    } else {
-        decoder_->GetLattice(true, &decoded_clat_);
-        if (decoded_clat_.NumStates() == 0) KALDI_ERR << "Empty decoded lattice";
-        if (config_.lm_weight != 10.0)
-            ScaleLattice(LatticeScale(config_.lm_weight, 10.0), &decoded_clat_);
-
-        // WriteLattice(decoded_clat, "tmp/lattice");
-
-        CompactLattice decoded_clat_relabeled = decoded_clat_;
-        if (true) {
-            // Relabel all nonterm:rules to nonterm:rule0, so redundant/ambiguous rules don't count as differing for measuring confidence
-            ExecutionTimer timer("relabel");
-            ArcMap(&decoded_clat_relabeled, rule_relabel_mapper_);
-            // TODO: write a custom Visitor to coalesce the nonterm:rules arcs, and possibly erase them?
-        }
-
-        if (false || (true && (GetVerboseLevel() >= 1))) {
-            // Difference between best path and second best path
-            ExecutionTimer timer("confidence");
-            int32 num_paths;
-            // float conf = SentenceLevelConfidence(decoded_clat, &num_paths, NULL, NULL);
-            std::vector<int32> best_sentence, second_best_sentence;
-            float conf = SentenceLevelConfidence(decoded_clat_relabeled, &num_paths, &best_sentence, &second_best_sentence);
-            timer.stop();
-            KALDI_LOG << "SLC(" << num_paths << "paths): " << conf;
-            if (num_paths >= 1) KALDI_LOG << "    1st best: " << WordIdsToString(best_sentence);
-            if (num_paths >= 2) KALDI_LOG << "    2nd best: " << WordIdsToString(second_best_sentence);
-            if (confidence) *confidence = conf;
-        }
-
-        if (false || (true && (GetVerboseLevel() >= 1))) {
-            // Expected sentence error rate
-            ExecutionTimer timer("expected_ser");
-            MinimumBayesRiskOptions mbr_opts;
-            mbr_opts.decode_mbr = false;
-            MinimumBayesRisk mbr(decoded_clat_relabeled, mbr_opts);
-            const vector<int32> &words = mbr.GetOneBest();
-            // const vector<BaseFloat> &conf = mbr.GetOneBestConfidences();
-            // const vector<pair<BaseFloat, BaseFloat> > &times = mbr.GetOneBestTimes();
-            auto risk = mbr.GetBayesRisk();
-            timer.stop();
-            KALDI_LOG << "MBR(SER): " << risk << " : " << WordIdsToString(words);
-            if (expected_error_rate) *expected_error_rate = risk;
-        }
-
-        if (false || (true && (GetVerboseLevel() >= 1))) {
-            // Expected word error rate
-            ExecutionTimer timer("expected_wer");
-            MinimumBayesRiskOptions mbr_opts;
-            mbr_opts.decode_mbr = true;
-            MinimumBayesRisk mbr(decoded_clat_relabeled, mbr_opts);
-            const vector<int32> &words = mbr.GetOneBest();
-            // const vector<BaseFloat> &conf = mbr.GetOneBestConfidences();
-            // const vector<pair<BaseFloat, BaseFloat> > &times = mbr.GetOneBestTimes();
-            auto risk = mbr.GetBayesRisk();
-            timer.stop();
-            KALDI_LOG << "MBR(WER): " << risk << " : " << WordIdsToString(words);
-            if (expected_error_rate) *expected_error_rate = risk;
-
-            if (true) {
-                ExecutionTimer timer("compare mbr");
-                MinimumBayesRiskOptions mbr_opts;
-                mbr_opts.decode_mbr = false;
-                MinimumBayesRisk mbr_ser(decoded_clat_relabeled, mbr_opts);
-                const vector<int32> &words_ser = mbr_ser.GetOneBest();
-                timer.stop();
-                if (mbr.GetBayesRisk() != mbr_ser.GetBayesRisk()) KALDI_WARN << "MBR risks differ";
-                if (words != words_ser) KALDI_WARN << "MBR words differ";
-            }
-        }
-
-        if (true) {
-            // Use MAP (SER) as expected error rate
-            ExecutionTimer timer("expected_error_rate");
-            MinimumBayesRiskOptions mbr_opts;
-            mbr_opts.decode_mbr = false;
-            MinimumBayesRisk mbr(decoded_clat_relabeled, mbr_opts);
-            // const vector<int32> &words = mbr.GetOneBest();
-            if (expected_error_rate) *expected_error_rate = mbr.GetBayesRisk();
-            // FIXME: also do confidence?
-        }
-
-        if (false) {
-            CompactLattice pre_dictation_clat, in_dictation_clat, post_dictation_clat;
-            auto nonterm_dictation = word_syms_->Find("#nonterm:dictation");
-            auto nonterm_end = word_syms_->Find("#nonterm:end");
-            bool ok;
-            CopyDictationVisitor<CompactLatticeArc> visitor(&pre_dictation_clat, &in_dictation_clat, &post_dictation_clat, &ok, nonterm_dictation, nonterm_end);
-            KALDI_ASSERT(ok);
-            AnyArcFilter<CompactLatticeArc> filter;
-            DfsVisit(decoded_clat_, &visitor, filter, true);
-            WriteLattice(in_dictation_clat, "tmp/lattice_dict");
-            WriteLattice(pre_dictation_clat, "tmp/lattice_dictpre");
-            WriteLattice(post_dictation_clat, "tmp/lattice_dictpost");
-        }
-
-        CompactLatticeShortestPath(decoded_clat_, &best_path_clat_);
-        ConvertLattice(best_path_clat_, &best_path_lat);
-    } // if (decoder_finalized_)
-
-    std::vector<int32> words;
-    std::vector<int32> alignment;
-    LatticeWeight weight;
-    bool ok = GetLinearSymbolSequence(best_path_lat, &alignment, &words, &weight);
-    if (!ok) KALDI_ERR << "GetLinearSymbolSequence returned false";
-
-    int32 num_frames = alignment.size();
-    // int32 num_words = words.size();
-    if (lm_score) *lm_score = weight.Value1();
-    if (am_score) *am_score = weight.Value2();
-    if (likelihood) *likelihood = expf(-(*lm_score + *am_score) / num_frames);
-
-    decoded_string = WordIdsToString(words);
-}
-
-bool BaseNNet3OnlineModelWrapper::GetWordAlignment(std::vector<string>& words, std::vector<int32>& times, std::vector<int32>& lengths, bool include_eps) {
-    if (!word_align_lexicon_.size() || !word_align_lexicon_info_) KALDI_ERR << "No word alignment lexicon loaded";
-    if (best_path_clat_.NumStates() == 0) KALDI_ERR << "No best path lattice";
-
-    // if (!best_path_has_valid_word_align) {
-    //     KALDI_ERR << "There was a word not in word alignment lexicon";
-    // }
-    // if (!word_align_lexicon_words_.count(words[i])) {
-    //     KALDI_LOG << "Word " << s << " (id #" << words[i] << ") not in word alignment lexicon";
-    // }
-
-    CompactLattice aligned_clat;
-    WordAlignLatticeLexiconOpts opts;
-    bool ok = WordAlignLatticeLexicon(best_path_clat_, trans_model_, *word_align_lexicon_info_, opts, &aligned_clat);
-
-    if (!ok) {
-        KALDI_WARN << "Lattice did not align correctly";
-        return false;
-    }
-
-    if (aligned_clat.Start() == fst::kNoStateId) {
-        KALDI_WARN << "Lattice was empty";
-        return false;
-    }
-
-    TopSortCompactLatticeIfNeeded(&aligned_clat);
-
-    // lattice-1best
-    CompactLattice best_path_aligned;
-    CompactLatticeShortestPath(aligned_clat, &best_path_aligned);
-
-    // nbest-to-ctm
-    std::vector<int32> word_idxs, times_raw, lengths_raw;
-    ok = CompactLatticeToWordAlignment(best_path_aligned, &word_idxs, &times_raw, &lengths_raw);
-    if (!ok) {
-        KALDI_WARN << "CompactLatticeToWordAlignment failed.";
-        return false;
-    }
-
-    // lexicon lookup
-    words.clear();
-    for (size_t i = 0; i < word_idxs.size(); i++) {
-        std::string s = word_syms_->Find(word_idxs[i]);  // Must be found, or CompactLatticeToWordAlignment would have crashed
-        // KALDI_LOG << "align: " << s << " - " << times_raw[i] << " - " << lengths_raw[i];
-        if (include_eps || (word_idxs[i] != 0)) {
-            words.push_back(s);
-            times.push_back(times_raw[i]);
-            lengths.push_back(lengths_raw[i]);
-        }
-    }
     return true;
 }
 

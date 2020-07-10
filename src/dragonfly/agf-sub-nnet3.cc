@@ -281,59 +281,6 @@ void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, f
     decoded_string = WordIdsToString(words);
 }
 
-bool AgfNNet3OnlineModelWrapper::GetWordAlignment(std::vector<string>& words, std::vector<int32>& times, std::vector<int32>& lengths, bool include_eps) {
-    if (!word_align_lexicon_.size() || !word_align_lexicon_info_) KALDI_ERR << "No word alignment lexicon loaded";
-    if (best_path_clat_.NumStates() == 0) KALDI_ERR << "No best path lattice";
-
-    // if (!best_path_has_valid_word_align) {
-    //     KALDI_ERR << "There was a word not in word alignment lexicon";
-    // }
-    // if (!word_align_lexicon_words_.count(words[i])) {
-    //     KALDI_LOG << "Word " << s << " (id #" << words[i] << ") not in word alignment lexicon";
-    // }
-
-    CompactLattice aligned_clat;
-    WordAlignLatticeLexiconOpts opts;
-    bool ok = WordAlignLatticeLexicon(best_path_clat_, trans_model_, *word_align_lexicon_info_, opts, &aligned_clat);
-
-    if (!ok) {
-        KALDI_WARN << "Lattice did not align correctly";
-        return false;
-    }
-
-    if (aligned_clat.Start() == fst::kNoStateId) {
-        KALDI_WARN << "Lattice was empty";
-        return false;
-    }
-
-    TopSortCompactLatticeIfNeeded(&aligned_clat);
-
-    // lattice-1best
-    CompactLattice best_path_aligned;
-    CompactLatticeShortestPath(aligned_clat, &best_path_aligned);
-
-    // nbest-to-ctm
-    std::vector<int32> word_idxs, times_raw, lengths_raw;
-    ok = CompactLatticeToWordAlignment(best_path_aligned, &word_idxs, &times_raw, &lengths_raw);
-    if (!ok) {
-        KALDI_WARN << "CompactLatticeToWordAlignment failed.";
-        return false;
-    }
-
-    // lexicon lookup
-    words.clear();
-    for (size_t i = 0; i < word_idxs.size(); i++) {
-        std::string s = word_syms_->Find(word_idxs[i]);  // Must be found, or CompactLatticeToWordAlignment would have crashed
-        // KALDI_LOG << "align: " << s << " - " << times_raw[i] << " - " << lengths_raw[i];
-        if (include_eps || (word_idxs[i] != 0)) {
-            words.push_back(s);
-            times.push_back(times_raw[i]);
-            lengths.push_back(lengths_raw[i]);
-        }
-    }
-    return true;
-}
-
 }  // namespace dragonfly
 
 
