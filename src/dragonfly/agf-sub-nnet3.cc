@@ -298,10 +298,19 @@ void* init_agf_nnet3(char* model_dir_cp, char* config_str_cp, int32_t verbosity)
 }
 
 bool load_lexicon_agf_nnet3(void* model_vp, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp) {
-    auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
-    std::string word_syms_filename(word_syms_filename_cp), word_align_lexicon_filename(word_align_lexicon_filename_cp);
-    bool result = model->LoadLexicon(word_syms_filename, word_align_lexicon_filename);
-    return result;
+    return load_lexicon_base_nnet3(model_vp, word_syms_filename_cp, word_align_lexicon_filename_cp);
+}
+
+bool save_adaptation_state_agf_nnet3(void* model_vp) {
+    return save_adaptation_state_base_nnet3(model_vp);
+}
+
+bool reset_adaptation_state_agf_nnet3(void* model_vp) {
+    return reset_adaptation_state_base_nnet3(model_vp);
+}
+
+bool get_word_align_agf_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words) {
+    return get_word_align_base_nnet3(model_vp, times_cp, lengths_cp, num_words);
 }
 
 int32_t add_grammar_fst_agf_nnet3(void* model_vp, char* grammar_fst_filename_cp) {
@@ -345,30 +354,6 @@ bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_samples, floa
     }
 }
 
-bool save_adaptation_state_agf_nnet3(void* model_vp) {
-    try {
-        auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
-        bool result = model->SaveAdaptationState();
-        return result;
-
-    } catch(const std::exception& e) {
-        KALDI_WARN << "Trying to survive fatal exception: " << e.what();
-        return false;
-    }
-}
-
-bool reset_adaptation_state_agf_nnet3(void* model_vp) {
-    try {
-        auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
-        model->ResetAdaptationState();
-        return true;
-
-    } catch(const std::exception& e) {
-        KALDI_WARN << "Trying to survive fatal exception: " << e.what();
-        return false;
-    }
-}
-
 bool get_output_agf_nnet3(void* model_vp, char* output, int32_t output_max_length,
         float* likelihood_p, float* am_score_p, float* lm_score_p, float* confidence_p, float* expected_error_rate_p) {
     try {
@@ -385,31 +370,6 @@ bool get_output_agf_nnet3(void* model_vp, char* output, int32_t output_max_lengt
         strncpy(output, cstr, output_max_length);
         output[output_max_length - 1] = 0;
         return true;
-
-    } catch(const std::exception& e) {
-        KALDI_WARN << "Trying to survive fatal exception: " << e.what();
-        return false;
-    }
-}
-
-bool get_word_align_agf_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words) {
-    try {
-        auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
-        std::vector<string> words;
-        std::vector<int32> times, lengths;
-        bool result = model->GetWordAlignment(words, times, lengths, false);
-
-        if (result) {
-            KALDI_ASSERT(words.size() == num_words);
-            for (size_t i = 0; i < words.size(); i++) {
-                times_cp[i] = times[i];
-                lengths_cp[i] = lengths[i];
-            }
-        } else {
-            KALDI_WARN << "alignment failed";
-        }
-
-        return result;
 
     } catch(const std::exception& e) {
         KALDI_WARN << "Trying to survive fatal exception: " << e.what();

@@ -366,6 +366,31 @@ bool reset_adaptation_state_base_nnet3(void* model_vp) {
     }
 }
 
+bool get_word_align_base_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words) {
+    try {
+        auto model = static_cast<BaseNNet3OnlineModelWrapper*>(model_vp);
+        std::vector<string> words;
+        std::vector<int32> times, lengths;
+        bool result = model->GetWordAlignment(words, times, lengths, false);
+
+        if (result) {
+            KALDI_ASSERT(words.size() == num_words);
+            for (size_t i = 0; i < words.size(); i++) {
+                times_cp[i] = times[i];
+                lengths_cp[i] = lengths[i];
+            }
+        } else {
+            KALDI_WARN << "alignment failed";
+        }
+
+        return result;
+
+    } catch(const std::exception& e) {
+        KALDI_WARN << "Trying to survive fatal exception: " << e.what();
+        return false;
+    }
+}
+
 bool decode_base_nnet3(void* model_vp, float samp_freq, int32_t num_samples, float* samples, bool finalize,
     bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state) {
     try {
