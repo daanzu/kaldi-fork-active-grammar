@@ -220,41 +220,20 @@ using namespace dragonfly;
 void* init_plain_nnet3(char* model_dir_cp, char* config_str_cp, int32_t verbosity) {
     std::string model_dir(model_dir_cp),
         config_str((config_str_cp != nullptr) ? config_str_cp : "");
-    PlainNNet3OnlineModelWrapper* model = new PlainNNet3OnlineModelWrapper(model_dir, config_str, verbosity);
+    auto model = new PlainNNet3OnlineModelWrapper(model_dir, config_str, verbosity);
     return model;
 }
 
 bool load_lexicon_plain_nnet3(void* model_vp, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp) {
-    PlainNNet3OnlineModelWrapper* model = static_cast<PlainNNet3OnlineModelWrapper*>(model_vp);
+    auto model = static_cast<PlainNNet3OnlineModelWrapper*>(model_vp);
     std::string word_syms_filename(word_syms_filename_cp), word_align_lexicon_filename(word_align_lexicon_filename_cp);
     bool result = model->LoadLexicon(word_syms_filename, word_align_lexicon_filename);
     return result;
 }
 
-bool decode_plain_nnet3(void* model_vp, float samp_freq, int32_t num_samples, float* samples, bool finalize,
-    bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state) {
-    try {
-        PlainNNet3OnlineModelWrapper* model = static_cast<PlainNNet3OnlineModelWrapper*>(model_vp);
-        std::vector<bool> grammars_activity(grammars_activity_cp_size, false);
-        for (size_t i = 0; i < grammars_activity_cp_size; i++)
-            grammars_activity[i] = grammars_activity_cp[i];
-        // if (num_samples > 3200)
-        //     KALDI_WARN << "Decoding large block of " << num_samples << " samples!";
-        Vector<BaseFloat> wave_data(num_samples, kUndefined);
-        for (int i = 0; i < num_samples; i++)
-            wave_data(i) = samples[i];
-        bool result = model->Decode(samp_freq, wave_data, finalize, grammars_activity, save_adaptation_state);
-        return result;
-
-    } catch(const std::exception& e) {
-        KALDI_WARN << "Trying to survive fatal exception: " << e.what();
-        return false;
-    }
-}
-
 bool save_adaptation_state_plain_nnet3(void* model_vp) {
     try {
-        PlainNNet3OnlineModelWrapper* model = static_cast<PlainNNet3OnlineModelWrapper*>(model_vp);
+        auto model = static_cast<PlainNNet3OnlineModelWrapper*>(model_vp);
         bool result = model->SaveAdaptationState();
         return result;
 
@@ -266,9 +245,26 @@ bool save_adaptation_state_plain_nnet3(void* model_vp) {
 
 bool reset_adaptation_state_plain_nnet3(void* model_vp) {
     try {
-        PlainNNet3OnlineModelWrapper* model = static_cast<PlainNNet3OnlineModelWrapper*>(model_vp);
+        auto model = static_cast<PlainNNet3OnlineModelWrapper*>(model_vp);
         model->ResetAdaptationState();
         return true;
+
+    } catch(const std::exception& e) {
+        KALDI_WARN << "Trying to survive fatal exception: " << e.what();
+        return false;
+    }
+}
+
+bool decode_plain_nnet3(void* model_vp, float samp_freq, int32_t num_samples, float* samples, bool finalize, bool save_adaptation_state) {
+    try {
+        auto model = static_cast<PlainNNet3OnlineModelWrapper*>(model_vp);
+        // if (num_samples > 3200)
+        //     KALDI_WARN << "Decoding large block of " << num_samples << " samples!";
+        Vector<BaseFloat> wave_data(num_samples, kUndefined);
+        for (int i = 0; i < num_samples; i++)
+            wave_data(i) = samples[i];
+        bool result = model->Decode(samp_freq, wave_data, finalize, save_adaptation_state);
+        return result;
 
     } catch(const std::exception& e) {
         KALDI_WARN << "Trying to survive fatal exception: " << e.what();
@@ -280,9 +276,9 @@ bool get_output_plain_nnet3(void* model_vp, char* output, int32_t output_max_len
         float* likelihood_p, float* am_score_p, float* lm_score_p, float* confidence_p, float* expected_error_rate_p) {
     try {
         if (output_max_length < 1) return false;
-        PlainNNet3OnlineModelWrapper* model = static_cast<PlainNNet3OnlineModelWrapper*>(model_vp);
+        auto model = static_cast<PlainNNet3OnlineModelWrapper*>(model_vp);
         std::string decoded_string;
-	    model->GetDecodedString(decoded_string, likelihood_p, am_score_p, lm_score_p, confidence_p, expected_error_rate_p);
+        model->GetDecodedString(decoded_string, likelihood_p, am_score_p, lm_score_p, confidence_p, expected_error_rate_p);
 
         // KALDI_LOG << "sleeping";
         // std::this_thread::sleep_for(std::chrono::milliseconds(25));
@@ -301,7 +297,7 @@ bool get_output_plain_nnet3(void* model_vp, char* output, int32_t output_max_len
 
 bool get_word_align_plain_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words) {
     try {
-        PlainNNet3OnlineModelWrapper* model = static_cast<PlainNNet3OnlineModelWrapper*>(model_vp);
+        auto model = static_cast<PlainNNet3OnlineModelWrapper*>(model_vp);
         std::vector<string> words;
         std::vector<int32> times, lengths;
         bool result = model->GetWordAlignment(words, times, lengths, false);

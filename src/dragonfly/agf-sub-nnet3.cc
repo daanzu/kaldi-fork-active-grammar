@@ -293,33 +293,33 @@ using namespace dragonfly;
 void* init_agf_nnet3(char* model_dir_cp, char* config_str_cp, int32_t verbosity) {
     std::string model_dir(model_dir_cp),
         config_str((config_str_cp != nullptr) ? config_str_cp : "");
-    AgfNNet3OnlineModelWrapper* model = new AgfNNet3OnlineModelWrapper(model_dir, config_str, verbosity);
+    auto model = new AgfNNet3OnlineModelWrapper(model_dir, config_str, verbosity);
     return model;
 }
 
 bool load_lexicon_agf_nnet3(void* model_vp, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp) {
-    AgfNNet3OnlineModelWrapper* model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
+    auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
     std::string word_syms_filename(word_syms_filename_cp), word_align_lexicon_filename(word_align_lexicon_filename_cp);
     bool result = model->LoadLexicon(word_syms_filename, word_align_lexicon_filename);
     return result;
 }
 
 int32_t add_grammar_fst_agf_nnet3(void* model_vp, char* grammar_fst_filename_cp) {
-    AgfNNet3OnlineModelWrapper* model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
+    auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
     std::string grammar_fst_filename(grammar_fst_filename_cp);
     int32_t grammar_fst_index = model->AddGrammarFst(grammar_fst_filename);
     return grammar_fst_index;
 }
 
 bool reload_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp) {
-    AgfNNet3OnlineModelWrapper* model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
+    auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
     std::string grammar_fst_filename(grammar_fst_filename_cp);
     bool result = model->ReloadGrammarFst(grammar_fst_index, grammar_fst_filename);
     return result;
 }
 
 bool remove_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index) {
-    AgfNNet3OnlineModelWrapper* model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
+    auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
     bool result = model->RemoveGrammarFst(grammar_fst_index);
     return result;
 }
@@ -327,7 +327,7 @@ bool remove_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index) {
 bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_samples, float* samples, bool finalize,
     bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state) {
     try {
-        AgfNNet3OnlineModelWrapper* model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
+        auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
         std::vector<bool> grammars_activity(grammars_activity_cp_size, false);
         for (size_t i = 0; i < grammars_activity_cp_size; i++)
             grammars_activity[i] = grammars_activity_cp[i];
@@ -347,7 +347,7 @@ bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_samples, floa
 
 bool save_adaptation_state_agf_nnet3(void* model_vp) {
     try {
-        AgfNNet3OnlineModelWrapper* model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
+        auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
         bool result = model->SaveAdaptationState();
         return result;
 
@@ -359,7 +359,7 @@ bool save_adaptation_state_agf_nnet3(void* model_vp) {
 
 bool reset_adaptation_state_agf_nnet3(void* model_vp) {
     try {
-        AgfNNet3OnlineModelWrapper* model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
+        auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
         model->ResetAdaptationState();
         return true;
 
@@ -373,9 +373,9 @@ bool get_output_agf_nnet3(void* model_vp, char* output, int32_t output_max_lengt
         float* likelihood_p, float* am_score_p, float* lm_score_p, float* confidence_p, float* expected_error_rate_p) {
     try {
         if (output_max_length < 1) return false;
-        AgfNNet3OnlineModelWrapper* model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
+        auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
         std::string decoded_string;
-	    model->GetDecodedString(decoded_string, likelihood_p, am_score_p, lm_score_p, confidence_p, expected_error_rate_p);
+        model->GetDecodedString(decoded_string, likelihood_p, am_score_p, lm_score_p, confidence_p, expected_error_rate_p);
 
         // KALDI_LOG << "sleeping";
         // std::this_thread::sleep_for(std::chrono::milliseconds(25));
@@ -394,7 +394,7 @@ bool get_output_agf_nnet3(void* model_vp, char* output, int32_t output_max_lengt
 
 bool get_word_align_agf_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words) {
     try {
-        AgfNNet3OnlineModelWrapper* model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
+        auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
         std::vector<string> words;
         std::vector<int32> times, lengths;
         bool result = model->GetWordAlignment(words, times, lengths, false);
