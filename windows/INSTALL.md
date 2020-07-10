@@ -154,7 +154,7 @@ for their processors. It isn't free, but you can get [Community Licensing for In
 
 8. Call the script that generates the MSVC solution
 
-         generate_solution.pl --vsver <default|vs2017|vs2015> [--enable-cuda] [--enable-openblas] [--enable-mkl]
+         generate_solution.pl --vsver <default|vs2019|vs2017|vs2015> [--enable-cuda] [--enable-openblas] [--enable-mkl]
 
     `--enable-mkl` is the default so you shouldn't need to use it. If `--enable-openblas` is passed it disables MKL support.
     CUDA is disabled by default. The default Visual Studio version is 15.0 (Visual Studio 2017).
