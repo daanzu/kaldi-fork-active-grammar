@@ -35,17 +35,20 @@ GetOptions ("vsver=s" => \$vsver,
 
 my %TOOLS=( default=> "14.1",
             vs2015 => "14.0",
-            vs2017 => "14.1"
+            vs2017 => "14.1",
+            vs2019 => "15.0"
             );
 
-my %FORMAT=( default=> "14.10",
-             vs2015 =>  "14.00",
-             vs2017 =>  "14.10"
+my %FORMAT=( default=> "12.00",
+             vs2015 => "12.00",
+             vs2017 => "12.00",
+             vs2019 => "12.00"
              );
 
 my %TOOLSET=( default=> "v141",
               vs2015 => "v140",
-              vs2017 => "v141"
+              vs2017 => "v141",
+              vs2019 => "v142"
               );
 
 
@@ -257,17 +260,16 @@ sub parseMakefile {
     }
 
     if (my ($items) = $line =~ /^ADDLIBS[^=]*?=(.+?)$/) {
-	  my @items = $items =~ /(\S+)/g;
+      my @items = $items =~ /(\S+)/g;
 
-	  foreach my $alib (keys %$alibs) {
-		$deps->{$path}->{$alib} = 1;
-	  }
+      foreach my $alib (keys %$alibs) {
+        $deps->{$path}->{$alib} = 1;
+      }
       foreach my $item (@items) {
         $item =~ s/^.*[\\\/]//;
         $item =~ s/\.[^\.]*$//;
 
         $deps->{$path}->{$item} = 1;
-
       }
     }
 
@@ -385,21 +387,21 @@ sub writeProjectFiles {
 
     foreach my $obj (keys %{$projlist->{ALL}->{$projname}->{'objs'}}) {
       my $cfile = winPath($projlist->{ALL}->{$projname}->{'path'} . $obj . '.cc');
-	  if (!-e &{$osPathConversion}($cfile)) {
-	    if ($ENABLED{CUDA}) {
+  	  if (!-e &{$osPathConversion}($cfile)) {
+	      if ($ENABLED{CUDA}) {
           my $cufile = winPath($projlist->{ALL}->{$projname}->{'path'} . $obj . '.cu');
           $srcfiles->{'cu'}->{$cufile} = 1;
           if (!-e &{$osPathConversion}($cufile)) {
-		    print "ERROR: file $cfile nor $cufile not found - project $projname\n";
-		  }
+            print "ERROR: file $cfile nor $cufile not found - project $projname\n";
+          }
         } else {
           if (!-e &{$osPathConversion}($cfile)) {
-		    print "ERROR?: file $cfile not found - project $projname\n";
-		  }
+            print "ERROR?: file $cfile not found - project $projname\n";
+          }
         }
       } else {
         $srcfiles->{'cc'}->{$cfile} = 1;
-	  }
+	    }
     }
   } else {
     $conftype = "Application";
@@ -523,7 +525,7 @@ sub writeProjectFiles {
   }
   print PROJ
 "  </ImportGroup>
-  <ImportGroup Condition=\"'\$(Configuration)|\$(Platform)'=='Debug|Win32'\"  Label=\"PropertySheets\">
+  <ImportGroup Condition=\"'\$(Configuration)|\$(Platform)'=='Debug|Win32'\" Label=\"PropertySheets\">
     <Import Project=\"..\\variables.props\" />
     <Import Project=\"\$(UserRootDir)\\Microsoft.Cpp.\$(Platform).user.props\" Condition=\"exists('\$(UserRootDir)\\Microsoft.Cpp.\$(Platform).user.props')\" Label=\"LocalAppDataPlatform\" />
 ";
