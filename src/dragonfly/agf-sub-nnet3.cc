@@ -106,7 +106,7 @@ bool AgfNNet3OnlineModelWrapper::RemoveGrammarFst(int32 grammar_fst_index) {
     return true;
 }
 
-void AgfNNet3OnlineModelWrapper::StartDecoding(std::vector<bool> grammars_activity) {
+void AgfNNet3OnlineModelWrapper::StartDecoding() {
     ExecutionTimer timer("StartDecoding", 2);
     BaseNNet3OnlineModelWrapper::StartDecoding();
 
@@ -121,6 +121,8 @@ void AgfNNet3OnlineModelWrapper::StartDecoding(std::vector<bool> grammars_activi
         }
         active_grammar_fst_ = new ActiveGrammarFst(config_.nonterm_phones_offset, *top_fst_, ifsts);
     }
+
+    auto grammars_activity = grammars_activity_;
     grammars_activity.push_back(dictation_fst_ != nullptr);  // dictation_fst_ is only enabled if present
     active_grammar_fst_->UpdateActivity(grammars_activity);
 
@@ -138,64 +140,8 @@ void AgfNNet3OnlineModelWrapper::CleanupDecoder() {
 bool AgfNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, const Vector<BaseFloat>& samples, bool finalize,
         std::vector<bool>& grammars_activity, bool save_adaptation_state) {
     ExecutionTimer timer("Decode", 2);
-
-    if (!decoder_ || decoder_finalized_) {
-        CleanupDecoder();
-        StartDecoding(grammars_activity);
-    } else if (grammars_activity.size() != 0) {
-    	KALDI_LOG << "non-empty grammars_activity passed on already-started decode";
-    }
-
-    if (samp_freq != feature_info_->GetSamplingFrequency())
-        KALDI_WARN << "Mismatched sampling frequency: " << samp_freq << " != " << feature_info_->GetSamplingFrequency() << " (model's)";
-
-    if (samples.Dim() > 0) {
-        feature_pipeline_->AcceptWaveform(samp_freq, samples);
-        tot_frames_ += samples.Dim();
-    }
-
-    if (finalize)
-        feature_pipeline_->InputFinished();  // No more input, so flush out last frames.
-
-    if (silence_weighting_->Active()
-            && feature_pipeline_->NumFramesReady() > 0
-            && feature_pipeline_->IvectorFeature() != nullptr) {
-        if (config_.silence_weight == 1.0)
-            KALDI_WARN << "Computing silence weighting despite silence_weight == 1.0";
-        std::vector<std::pair<int32, BaseFloat> > delta_weights;
-        silence_weighting_->ComputeCurrentTraceback(decoder_->Decoder());
-        silence_weighting_->GetDeltaWeights(feature_pipeline_->NumFramesReady(), &delta_weights);  // FIXME: reuse decoder?
-        feature_pipeline_->IvectorFeature()->UpdateFrameWeights(delta_weights);
-    }
-
-    decoder_->AdvanceDecoding();
-
-    if (finalize) {
-        ExecutionTimer timer("Decode finalize", 2);
-        decoder_->FinalizeDecoding();
-        decoder_finalized_ = true;
-
-        tot_frames_decoded_ += tot_frames_;
-        tot_frames_ = 0;
-
-        if (save_adaptation_state) {
-            feature_pipeline_->GetAdaptationState(adaptation_state_);
-            KALDI_LOG << "Saved adaptation state";
-            // std::string output;
-            // double likelihood;
-            // GetDecodedString(output, likelihood);
-            // // int count_terminals = std::count_if(output.begin(), output.end(), [](std::string word){ return word[0] != '#'; });
-            // if (output.size() > 0) {
-            //     feature_pipeline->GetAdaptationState(adaptation_state);
-            //     KALDI_LOG << "Saved adaptation state." << output;
-            //     free_decoder();
-            // } else {
-            //     KALDI_LOG << "Did not save adaptation state, because empty recognition.";
-            // }
-        }
-    }
-
-    return true;
+    grammars_activity_ = grammars_activity;
+    return BaseNNet3OnlineModelWrapper::Decode(decoder_, samp_freq, samples, finalize, save_adaptation_state);
 }
 
 void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, float* likelihood, float* am_score, float* lm_score, float* confidence, float* expected_error_rate) {

@@ -210,8 +210,8 @@ void BaseNNet3OnlineModelWrapper::ResetAdaptationState() {
     adaptation_state_ = new OnlineIvectorExtractorAdaptationState(feature_info_->ivector_extractor_info);
 }
 
-// grammars_activity is ignored once decoding has already started
-bool BaseNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, const Vector<BaseFloat>& samples, bool finalize, bool save_adaptation_state) {
+template <typename Decoder>
+bool BaseNNet3OnlineModelWrapper::Decode(Decoder& decoder_, BaseFloat samp_freq, const Vector<BaseFloat>& samples, bool finalize, bool save_adaptation_state) {
     ExecutionTimer timer("Decode", 2);
 
     if (!decoder_ || decoder_finalized_) {

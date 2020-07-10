@@ -100,6 +100,7 @@ class AgfNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
         std::vector<StdConstFst*> grammar_fsts_;
         std::map<StdConstFst*, std::string> grammar_fsts_filename_map_;  // maps grammar_fst -> name; for debugging
         // INVARIANT: same size: grammar_fsts_, grammar_fsts_filename_map_
+        std::vector<bool> grammars_activity_;
 
         // Model objects
         ActiveGrammarFst* active_grammar_fst_ = nullptr;
@@ -108,7 +109,7 @@ class AgfNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
         SingleUtteranceNnet3DecoderTpl<fst::ActiveGrammarFst>* decoder_ = nullptr;  // reinstantiated per utterance
         CombineRuleNontermMapper<CompactLatticeArc>* rule_relabel_mapper_ = nullptr;
 
-        void StartDecoding(std::vector<bool> grammars_activity);
+        void StartDecoding() override;
         void CleanupDecoder() override;
 };
 
