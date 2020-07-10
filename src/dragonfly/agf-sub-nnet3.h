@@ -1,4 +1,4 @@
-// NNet3 Base
+// NNet3 AGF
 
 // Copyright   2019  David Zurow
 
@@ -85,6 +85,7 @@ class AgfNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
         int32 AddGrammarFst(std::string& grammar_fst_filename);
         bool ReloadGrammarFst(int32 grammar_fst_index, std::string& grammar_fst_filename);
         bool RemoveGrammarFst(int32 grammar_fst_index);
+
         bool Decode(BaseFloat samp_freq, const Vector<BaseFloat>& frames, bool finalize, std::vector<bool>& grammars_activity, bool save_adaptation_state = true);
         void GetDecodedString(std::string& decoded_string, float* likelihood, float* am_score, float* lm_score, float* confidence, float* expected_error_rate) override;
         bool GetWordAlignment(std::vector<string>& words, std::vector<int32>& times, std::vector<int32>& lengths, bool include_eps) override;

@@ -151,7 +151,7 @@ bool BaseNNet3OnlineModelWrapper::LoadLexicon(std::string& word_syms_filename, s
 
 StdConstFst* BaseNNet3OnlineModelWrapper::ReadFstFile(std::string filename) {
     if (filename.compare(filename.length() - 4, 4, ".txt") == 0) {
-        // FIXME: fstdeterminize | fstminimize | fstrmepsilon | fstarcsort --sort_type=ilabel
+        // TODO?: fstdeterminize | fstminimize | fstrmepsilon | fstarcsort --sort_type=ilabel
         KALDI_WARN << "cannot read text fst file " << filename;
         return nullptr;
     } else {
@@ -173,41 +173,23 @@ std::string BaseNNet3OnlineModelWrapper::WordIdsToString(const std::vector<int32
     return text.str();
 }
 
-void BaseNNet3OnlineModelWrapper::StartDecoding(std::vector<bool> grammars_activity) {
+void BaseNNet3OnlineModelWrapper::StartDecoding() {
+    // Cleanup
     CleanupDecoder();
-    ExecutionTimer timer("StartDecoding", 2);
+    decoder_finalized_ = false;
+    decoded_clat_.DeleteStates();
+    best_path_clat_.DeleteStates();
 
-    if (active_grammar_fst_ == nullptr) {
-        std::vector<std::pair<int32, const StdConstFst *> > ifsts;
-        for (auto grammar_fst : grammar_fsts_) {
-            int32 nonterm_phone = config_.rules_phones_offset + ifsts.size();
-            ifsts.emplace_back(std::make_pair(nonterm_phone, grammar_fst));
-        }
-        if (dictation_fst_ != nullptr) {
-            ifsts.emplace_back(std::make_pair(config_.dictation_phones_offset, dictation_fst_));
-        }
-        active_grammar_fst_ = new ActiveGrammarFst(config_.nonterm_phones_offset, *top_fst_, ifsts);
-    }
-    grammars_activity.push_back(dictation_fst_ != nullptr);  // dictation_fst_ is only enabled if present
-    active_grammar_fst_->UpdateActivity(grammars_activity);
-
+    // Setup
     feature_pipeline_ = new OnlineNnet2FeaturePipeline(*feature_info_);
     feature_pipeline_->SetAdaptationState(*adaptation_state_);
     silence_weighting_ = new OnlineSilenceWeighting(
         trans_model_, feature_info_->silence_weighting_config,
         decodable_config_.frame_subsampling_factor);
-    decoder_ = new SingleUtteranceNnet3DecoderTpl<fst::ActiveGrammarFst>(
-        decoder_config_, trans_model_, *decodable_info_, *active_grammar_fst_, feature_pipeline_);
-
-    // Cleanup
-    decoder_finalized_ = false;
-    decoded_clat_.DeleteStates();
-    best_path_clat_.DeleteStates();
+    // Child class should afterwards setup decoder
 }
 
 void BaseNNet3OnlineModelWrapper::CleanupDecoder() {
-    delete decoder_;
-    decoder_ = nullptr;
     delete silence_weighting_;
     silence_weighting_ = nullptr;
     delete feature_pipeline_;
@@ -229,8 +211,7 @@ void BaseNNet3OnlineModelWrapper::ResetAdaptationState() {
 }
 
 // grammars_activity is ignored once decoding has already started
-bool BaseNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, const Vector<BaseFloat>& samples, bool finalize,
-        std::vector<bool>& grammars_activity, bool save_adaptation_state) {
+bool BaseNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, const Vector<BaseFloat>& samples, bool finalize, bool save_adaptation_state) {
     ExecutionTimer timer("Decode", 2);
 
     if (!decoder_ || decoder_finalized_) {

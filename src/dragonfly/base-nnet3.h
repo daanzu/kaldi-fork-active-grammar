@@ -43,7 +43,6 @@ namespace dragonfly {
 using namespace kaldi;
 using namespace fst;
 
-
 struct BaseNNet3OnlineModelConfig {
 
     BaseFloat beam = 14.0;  // normally 7.0
@@ -113,9 +112,10 @@ class BaseNNet3OnlineModelWrapper {
 
         bool SaveAdaptationState();
         void ResetAdaptationState();
-        bool Decode(BaseFloat samp_freq, const Vector<BaseFloat>& frames, bool finalize, std::vector<bool>& grammars_activity, bool save_adaptation_state = true);
-        void GetDecodedString(std::string& decoded_string, float* likelihood, float* am_score, float* lm_score, float* confidence, float* expected_error_rate);
-        bool GetWordAlignment(std::vector<string>& words, std::vector<int32>& times, std::vector<int32>& lengths, bool include_eps);
+
+        virtual bool Decode(BaseFloat samp_freq, const Vector<BaseFloat>& frames, bool finalize, bool save_adaptation_state = true);
+        virtual void GetDecodedString(std::string& decoded_string, float* likelihood, float* am_score, float* lm_score, float* confidence, float* expected_error_rate);
+        virtual bool GetWordAlignment(std::vector<string>& words, std::vector<int32>& times, std::vector<int32>& lengths, bool include_eps);
 
     protected:
 
@@ -141,7 +141,6 @@ class BaseNNet3OnlineModelWrapper {
         OnlineIvectorExtractorAdaptationState* adaptation_state_ = nullptr;
         WordAlignLatticeLexiconInfo* word_align_lexicon_info_ = nullptr;
         std::set<int32> word_align_lexicon_words_;  // contains word-ids that are in word_align_lexicon_info_
-        SingleUtteranceNnet3Decoder* decoder_ = nullptr;  // reinstantiated per utterance
 
         int32 tot_frames_ = 0, tot_frames_decoded_ = 0;
         bool decoder_finalized_ = false;
