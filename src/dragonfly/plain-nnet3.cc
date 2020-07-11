@@ -100,7 +100,7 @@ namespace dragonfly {
         std::set<int32> word_align_lexicon_words;  // contains word-ids that are in word_align_lexicon_info
         bool best_path_has_valid_word_align;
 
-        bool enable_rnnlm_ = false;
+        bool enable_rnnlm_ = true;
         nnet3::Nnet rnnlm_;
         CuMatrix<BaseFloat> word_embedding_mat_;
         fst::ScaleDeterministicOnDemandFst* lm_to_subtract_det_scale_ = nullptr;
@@ -112,6 +112,7 @@ namespace dragonfly {
 
         void StartDecoding();
         void FreeDecoder(void);
+        void RescoreRnnlm(CompactLattice& clat, const std::string& prime = "");
     };
 
     PlainNNet3OnlineModelWrapper::PlainNNet3OnlineModelWrapper(
@@ -313,43 +314,9 @@ namespace dragonfly {
                 return false;
             }
 
-            if (enable_rnnlm_) {
-                ExecutionTimer timer("rnnlm rescoring");
-                rnnlm::KaldiRnnlmDeterministicFst lm_to_add_orig(rnnlm_max_ngram_order_, *rnnlm_info_);
-                // std::vector<int32> precontext({(int32)word_syms->Find("invoice")});
-                // std::vector<int32> precontext(10, word_syms->Find("invoice"));
-                // lm_to_add_orig.Prime(precontext);
-                DeterministicOnDemandFst<StdArc> *lm_to_add = new ScaleDeterministicOnDemandFst(rnnlm_scale_, &lm_to_add_orig);
-                ComposeDeterministicOnDemandFst<StdArc> combined_lms(lm_to_subtract_det_scale_, lm_to_add);
-
-                // Before composing with the LM FST, we scale the lattice weights
-                // by the inverse of "lm_scale".  We'll later scale by "lm_scale".
-                // We do it this way so we can determinize and it will give the
-                // right effect (taking the "best path" through the LM) regardless
-                // of the sign of lm_scale.
-                // NOTE: The above comment is incorrect, but the below code is correct.
-                if (decodable_config.acoustic_scale != 1.0)
-                    ScaleLattice(AcousticLatticeScale(decodable_config.acoustic_scale), &clat);
-                TopSortCompactLatticeIfNeeded(&clat);
-
-                // Composes lattice with language model.
-                CompactLattice composed_clat;
-                ComposeCompactLatticePruned(rnnlm_compose_opts_, clat, &combined_lms, &composed_clat);
-
-                if (composed_clat.NumStates() == 0) {
-                    // Something went wrong.  A warning will already have been printed.
-                    KALDI_WARN << "Empty lattice after RNNLM rescoring.";
-                    // FIXME: fall back to original?
-                } else {
-                    if (decodable_config.acoustic_scale != 1.0) {
-                        if (decodable_config.acoustic_scale == 0.0)
-                            KALDI_ERR << "Acoustic scale cannot be zero.";
-                        ScaleLattice(AcousticLatticeScale(1.0 / decodable_config.acoustic_scale), &composed_clat);
-                    }
-                    clat = composed_clat;
-                }
-
-                delete lm_to_add;
+            if (enable_rnnlm_ && true) {
+                // RescoreRnnlm(clat);
+                RescoreRnnlm(clat, "back");
             }
 
             CompactLatticeShortestPath(clat, &best_path_clat);
@@ -370,6 +337,51 @@ namespace dragonfly {
         }
 
         return true;
+    }
+
+    void PlainNNet3OnlineModelWrapper::RescoreRnnlm(CompactLattice& clat, const std::string& prime) {
+        ExecutionTimer timer("rnnlm rescoring");
+        rnnlm::KaldiRnnlmDeterministicFst lm_to_add_orig(rnnlm_max_ngram_order_, *rnnlm_info_);
+
+        if (!prime.empty()) {
+            istringstream iss(prime);
+            vector<string> words{istream_iterator<string>{iss}, istream_iterator<string>{}};
+            vector<int32> precontext(words.size());
+            for (auto word : words) precontext.push_back(word_syms->Find(word));
+            lm_to_add_orig.Prime(precontext);
+        }
+
+        DeterministicOnDemandFst<StdArc> *lm_to_add = new ScaleDeterministicOnDemandFst(rnnlm_scale_, &lm_to_add_orig);
+        ComposeDeterministicOnDemandFst<StdArc> combined_lms(lm_to_subtract_det_scale_, lm_to_add);
+
+        // Before composing with the LM FST, we scale the lattice weights
+        // by the inverse of "lm_scale".  We'll later scale by "lm_scale".
+        // We do it this way so we can determinize and it will give the
+        // right effect (taking the "best path" through the LM) regardless
+        // of the sign of lm_scale.
+        // NOTE: The above comment is incorrect, but the below code is correct.
+        if (decodable_config.acoustic_scale != 1.0)
+            ScaleLattice(AcousticLatticeScale(decodable_config.acoustic_scale), &clat);
+        TopSortCompactLatticeIfNeeded(&clat);
+
+        // Composes lattice with language model.
+        CompactLattice composed_clat;
+        ComposeCompactLatticePruned(rnnlm_compose_opts_, clat, &combined_lms, &composed_clat);
+
+        if (composed_clat.NumStates() == 0) {
+            // Something went wrong.  A warning will already have been printed.
+            KALDI_WARN << "Empty lattice after RNNLM rescoring.";
+            // FIXME: fall back to original?
+        } else {
+            if (decodable_config.acoustic_scale != 1.0) {
+                if (decodable_config.acoustic_scale == 0.0)
+                    KALDI_ERR << "Acoustic scale cannot be zero.";
+                ScaleLattice(AcousticLatticeScale(1.0 / decodable_config.acoustic_scale), &composed_clat);
+            }
+            clat = composed_clat;
+        }
+
+        delete lm_to_add;
     }
 
     void PlainNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, double& likelihood) {
