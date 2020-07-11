@@ -61,7 +61,7 @@ struct BaseNNet3OnlineModelConfig {
     std::string word_syms_filename;
     std::string word_align_lexicon_filename;
 
-    bool Set(const std::string& name, const nlohmann::json& value) {
+    virtual bool Set(const std::string& name, const nlohmann::json& value) {
         if (name == "beam") { beam = value.get<BaseFloat>(); return true; }
         if (name == "max_active") { max_active = value.get<int32>(); return true; }
         if (name == "min_active") { min_active = value.get<int32>(); return true; }
@@ -80,7 +80,7 @@ struct BaseNNet3OnlineModelConfig {
         return false;
     }
 
-    std::string ToString() {
+    virtual std::string ToString() {
         stringstream ss;
         ss << "BaseNNet3OnlineModelConfig...";
         ss << "\n    " << "beam: " << beam;
@@ -114,11 +114,13 @@ class BaseNNet3OnlineModelWrapper {
         void ResetAdaptationState();
         virtual bool GetWordAlignment(std::vector<string>& words, std::vector<int32>& times, std::vector<int32>& lengths, bool include_eps);
 
-        template <typename Decoder>
-        bool Decode(Decoder& decoder, BaseFloat samp_freq, const Vector<BaseFloat>& frames, bool finalize, bool save_adaptation_state = true);
+        virtual bool Decode(BaseFloat samp_freq, const Vector<BaseFloat>& frames, bool finalize, bool save_adaptation_state = true) = 0;
         virtual void GetDecodedString(std::string& decoded_string, float* likelihood, float* am_score, float* lm_score, float* confidence, float* expected_error_rate) = 0;
 
     protected:
+
+        template <typename Decoder>
+        bool Decode(Decoder& decoder, BaseFloat samp_freq, const Vector<BaseFloat>& frames, bool finalize, bool save_adaptation_state = true);
 
         BaseNNet3OnlineModelConfig config_;
 
@@ -155,4 +157,4 @@ class BaseNNet3OnlineModelWrapper {
         virtual void CleanupDecoder();
 };
 
-}  // namespace dragonfly
+} // namespace dragonfly

@@ -191,4 +191,4 @@ class CopyDictationVisitor {
     // static constexpr uint8 kStatePostDictation = 3;
 };
 
-}  // namespace dragonfly
+} // namespace dragonfly

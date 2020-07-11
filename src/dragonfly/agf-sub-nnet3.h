@@ -53,7 +53,7 @@ struct AgfNNet3OnlineModelConfig : public BaseNNet3OnlineModelConfig {
     std::string top_fst_filename;
     std::string dictation_fst_filename;
 
-    bool Set(const std::string& name, const nlohmann::json& value) {
+    bool Set(const std::string& name, const nlohmann::json& value) override {
         if (BaseNNet3OnlineModelConfig::Set(name, value)) { return true; }
         if (name == "nonterm_phones_offset") { nonterm_phones_offset = value.get<int32>(); return true; }
         if (name == "rules_phones_offset") { rules_phones_offset = value.get<int32>(); return true; }
@@ -63,7 +63,7 @@ struct AgfNNet3OnlineModelConfig : public BaseNNet3OnlineModelConfig {
         return false;
     }
 
-    std::string ToString() {
+    std::string ToString() override {
         stringstream ss;
         ss << BaseNNet3OnlineModelConfig::ToString() << '\n';
         ss << "AgfNNet3OnlineModelConfig...";
@@ -85,8 +85,10 @@ class AgfNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
         int32 AddGrammarFst(std::string& grammar_fst_filename);
         bool ReloadGrammarFst(int32 grammar_fst_index, std::string& grammar_fst_filename);
         bool RemoveGrammarFst(int32 grammar_fst_index);
+        void SetActiveGrammars(const std::vector<bool>& grammars_activity) { grammars_activity_ = grammars_activity; };
 
-        bool Decode(BaseFloat samp_freq, const Vector<BaseFloat>& frames, bool finalize, std::vector<bool>& grammars_activity, bool save_adaptation_state = true);
+        bool Decode(BaseFloat samp_freq, const Vector<BaseFloat>& frames, bool finalize, const std::vector<bool>& grammars_activity, bool save_adaptation_state = true);
+        bool Decode(BaseFloat samp_freq, const Vector<BaseFloat>& frames, bool finalize, bool save_adaptation_state = true) override;
         void GetDecodedString(std::string& decoded_string, float* likelihood, float* am_score, float* lm_score, float* confidence, float* expected_error_rate) override;
 
     protected:
@@ -112,4 +114,4 @@ class AgfNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
         void CleanupDecoder() override;
 };
 
-}  // namespace dragonfly
+} // namespace dragonfly

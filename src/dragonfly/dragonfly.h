@@ -48,9 +48,8 @@ bool load_lexicon_base_nnet3(void* model_vp, char* word_syms_filename_cp, char* 
 bool save_adaptation_state_base_nnet3(void* model_vp);
 bool reset_adaptation_state_base_nnet3(void* model_vp);
 bool get_word_align_base_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words);
-bool decode_base_nnet3(void* model_vp, float samp_freq, int32_t num_samples, float* samples, bool finalize,
-    bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state);
-bool get_output_base_nnet3(BaseNNet3OnlineModelWrapper* model, char* output, int32_t output_max_length,
+bool decode_base_nnet3(void* model_vp, float samp_freq, int32_t num_samples, float* samples, bool finalize, bool save_adaptation_state);
+bool get_output_base_nnet3(void* model_vp, char* output, int32_t output_max_length,
         float* likelihood_p, float* am_score_p, float* lm_score_p, float* confidence_p, float* expected_error_rate_p);
 
 extern "C" DRAGONFLY_API void* init_plain_nnet3(float beam, int32_t max_active, int32_t min_active, float lattice_beam, float acoustic_scale, int32_t frame_subsampling_factor,

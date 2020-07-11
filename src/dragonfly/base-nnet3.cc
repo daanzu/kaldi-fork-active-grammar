@@ -326,7 +326,7 @@ bool BaseNNet3OnlineModelWrapper::Decode(Decoder& decoder_, BaseFloat samp_freq,
     return true;
 }
 
-}  // namespace dragonfly
+} // namespace dragonfly
 
 
 extern "C" {
@@ -391,19 +391,15 @@ bool get_word_align_base_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengt
     }
 }
 
-bool decode_base_nnet3(void* model_vp, float samp_freq, int32_t num_samples, float* samples, bool finalize,
-    bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state) {
+bool decode_base_nnet3(void* model_vp, float samp_freq, int32_t num_samples, float* samples, bool finalize, bool save_adaptation_state) {
     try {
         auto model = static_cast<BaseNNet3OnlineModelWrapper*>(model_vp);
-        std::vector<bool> grammars_activity(grammars_activity_cp_size, false);
-        for (size_t i = 0; i < grammars_activity_cp_size; i++)
-            grammars_activity[i] = grammars_activity_cp[i];
         // if (num_samples > 3200)
         //     KALDI_WARN << "Decoding large block of " << num_samples << " samples!";
         Vector<BaseFloat> wave_data(num_samples, kUndefined);
         for (int i = 0; i < num_samples; i++)
             wave_data(i) = samples[i];
-        bool result = model->Decode(samp_freq, wave_data, finalize, grammars_activity, save_adaptation_state);
+        bool result = model->Decode(samp_freq, wave_data, finalize, save_adaptation_state);
         return result;
 
     } catch(const std::exception& e) {
@@ -412,9 +408,10 @@ bool decode_base_nnet3(void* model_vp, float samp_freq, int32_t num_samples, flo
     }
 }
 
-bool get_output_base_nnet3(BaseNNet3OnlineModelWrapper* model, char* output, int32_t output_max_length,
+bool get_output_base_nnet3(void* model_vp, char* output, int32_t output_max_length,
         float* likelihood_p, float* am_score_p, float* lm_score_p, float* confidence_p, float* expected_error_rate_p) {
     try {
+        auto model = static_cast<BaseNNet3OnlineModelWrapper*>(model_vp);
         if (output_max_length < 1) return false;
         std::string decoded_string;
         model->GetDecodedString(decoded_string, likelihood_p, am_score_p, lm_score_p, confidence_p, expected_error_rate_p);

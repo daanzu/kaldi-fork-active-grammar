@@ -102,12 +102,6 @@ void PlainNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string,
         // WriteLattice(decoded_clat, "tmp/lattice");
 
         CompactLattice decoded_clat_relabeled = decoded_clat_;
-        if (true) {
-            // Relabel all nonterm:rules to nonterm:rule0, so redundant/ambiguous rules don't count as differing for measuring confidence
-            ExecutionTimer timer("relabel");
-            ArcMap(&decoded_clat_relabeled, rule_relabel_mapper_);
-            // TODO: write a custom Visitor to coalesce the nonterm:rules arcs, and possibly erase them?
-        }
 
         if (false || (true && (GetVerboseLevel() >= 1))) {
             // Difference between best path and second best path
@@ -175,20 +169,6 @@ void PlainNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string,
             // FIXME: also do confidence?
         }
 
-        if (false) {
-            CompactLattice pre_dictation_clat, in_dictation_clat, post_dictation_clat;
-            auto nonterm_dictation = word_syms_->Find("#nonterm:dictation");
-            auto nonterm_end = word_syms_->Find("#nonterm:end");
-            bool ok;
-            CopyDictationVisitor<CompactLatticeArc> visitor(&pre_dictation_clat, &in_dictation_clat, &post_dictation_clat, &ok, nonterm_dictation, nonterm_end);
-            KALDI_ASSERT(ok);
-            AnyArcFilter<CompactLatticeArc> filter;
-            DfsVisit(decoded_clat_, &visitor, filter, true);
-            WriteLattice(in_dictation_clat, "tmp/lattice_dict");
-            WriteLattice(pre_dictation_clat, "tmp/lattice_dictpre");
-            WriteLattice(post_dictation_clat, "tmp/lattice_dictpost");
-        }
-
         CompactLatticeShortestPath(decoded_clat_, &best_path_clat_);
         ConvertLattice(best_path_clat_, &best_path_lat);
     } // if (decoder_finalized_)
@@ -208,7 +188,7 @@ void PlainNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string,
     decoded_string = WordIdsToString(words);
 }
 
-}  // namespace dragonfly
+} // namespace dragonfly
 
 
 extern "C" {
@@ -241,41 +221,10 @@ bool get_word_align_plain_nnet3(void* model_vp, int32_t* times_cp, int32_t* leng
 }
 
 bool decode_plain_nnet3(void* model_vp, float samp_freq, int32_t num_samples, float* samples, bool finalize, bool save_adaptation_state) {
-    try {
-        auto model = static_cast<PlainNNet3OnlineModelWrapper*>(model_vp);
-        // if (num_samples > 3200)
-        //     KALDI_WARN << "Decoding large block of " << num_samples << " samples!";
-        Vector<BaseFloat> wave_data(num_samples, kUndefined);
-        for (int i = 0; i < num_samples; i++)
-            wave_data(i) = samples[i];
-        bool result = model->Decode(samp_freq, wave_data, finalize, save_adaptation_state);
-        return result;
-
-    } catch(const std::exception& e) {
-        KALDI_WARN << "Trying to survive fatal exception: " << e.what();
-        return false;
-    }
+    return decode_base_nnet3(model_vp, samp_freq, num_samples, samples, finalize, save_adaptation_state);
 }
 
 bool get_output_plain_nnet3(void* model_vp, char* output, int32_t output_max_length,
         float* likelihood_p, float* am_score_p, float* lm_score_p, float* confidence_p, float* expected_error_rate_p) {
-    try {
-        if (output_max_length < 1) return false;
-        auto model = static_cast<PlainNNet3OnlineModelWrapper*>(model_vp);
-        std::string decoded_string;
-        model->GetDecodedString(decoded_string, likelihood_p, am_score_p, lm_score_p, confidence_p, expected_error_rate_p);
-
-        // KALDI_LOG << "sleeping";
-        // std::this_thread::sleep_for(std::chrono::milliseconds(25));
-        // KALDI_LOG << "slept";
-
-        const char* cstr = decoded_string.c_str();
-        strncpy(output, cstr, output_max_length);
-        output[output_max_length - 1] = 0;
-        return true;
-
-    } catch(const std::exception& e) {
-        KALDI_WARN << "Trying to survive fatal exception: " << e.what();
-        return false;
-    }
+    return get_output_base_nnet3(model_vp, output, output_max_length, likelihood_p, am_score_p, lm_score_p, confidence_p, expected_error_rate_p);
 }

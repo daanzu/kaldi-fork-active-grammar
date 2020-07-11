@@ -48,13 +48,13 @@ struct PlainNNet3OnlineModelConfig : public BaseNNet3OnlineModelConfig {
 
     std::string decode_fst_filename;
 
-    bool Set(const std::string& name, const nlohmann::json& value) {
+    bool Set(const std::string& name, const nlohmann::json& value) override {
         if (BaseNNet3OnlineModelConfig::Set(name, value)) { return true; }
         if (name == "decode_fst_filename") { decode_fst_filename = value.get<std::string>(); return true; }
         return false;
     }
 
-    std::string ToString() {
+    std::string ToString() override {
         stringstream ss;
         ss << BaseNNet3OnlineModelConfig::ToString() << '\n';
         ss << "PlainNNet3OnlineModelConfig...";
@@ -86,4 +86,4 @@ class PlainNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
         void CleanupDecoder() override;
 };
 
-}  // namespace dragonfly
+} // namespace dragonfly

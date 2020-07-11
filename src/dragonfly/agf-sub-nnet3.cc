@@ -136,12 +136,16 @@ void AgfNNet3OnlineModelWrapper::CleanupDecoder() {
     BaseNNet3OnlineModelWrapper::CleanupDecoder();
 }
 
+bool AgfNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, const Vector<BaseFloat>& samples, bool finalize, bool save_adaptation_state) {
+    ExecutionTimer timer("Decode", 2);
+    return BaseNNet3OnlineModelWrapper::Decode(decoder_, samp_freq, samples, finalize, save_adaptation_state);
+}
+
 // grammars_activity is ignored once decoding has already started
 bool AgfNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, const Vector<BaseFloat>& samples, bool finalize,
-        std::vector<bool>& grammars_activity, bool save_adaptation_state) {
-    ExecutionTimer timer("Decode", 2);
-    grammars_activity_ = grammars_activity;
-    return BaseNNet3OnlineModelWrapper::Decode(decoder_, samp_freq, samples, finalize, save_adaptation_state);
+        const std::vector<bool>& grammars_activity, bool save_adaptation_state) {
+    SetActiveGrammars(std::move(grammars_activity));
+    return Decode(samp_freq, samples, finalize, save_adaptation_state);
 }
 
 void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, float* likelihood, float* am_score, float* lm_score, float* confidence, float* expected_error_rate) {
@@ -281,7 +285,7 @@ void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, f
     decoded_string = WordIdsToString(words);
 }
 
-}  // namespace dragonfly
+} // namespace dragonfly
 
 
 extern "C" {
@@ -335,44 +339,17 @@ bool remove_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index) {
 
 bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_samples, float* samples, bool finalize,
     bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state) {
-    try {
+    if (grammars_activity_cp_size) {
         auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
         std::vector<bool> grammars_activity(grammars_activity_cp_size, false);
         for (size_t i = 0; i < grammars_activity_cp_size; i++)
             grammars_activity[i] = grammars_activity_cp[i];
-        // if (num_samples > 3200)
-        //     KALDI_WARN << "Decoding large block of " << num_samples << " samples!";
-        Vector<BaseFloat> wave_data(num_samples, kUndefined);
-        for (int i = 0; i < num_samples; i++)
-            wave_data(i) = samples[i];
-        bool result = model->Decode(samp_freq, wave_data, finalize, grammars_activity, save_adaptation_state);
-        return result;
-
-    } catch(const std::exception& e) {
-        KALDI_WARN << "Trying to survive fatal exception: " << e.what();
-        return false;
+        model->SetActiveGrammars(std::move(grammars_activity));
     }
+    return decode_base_nnet3(model_vp, samp_freq, num_samples, samples, finalize, save_adaptation_state);
 }
 
 bool get_output_agf_nnet3(void* model_vp, char* output, int32_t output_max_length,
         float* likelihood_p, float* am_score_p, float* lm_score_p, float* confidence_p, float* expected_error_rate_p) {
-    try {
-        if (output_max_length < 1) return false;
-        auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
-        std::string decoded_string;
-        model->GetDecodedString(decoded_string, likelihood_p, am_score_p, lm_score_p, confidence_p, expected_error_rate_p);
-
-        // KALDI_LOG << "sleeping";
-        // std::this_thread::sleep_for(std::chrono::milliseconds(25));
-        // KALDI_LOG << "slept";
-
-        const char* cstr = decoded_string.c_str();
-        strncpy(output, cstr, output_max_length);
-        output[output_max_length - 1] = 0;
-        return true;
-
-    } catch(const std::exception& e) {
-        KALDI_WARN << "Trying to survive fatal exception: " << e.what();
-        return false;
-    }
+    return get_output_base_nnet3(model_vp, output, output_max_length, likelihood_p, am_score_p, lm_score_p, confidence_p, expected_error_rate_p);
 }
