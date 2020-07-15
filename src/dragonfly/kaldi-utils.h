@@ -17,6 +17,8 @@
 
 #pragma once
 
+#include <ctime>
+#include <iomanip>
 #include "fstext/fstext-lib.h"
 
 namespace dragonfly {
@@ -24,7 +26,7 @@ namespace dragonfly {
 using namespace kaldi;
 using namespace fst;
 
-ConstFst<StdArc>* CastOrConvertToConstFst(Fst<StdArc>* fst) {
+inline ConstFst<StdArc>* CastOrConvertToConstFst(Fst<StdArc>* fst) {
     // This version currently supports ConstFst<StdArc> or VectorFst<StdArc>
     std::string real_type = fst->Type();
     KALDI_ASSERT(real_type == "vector" || real_type == "const");
@@ -39,7 +41,7 @@ ConstFst<StdArc>* CastOrConvertToConstFst(Fst<StdArc>* fst) {
     }
 }
 
-void WriteLattice(const CompactLattice clat_in, std::string name = "lattice") {
+inline void WriteLattice(const CompactLattice clat_in, std::string name = "lattice") {
     auto clat = clat_in;
     RemoveAlignmentsFromCompactLattice(&clat);
     Lattice lat;

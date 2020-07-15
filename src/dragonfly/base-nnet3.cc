@@ -35,8 +35,6 @@
 #include "kaldi-utils.h"
 #include "nlohmann_json.hpp"
 
-#define DEFAULT_VERBOSITY 0
-
 namespace dragonfly {
 
 using namespace kaldi;
@@ -264,15 +262,11 @@ bool BaseNNet3OnlineModelWrapper::GetWordAlignment(std::vector<string>& words, s
 }
 
 template <typename Decoder>
-bool BaseNNet3OnlineModelWrapper::Decode(Decoder& decoder_, BaseFloat samp_freq, const Vector<BaseFloat>& samples, bool finalize, bool save_adaptation_state) {
+bool BaseNNet3OnlineModelWrapper::Decode(Decoder* decoder, BaseFloat samp_freq, const Vector<BaseFloat>& samples, bool finalize, bool save_adaptation_state) {
     ExecutionTimer timer("Decode", 2);
 
-    if (!decoder_ || decoder_finalized_) {
-        CleanupDecoder();
-        StartDecoding(grammars_activity);
-    } else if (grammars_activity.size() != 0) {
-        KALDI_LOG << "non-empty grammars_activity passed on already-started decode";
-    }
+    if (!DecoderReady(decoder))
+        StartDecoding();
 
     if (samp_freq != feature_info_->GetSamplingFrequency())
         KALDI_WARN << "Mismatched sampling frequency: " << samp_freq << " != " << feature_info_->GetSamplingFrequency() << " (model's)";
@@ -291,16 +285,16 @@ bool BaseNNet3OnlineModelWrapper::Decode(Decoder& decoder_, BaseFloat samp_freq,
         if (config_.silence_weight == 1.0)
             KALDI_WARN << "Computing silence weighting despite silence_weight == 1.0";
         std::vector<std::pair<int32, BaseFloat> > delta_weights;
-        silence_weighting_->ComputeCurrentTraceback(decoder_->Decoder());
+        silence_weighting_->ComputeCurrentTraceback(decoder->Decoder());
         silence_weighting_->GetDeltaWeights(feature_pipeline_->NumFramesReady(), &delta_weights);  // FIXME: reuse decoder?
         feature_pipeline_->IvectorFeature()->UpdateFrameWeights(delta_weights);
     }
 
-    decoder_->AdvanceDecoding();
+    decoder->AdvanceDecoding();
 
     if (finalize) {
         ExecutionTimer timer("Decode finalize", 2);
-        decoder_->FinalizeDecoding();
+        decoder->FinalizeDecoding();
         decoder_finalized_ = true;
 
         tot_frames_decoded_ += tot_frames_;
@@ -325,6 +319,11 @@ bool BaseNNet3OnlineModelWrapper::Decode(Decoder& decoder_, BaseFloat samp_freq,
 
     return true;
 }
+
+template bool BaseNNet3OnlineModelWrapper::Decode(SingleUtteranceNnet3Decoder* decoder,
+    BaseFloat samp_freq, const Vector<BaseFloat>& frames, bool finalize, bool save_adaptation_state);
+template bool BaseNNet3OnlineModelWrapper::Decode(SingleUtteranceNnet3DecoderTpl<fst::ActiveGrammarFst>* decoder,
+    BaseFloat samp_freq, const Vector<BaseFloat>& frames, bool finalize, bool save_adaptation_state);
 
 } // namespace dragonfly
 

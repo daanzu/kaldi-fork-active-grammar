@@ -106,7 +106,7 @@ class BaseNNet3OnlineModelWrapper {
     public:
 
         BaseNNet3OnlineModelWrapper(const std::string& model_dir, const std::string& config_str = "", int32 verbosity = DEFAULT_VERBOSITY);
-        ~BaseNNet3OnlineModelWrapper();
+        virtual ~BaseNNet3OnlineModelWrapper();
 
         bool LoadLexicon(std::string& word_syms_filename, std::string& word_align_lexicon_filename);
 
@@ -119,8 +119,11 @@ class BaseNNet3OnlineModelWrapper {
 
     protected:
 
+        // Templated decode methods
         template <typename Decoder>
-        bool Decode(Decoder& decoder, BaseFloat samp_freq, const Vector<BaseFloat>& frames, bool finalize, bool save_adaptation_state = true);
+        bool Decode(Decoder* decoder, BaseFloat samp_freq, const Vector<BaseFloat>& frames, bool finalize, bool save_adaptation_state = true);
+        template <typename Decoder>
+        bool DecoderReady(Decoder* decoder) const { return !(!decoder || decoder_finalized_); };
 
         BaseNNet3OnlineModelConfig config_;
 

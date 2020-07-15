@@ -37,8 +37,6 @@
 #include "kaldi-utils.h"
 #include "nlohmann_json.hpp"
 
-#define DEFAULT_VERBOSITY 0
-
 namespace dragonfly {
 
 using namespace kaldi;
@@ -80,7 +78,7 @@ class AgfNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
     public:
 
         AgfNNet3OnlineModelWrapper(const std::string& model_dir, const std::string& config_str = "", int32 verbosity = DEFAULT_VERBOSITY);
-        ~AgfNNet3OnlineModelWrapper();
+        ~AgfNNet3OnlineModelWrapper() override;
 
         int32 AddGrammarFst(std::string& grammar_fst_filename);
         bool ReloadGrammarFst(int32 grammar_fst_index, std::string& grammar_fst_filename);
@@ -101,7 +99,7 @@ class AgfNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
         std::vector<StdConstFst*> grammar_fsts_;
         std::map<StdConstFst*, std::string> grammar_fsts_filename_map_;  // maps grammar_fst -> name; for debugging
         // INVARIANT: same size: grammar_fsts_, grammar_fsts_filename_map_
-        std::vector<bool> grammars_activity_;
+        std::vector<bool> grammars_activity_;  // bitfield of whether each grammar is active for current/upcoming utterance
 
         // Model objects
         ActiveGrammarFst* active_grammar_fst_ = nullptr;

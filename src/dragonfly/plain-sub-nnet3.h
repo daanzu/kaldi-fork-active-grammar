@@ -37,8 +37,6 @@
 #include "kaldi-utils.h"
 #include "nlohmann_json.hpp"
 
-#define DEFAULT_VERBOSITY 0
-
 namespace dragonfly {
 
 using namespace kaldi;
@@ -67,9 +65,9 @@ class PlainNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
     public:
 
         PlainNNet3OnlineModelWrapper(const std::string& model_dir, const std::string& config_str = "", int32 verbosity = DEFAULT_VERBOSITY);
-        ~PlainNNet3OnlineModelWrapper();
+        ~PlainNNet3OnlineModelWrapper() override;
 
-        bool Decode(BaseFloat samp_freq, const Vector<BaseFloat>& frames, bool finalize, bool save_adaptation_state = true);
+        bool Decode(BaseFloat samp_freq, const Vector<BaseFloat>& frames, bool finalize, bool save_adaptation_state = true) override;
         void GetDecodedString(std::string& decoded_string, float* likelihood, float* am_score, float* lm_score, float* confidence, float* expected_error_rate) override;
 
     protected:

@@ -35,15 +35,13 @@
 #include "kaldi-utils.h"
 #include "nlohmann_json.hpp"
 
-#define DEFAULT_VERBOSITY 0
-
 namespace dragonfly {
 
 using namespace kaldi;
 using namespace fst;
 
 PlainNNet3OnlineModelWrapper::PlainNNet3OnlineModelWrapper(const std::string& model_dir, const std::string& config_str, int32 verbosity)
-    : PlainNNet3OnlineModelWrapper(model_dir, config_str, verbosity) {
+    : BaseNNet3OnlineModelWrapper(model_dir, config_str, verbosity) {
     if (!config_.decode_fst_filename.empty())
         decode_fst_ = dynamic_cast<StdConstFst*>(ReadFstKaldiGeneric(config_.decode_fst_filename));
 }
@@ -67,7 +65,6 @@ void PlainNNet3OnlineModelWrapper::CleanupDecoder() {
 }
 
 bool PlainNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, const Vector<BaseFloat>& samples, bool finalize, bool save_adaptation_state) {
-    ExecutionTimer timer("Decode", 2);
     return BaseNNet3OnlineModelWrapper::Decode(decoder_, samp_freq, samples, finalize, save_adaptation_state);
 }
 

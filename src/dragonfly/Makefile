@@ -9,7 +9,7 @@ include ../kaldi.mk
 
 TESTFILES =
 
-OBJFILES = agf-nnet3.o plain-nnet3.o
+OBJFILES = base-nnet3.o agf-sub-nnet3.o plain-sub-nnet3.o
 
 LIBNAME = kaldi-dragonfly
 DynamicLibrary = kaldi-dragonfly
