@@ -254,8 +254,7 @@ bool BaseNNet3OnlineModelWrapper::Decode(Decoder* decoder, BaseFloat samp_freq, 
     ExecutionTimer timer("Decode", 2);
 
     if (!DecoderReady(decoder))
-        StartDecoding();
-
+        KALDI_ERR << "Decoder not ready!";
     if (samp_freq != feature_info_->GetSamplingFrequency())
         KALDI_WARN << "Mismatched sampling frequency: " << samp_freq << " != " << feature_info_->GetSamplingFrequency() << " (model's)";
 

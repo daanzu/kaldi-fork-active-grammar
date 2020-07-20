@@ -142,7 +142,7 @@ class BaseNNet3OnlineModelWrapper {
         template <typename Decoder>
         bool Decode(Decoder* decoder, BaseFloat samp_freq, const Vector<BaseFloat>& frames, bool finalize, bool save_adaptation_state = true);
         template <typename Decoder>
-        bool DecoderReady(Decoder* decoder) const { return !(!decoder || decoder_finalized_); };
+        bool DecoderReady(Decoder* decoder) const { return (decoder && !decoder_finalized_); };
 
         BaseNNet3OnlineModelConfig::Ptr config_;
 

@@ -65,6 +65,8 @@ void PlainNNet3OnlineModelWrapper::CleanupDecoder() {
 }
 
 bool PlainNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, const Vector<BaseFloat>& samples, bool finalize, bool save_adaptation_state) {
+    if (!DecoderReady(decoder_))
+        StartDecoding();
     return BaseNNet3OnlineModelWrapper::Decode(decoder_, samp_freq, samples, finalize, save_adaptation_state);
 }
 

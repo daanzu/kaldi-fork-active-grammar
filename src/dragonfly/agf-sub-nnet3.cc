@@ -135,8 +135,8 @@ void AgfNNet3OnlineModelWrapper::CleanupDecoder() {
 }
 
 bool AgfNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, const Vector<BaseFloat>& samples, bool finalize, bool save_adaptation_state) {
-    if ((grammars_activity_.size() != 0) && DecoderReady(decoder_))
-        KALDI_LOG << "non-empty grammars_activity passed on already-started decode";
+    if (!DecoderReady(decoder_))
+        StartDecoding();
     return BaseNNet3OnlineModelWrapper::Decode(decoder_, samp_freq, samples, finalize, save_adaptation_state);
 }
 
