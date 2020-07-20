@@ -455,6 +455,7 @@ sub writeProjectFiles {
     <ProjectGuid>" . $guid . "</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>" . $rootnamespace . "</RootNamespace>
+    <ProjectName>" . $projname . "</ProjectName>
   </PropertyGroup>
 ";
 
