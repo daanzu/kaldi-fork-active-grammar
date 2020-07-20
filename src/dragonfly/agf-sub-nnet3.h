@@ -44,6 +44,9 @@ using namespace fst;
 
 
 struct AgfNNet3OnlineModelConfig : public BaseNNet3OnlineModelConfig {
+    using Ptr = std::shared_ptr<AgfNNet3OnlineModelConfig>;
+
+    static constexpr auto Create = BaseNNet3OnlineModelConfig::Create<AgfNNet3OnlineModelConfig>;
 
     int32 nonterm_phones_offset = -1;  // offset from start of phones that start of nonterms are
     int32 rules_phones_offset = -1;  // offset from start of phones that the dictation nonterms are
@@ -77,7 +80,7 @@ struct AgfNNet3OnlineModelConfig : public BaseNNet3OnlineModelConfig {
 class AgfNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
     public:
 
-        AgfNNet3OnlineModelWrapper(const std::string& model_dir, const std::string& config_str = "", int32 verbosity = DEFAULT_VERBOSITY);
+        AgfNNet3OnlineModelWrapper(AgfNNet3OnlineModelConfig::Ptr config, int32 verbosity = DEFAULT_VERBOSITY);
         ~AgfNNet3OnlineModelWrapper() override;
 
         int32 AddGrammarFst(std::string& grammar_fst_filename);
@@ -91,7 +94,7 @@ class AgfNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
 
     protected:
 
-        AgfNNet3OnlineModelConfig config_;
+        AgfNNet3OnlineModelConfig::Ptr config_;
 
         // Model
         StdConstFst *top_fst_ = nullptr;

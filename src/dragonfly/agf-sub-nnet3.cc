@@ -40,14 +40,14 @@ namespace dragonfly {
 using namespace kaldi;
 using namespace fst;
 
-AgfNNet3OnlineModelWrapper::AgfNNet3OnlineModelWrapper(const std::string& model_dir, const std::string& config_str, int32 verbosity)
-    : BaseNNet3OnlineModelWrapper(model_dir, config_str, verbosity) {
-    KALDI_VLOG(2) << "kNontermBigNumber, GetEncodingMultiple: " << kNontermBigNumber << ", " << GetEncodingMultiple(config_.nonterm_phones_offset);
+AgfNNet3OnlineModelWrapper::AgfNNet3OnlineModelWrapper(AgfNNet3OnlineModelConfig::Ptr config, int32 verbosity)
+    : BaseNNet3OnlineModelWrapper(config, verbosity), config_(config) {
+    KALDI_VLOG(2) << "kNontermBigNumber, GetEncodingMultiple: " << kNontermBigNumber << ", " << GetEncodingMultiple(config_->nonterm_phones_offset);
 
-    top_fst_ = dynamic_cast<StdConstFst*>(ReadFstKaldiGeneric(config_.top_fst_filename));
+    top_fst_ = dynamic_cast<StdConstFst*>(ReadFstKaldiGeneric(config_->top_fst_filename));
 
-    if (!config_.dictation_fst_filename.empty())
-        dictation_fst_ = ReadFstFile(config_.dictation_fst_filename);
+    if (!config_->dictation_fst_filename.empty())
+        dictation_fst_ = ReadFstFile(config_->dictation_fst_filename);
 
     auto first_rule_sym = word_syms_->Find("#nonterm:rule0"),
         last_rule_sym = first_rule_sym + 9999;
@@ -111,13 +111,13 @@ void AgfNNet3OnlineModelWrapper::StartDecoding() {
     if (active_grammar_fst_ == nullptr) {
         std::vector<std::pair<int32, const StdConstFst *> > ifsts;
         for (auto grammar_fst : grammar_fsts_) {
-            int32 nonterm_phone = config_.rules_phones_offset + ifsts.size();
+            int32 nonterm_phone = config_->rules_phones_offset + ifsts.size();
             ifsts.emplace_back(std::make_pair(nonterm_phone, grammar_fst));
         }
         if (dictation_fst_ != nullptr) {
-            ifsts.emplace_back(std::make_pair(config_.dictation_phones_offset, dictation_fst_));
+            ifsts.emplace_back(std::make_pair(config_->dictation_phones_offset, dictation_fst_));
         }
-        active_grammar_fst_ = new ActiveGrammarFst(config_.nonterm_phones_offset, *top_fst_, ifsts);
+        active_grammar_fst_ = new ActiveGrammarFst(config_->nonterm_phones_offset, *top_fst_, ifsts);
     }
 
     auto grammars_activity = grammars_activity_;
@@ -172,8 +172,8 @@ void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, f
     } else {
         decoder_->GetLattice(true, &decoded_clat_);
         if (decoded_clat_.NumStates() == 0) KALDI_ERR << "Empty decoded lattice";
-        if (config_.lm_weight != 10.0)
-            ScaleLattice(LatticeScale(config_.lm_weight, 10.0), &decoded_clat_);
+        if (config_->lm_weight != 10.0)
+            ScaleLattice(LatticeScale(config_->lm_weight, 10.0), &decoded_clat_);
 
         // WriteLattice(decoded_clat, "tmp/lattice");
 
@@ -296,7 +296,7 @@ using namespace dragonfly;
 void* init_agf_nnet3(char* model_dir_cp, char* config_str_cp, int32_t verbosity) {
     std::string model_dir(model_dir_cp),
         config_str((config_str_cp != nullptr) ? config_str_cp : "");
-    auto model = new AgfNNet3OnlineModelWrapper(model_dir, config_str, verbosity);
+    auto model = new AgfNNet3OnlineModelWrapper(AgfNNet3OnlineModelConfig::Create(model_dir, config_str), verbosity);
     return model;
 }
 

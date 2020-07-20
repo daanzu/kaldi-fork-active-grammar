@@ -40,10 +40,10 @@ namespace dragonfly {
 using namespace kaldi;
 using namespace fst;
 
-PlainNNet3OnlineModelWrapper::PlainNNet3OnlineModelWrapper(const std::string& model_dir, const std::string& config_str, int32 verbosity)
-    : BaseNNet3OnlineModelWrapper(model_dir, config_str, verbosity) {
-    if (!config_.decode_fst_filename.empty())
-        decode_fst_ = dynamic_cast<StdConstFst*>(ReadFstKaldiGeneric(config_.decode_fst_filename));
+PlainNNet3OnlineModelWrapper::PlainNNet3OnlineModelWrapper(PlainNNet3OnlineModelConfig::Ptr config, int32 verbosity)
+    : BaseNNet3OnlineModelWrapper(config, verbosity), config_(config) {
+    if (!config_->decode_fst_filename.empty())
+        decode_fst_ = dynamic_cast<StdConstFst*>(ReadFstKaldiGeneric(config_->decode_fst_filename));
 }
 
 PlainNNet3OnlineModelWrapper::~PlainNNet3OnlineModelWrapper() {
@@ -93,8 +93,8 @@ void PlainNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string,
     } else {
         decoder_->GetLattice(true, &decoded_clat_);
         if (decoded_clat_.NumStates() == 0) KALDI_ERR << "Empty decoded lattice";
-        if (config_.lm_weight != 10.0)
-            ScaleLattice(LatticeScale(config_.lm_weight, 10.0), &decoded_clat_);
+        if (config_->lm_weight != 10.0)
+            ScaleLattice(LatticeScale(config_->lm_weight, 10.0), &decoded_clat_);
 
         // WriteLattice(decoded_clat, "tmp/lattice");
 
@@ -197,7 +197,7 @@ using namespace dragonfly;
 void* init_plain_nnet3(char* model_dir_cp, char* config_str_cp, int32_t verbosity) {
     std::string model_dir(model_dir_cp),
         config_str((config_str_cp != nullptr) ? config_str_cp : "");
-    auto model = new PlainNNet3OnlineModelWrapper(model_dir, config_str, verbosity);
+    auto model = new PlainNNet3OnlineModelWrapper(PlainNNet3OnlineModelConfig::Create(model_dir, config_str), verbosity);
     return model;
 }
 

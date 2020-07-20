@@ -44,6 +44,7 @@ using namespace kaldi;
 using namespace fst;
 
 struct BaseNNet3OnlineModelConfig {
+    using Ptr = std::shared_ptr<BaseNNet3OnlineModelConfig>;
 
     BaseFloat beam = 14.0;  // normally 7.0
     int32 max_active = 14000;  // normally 7000
@@ -100,12 +101,30 @@ struct BaseNNet3OnlineModelConfig {
         ss << "\n    " << "word_align_lexicon_filename: " << word_align_lexicon_filename;
         return ss.str();
     }
+
+    template <class Config>
+    static std::shared_ptr<Config> Create(const std::string& model_dir_str, const std::string& config_str = "") {
+        auto config = std::make_shared<Config>();
+        if (model_dir_str.empty())
+            KALDI_ERR << "Empty model_dir";
+        config->model_dir = model_dir_str;
+        if (!config_str.empty()) {
+            auto config_json = nlohmann::json::parse(config_str);
+            if (!config_json.is_object())
+                KALDI_ERR << "config_str must be a valid JSON object";
+            for (const auto& it : config_json.items()) {
+                if (!config->Set(it.key(), it.value()))
+                    KALDI_WARN << "Bad config key: " << it.key() << " = " << it.value();
+            }
+        }
+        return config;
+    }
 };
 
 class BaseNNet3OnlineModelWrapper {
     public:
 
-        BaseNNet3OnlineModelWrapper(const std::string& model_dir, const std::string& config_str = "", int32 verbosity = DEFAULT_VERBOSITY);
+        BaseNNet3OnlineModelWrapper(BaseNNet3OnlineModelConfig::Ptr config, int32 verbosity = DEFAULT_VERBOSITY);
         virtual ~BaseNNet3OnlineModelWrapper();
 
         bool LoadLexicon(std::string& word_syms_filename, std::string& word_align_lexicon_filename);
@@ -125,7 +144,7 @@ class BaseNNet3OnlineModelWrapper {
         template <typename Decoder>
         bool DecoderReady(Decoder* decoder) const { return !(!decoder || decoder_finalized_); };
 
-        BaseNNet3OnlineModelConfig config_;
+        BaseNNet3OnlineModelConfig::Ptr config_;
 
         // Model
         fst::SymbolTable *word_syms_ = nullptr;

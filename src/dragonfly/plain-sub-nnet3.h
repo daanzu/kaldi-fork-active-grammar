@@ -43,6 +43,9 @@ using namespace kaldi;
 using namespace fst;
 
 struct PlainNNet3OnlineModelConfig : public BaseNNet3OnlineModelConfig {
+    using Ptr = std::shared_ptr<PlainNNet3OnlineModelConfig>;
+
+    static constexpr auto Create = BaseNNet3OnlineModelConfig::Create<PlainNNet3OnlineModelConfig>;
 
     std::string decode_fst_filename;
 
@@ -64,7 +67,7 @@ struct PlainNNet3OnlineModelConfig : public BaseNNet3OnlineModelConfig {
 class PlainNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
     public:
 
-        PlainNNet3OnlineModelWrapper(const std::string& model_dir, const std::string& config_str = "", int32 verbosity = DEFAULT_VERBOSITY);
+        PlainNNet3OnlineModelWrapper(PlainNNet3OnlineModelConfig::Ptr config, int32 verbosity = DEFAULT_VERBOSITY);
         ~PlainNNet3OnlineModelWrapper() override;
 
         bool Decode(BaseFloat samp_freq, const Vector<BaseFloat>& frames, bool finalize, bool save_adaptation_state = true) override;
@@ -72,7 +75,7 @@ class PlainNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
 
     protected:
 
-        PlainNNet3OnlineModelConfig config_;
+        PlainNNet3OnlineModelConfig::Ptr config_;
 
         // Model objects
         StdConstFst* decode_fst_ = nullptr;

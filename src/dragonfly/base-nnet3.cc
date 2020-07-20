@@ -40,12 +40,10 @@ namespace dragonfly {
 using namespace kaldi;
 using namespace fst;
 
-BaseNNet3OnlineModelWrapper::BaseNNet3OnlineModelWrapper(const std::string& model_dir, const std::string& config_str, int32 verbosity) {
+BaseNNet3OnlineModelWrapper::BaseNNet3OnlineModelWrapper(BaseNNet3OnlineModelConfig::Ptr config, int32 verbosity) : config_(std::move(config)) {
     SetVerboseLevel(verbosity);
     if (verbosity >= 0) {
-        KALDI_LOG << "model_dir: " << model_dir;
-        KALDI_LOG << "config_str: " << config_str;
-        KALDI_LOG << "verbosity: " << verbosity;
+        KALDI_LOG << "Verbosity: " << verbosity;
     } else if (verbosity == -1) {
         SetLogHandler([](const LogMessageEnvelope& envelope, const char* message) {
             if (envelope.severity <= LogMessageEnvelope::kWarning) {
@@ -57,17 +55,7 @@ BaseNNet3OnlineModelWrapper::BaseNNet3OnlineModelWrapper(const std::string& mode
         SetLogHandler([](const LogMessageEnvelope& envelope, const char* message) {});
     }
 
-    config_.model_dir = model_dir;
-    if (!config_str.empty()) {
-        auto config_json = nlohmann::json::parse(config_str);
-        if (!config_json.is_object())
-            KALDI_ERR << "config_str must be a valid JSON object";
-        for (const auto& it : config_json.items()) {
-            if (!config_.Set(it.key(), it.value()))
-                KALDI_WARN << "Bad config key: " << it.key() << " = " << it.value();
-        }
-    }
-    KALDI_LOG << config_.ToString();
+    KALDI_LOG << config_->ToString();
 
     if (true && verbosity >= 1) {
         ExecutionTimer timer("testing output latency");
@@ -80,20 +68,20 @@ BaseNNet3OnlineModelWrapper::BaseNNet3OnlineModelWrapper(const std::string& mode
     decoder_config_.Register(&po);
     endpoint_config_.Register(&po);
 
-    feature_config_.mfcc_config = config_.mfcc_config_filename;
-    feature_config_.ivector_extraction_config = config_.ie_config_filename;
-    feature_config_.silence_weighting_config.silence_weight = config_.silence_weight;
-    feature_config_.silence_weighting_config.silence_phones_str = config_.silence_phones_str;
-    decoder_config_.max_active = config_.max_active;
-    decoder_config_.min_active = config_.min_active;
-    decoder_config_.beam = config_.beam;
-    decoder_config_.lattice_beam = config_.lattice_beam;
-    decodable_config_.acoustic_scale = config_.acoustic_scale;
-    decodable_config_.frame_subsampling_factor = config_.frame_subsampling_factor;
+    feature_config_.mfcc_config = config_->mfcc_config_filename;
+    feature_config_.ivector_extraction_config = config_->ie_config_filename;
+    feature_config_.silence_weighting_config.silence_weight = config_->silence_weight;
+    feature_config_.silence_weighting_config.silence_phones_str = config_->silence_phones_str;
+    decoder_config_.max_active = config_->max_active;
+    decoder_config_.min_active = config_->min_active;
+    decoder_config_.beam = config_->beam;
+    decoder_config_.lattice_beam = config_->lattice_beam;
+    decodable_config_.acoustic_scale = config_->acoustic_scale;
+    decodable_config_.frame_subsampling_factor = config_->frame_subsampling_factor;
 
     {
         bool binary;
-        Input ki(config_.model_filename, &binary);
+        Input ki(config_->model_filename, &binary);
         trans_model_.Read(ki.Stream(), binary);
         am_nnet_.Read(ki.Stream(), binary);
         SetBatchnormTestMode(true, &(am_nnet_.GetNnet()));
@@ -105,7 +93,7 @@ BaseNNet3OnlineModelWrapper::BaseNNet3OnlineModelWrapper(const std::string& mode
     decodable_info_ = new nnet3::DecodableNnetSimpleLoopedInfo(decodable_config_, &am_nnet_);
     ResetAdaptationState();
 
-    LoadLexicon(config_.word_syms_filename, config_.word_align_lexicon_filename);
+    LoadLexicon(config_->word_syms_filename, config_->word_align_lexicon_filename);
 }
 
 BaseNNet3OnlineModelWrapper::~BaseNNet3OnlineModelWrapper() {
@@ -282,7 +270,7 @@ bool BaseNNet3OnlineModelWrapper::Decode(Decoder* decoder, BaseFloat samp_freq, 
     if (silence_weighting_->Active()
             && feature_pipeline_->NumFramesReady() > 0
             && feature_pipeline_->IvectorFeature() != nullptr) {
-        if (config_.silence_weight == 1.0)
+        if (config_->silence_weight == 1.0)
             KALDI_WARN << "Computing silence weighting despite silence_weight == 1.0";
         std::vector<std::pair<int32, BaseFloat> > delta_weights;
         silence_weighting_->ComputeCurrentTraceback(decoder->Decoder());
