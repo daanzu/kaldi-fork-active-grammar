@@ -25,10 +25,12 @@
 #include "online2/online-timing.h"
 #include "online2/online-endpoint.h"
 #include "fstext/fstext-lib.h"
+#include "lat/compose-lattice-pruned.h"
 #include "lat/confidence.h"
 #include "lat/lattice-functions.h"
 #include "lat/sausages.h"
 #include "lat/word-align-lattice-lexicon.h"
+#include "rnnlm/rnnlm-lattice-rescoring.h"
 #include "nnet3/nnet-utils.h"
 #include "decoder/active-grammar-fst.h"
 
@@ -61,6 +63,9 @@ struct BaseNNet3OnlineModelConfig {
     std::string model_filename;
     std::string word_syms_filename;
     std::string word_align_lexicon_filename;
+    std::string rnnlm_nnet_filename;
+    std::string rnnlm_word_embed_filename;
+    std::string rnnlm_orig_grammar_filename;
 
     virtual bool Set(const std::string& name, const nlohmann::json& value) {
         if (name == "beam") { beam = value.get<BaseFloat>(); return true; }
@@ -78,6 +83,9 @@ struct BaseNNet3OnlineModelConfig {
         if (name == "model_filename") { model_filename = value.get<std::string>(); return true; }
         if (name == "word_syms_filename") { word_syms_filename = value.get<std::string>(); return true; }
         if (name == "word_align_lexicon_filename") { word_align_lexicon_filename = value.get<std::string>(); return true; }
+        if (name == "rnnlm_nnet_filename") { rnnlm_nnet_filename = value.get<std::string>(); return true; }
+        if (name == "rnnlm_word_embed_filename") { rnnlm_word_embed_filename = value.get<std::string>(); return true; }
+        if (name == "rnnlm_orig_grammar_filename") { rnnlm_orig_grammar_filename = value.get<std::string>(); return true; }
         return false;
     }
 
@@ -99,6 +107,9 @@ struct BaseNNet3OnlineModelConfig {
         ss << "\n    " << "model_filename: " << model_filename;
         ss << "\n    " << "word_syms_filename: " << word_syms_filename;
         ss << "\n    " << "word_align_lexicon_filename: " << word_align_lexicon_filename;
+        ss << "\n    " << "rnnlm_nnet_filename: " << rnnlm_nnet_filename;
+        ss << "\n    " << "rnnlm_word_embed_filename: " << rnnlm_word_embed_filename;
+        ss << "\n    " << "rnnlm_orig_grammar_filename: " << rnnlm_orig_grammar_filename;
         return ss.str();
     }
 
@@ -167,6 +178,18 @@ class BaseNNet3OnlineModelWrapper {
         WordAlignLatticeLexiconInfo* word_align_lexicon_info_ = nullptr;
         std::set<int32> word_align_lexicon_words_;  // contains word-ids that are in word_align_lexicon_info_
 
+        // RNNLM
+        bool enable_rnnlm_ = false;
+        nnet3::Nnet rnnlm_;
+        CuMatrix<BaseFloat> word_embedding_mat_;
+        fst::ScaleDeterministicOnDemandFst* lm_to_subtract_det_scale_ = nullptr;
+        rnnlm::RnnlmComputeStateComputationOptions rnnlm_opts_;
+        rnnlm::RnnlmComputeStateInfo* rnnlm_info_ = nullptr;
+        int32 rnnlm_max_ngram_order_;
+        ComposeLatticePrunedOptions rnnlm_compose_opts_;
+        BaseFloat rnnlm_scale_;
+
+        // Miscellaneous
         int32 tot_frames_ = 0, tot_frames_decoded_ = 0;
         bool decoder_finalized_ = false;
         CompactLattice decoded_clat_;
@@ -174,6 +197,7 @@ class BaseNNet3OnlineModelWrapper {
 
         StdConstFst* ReadFstFile(std::string filename);
         std::string WordIdsToString(const std::vector<int32> &wordIds);
+        void RescoreRnnlm(CompactLattice& clat, const std::string& prime = "");
 
         virtual void StartDecoding();
         virtual void CleanupDecoder();

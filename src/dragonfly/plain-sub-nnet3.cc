@@ -97,6 +97,8 @@ void PlainNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string,
         if (decoded_clat_.NumStates() == 0) KALDI_ERR << "Empty decoded lattice";
         // WriteLattice(decoded_clat, "tmp/lattice");
 
+        if (enable_rnnlm_)
+            RescoreRnnlm(decoded_clat_);
         if (config_->lm_weight != 10.0)
             ScaleLattice(LatticeScale(config_->lm_weight / 10.0, 1.0), &decoded_clat_);
 
@@ -167,6 +169,9 @@ void PlainNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string,
             if (expected_error_rate) *expected_error_rate = mbr.GetBayesRisk();
             // FIXME: also do confidence?
         }
+
+        // if (enable_rnnlm_)
+        //     RescoreRnnlm(decoded_clat_, "back");
 
         CompactLatticeShortestPath(decoded_clat_, &best_path_clat_);
         ConvertLattice(best_path_clat_, &best_path_lat);

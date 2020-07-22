@@ -40,7 +40,7 @@ namespace dragonfly {
 using namespace kaldi;
 using namespace fst;
 
-BaseNNet3OnlineModelWrapper::BaseNNet3OnlineModelWrapper(BaseNNet3OnlineModelConfig::Ptr config, int32 verbosity) : config_(std::move(config)) {
+BaseNNet3OnlineModelWrapper::BaseNNet3OnlineModelWrapper(BaseNNet3OnlineModelConfig::Ptr config_arg, int32 verbosity) : config_(std::move(config_arg)) {
     SetVerboseLevel(verbosity);
     if (verbosity >= 0) {
         KALDI_LOG << "Verbosity: " << verbosity;
@@ -96,6 +96,28 @@ BaseNNet3OnlineModelWrapper::BaseNNet3OnlineModelWrapper(BaseNNet3OnlineModelCon
     ResetAdaptationState();
 
     LoadLexicon(config_->word_syms_filename, config_->word_align_lexicon_filename);
+
+    enable_rnnlm_ = (!config_->rnnlm_nnet_filename.empty() && !config_->rnnlm_word_embed_filename.empty() && !config_->rnnlm_orig_grammar_filename.empty());
+    if (enable_rnnlm_) {
+        ExecutionTimer timer("loading rnnlm");
+        // config_->rnnlm_nnet_filename = "rnnlm/" + "final.raw";
+        // config_->rnnlm_word_embed_filename = "rnnlm/" + "word_embedding.mat";
+        // config_->rnnlm_orig_grammar_filename = "G.fst";
+        
+        VectorFst<StdArc> *lm_to_subtract_fst = ReadAndPrepareLmFst(config_->model_dir + "/" + config_->rnnlm_orig_grammar_filename);
+        BackoffDeterministicOnDemandFst<StdArc> *lm_to_subtract_det_backoff = new BackoffDeterministicOnDemandFst<StdArc>(*lm_to_subtract_fst);
+        rnnlm_scale_ = 1.0;
+        lm_to_subtract_det_scale_ = new ScaleDeterministicOnDemandFst(-rnnlm_scale_, lm_to_subtract_det_backoff);
+
+        ReadKaldiObject((config_->model_dir + "/" + config_->rnnlm_nnet_filename), &rnnlm_);
+        KALDI_ASSERT(IsSimpleNnet(rnnlm_));
+        ReadKaldiObject((config_->model_dir + "/" + config_->rnnlm_word_embed_filename), &word_embedding_mat_);
+
+        rnnlm_opts_.bos_index = word_syms_->Find("<s>");
+        rnnlm_opts_.eos_index = word_syms_->Find("</s>");
+        rnnlm_info_ = new rnnlm::RnnlmComputeStateInfo(rnnlm_opts_, rnnlm_, word_embedding_mat_);
+        rnnlm_max_ngram_order_ = 4;
+    }
 }
 
 BaseNNet3OnlineModelWrapper::~BaseNNet3OnlineModelWrapper() {
@@ -249,6 +271,52 @@ bool BaseNNet3OnlineModelWrapper::GetWordAlignment(std::vector<string>& words, s
         }
     }
     return true;
+}
+
+void BaseNNet3OnlineModelWrapper::RescoreRnnlm(CompactLattice& clat, const std::string& prime) {
+    ExecutionTimer timer("rnnlm rescoring");
+    rnnlm::KaldiRnnlmDeterministicFst lm_to_add_orig(rnnlm_max_ngram_order_, *rnnlm_info_);
+
+    if (!prime.empty()) {
+        KALDI_LOG << "RNNLM Primed with: " << prime;
+        istringstream iss(prime);
+        vector<string> words{istream_iterator<string>{iss}, istream_iterator<string>{}};
+        vector<int32> precontext(words.size());
+        for (auto word : words) precontext.push_back(word_syms_->Find(word));
+        lm_to_add_orig.Prime(precontext);
+    }
+
+    DeterministicOnDemandFst<StdArc> *lm_to_add = new ScaleDeterministicOnDemandFst(rnnlm_scale_, &lm_to_add_orig);
+    ComposeDeterministicOnDemandFst<StdArc> combined_lms(lm_to_subtract_det_scale_, lm_to_add);
+
+    // Before composing with the LM FST, we scale the lattice weights
+    // by the inverse of "lm_scale".  We'll later scale by "lm_scale".
+    // We do it this way so we can determinize and it will give the
+    // right effect (taking the "best path" through the LM) regardless
+    // of the sign of lm_scale.
+    // NOTE: The above comment is incorrect, but the below code is correct.
+    if (decodable_config_.acoustic_scale != 1.0)
+        ScaleLattice(AcousticLatticeScale(decodable_config_.acoustic_scale), &clat);
+    TopSortCompactLatticeIfNeeded(&clat);
+
+    // Composes lattice with language model.
+    CompactLattice composed_clat;
+    ComposeCompactLatticePruned(rnnlm_compose_opts_, clat, &combined_lms, &composed_clat);
+
+    if (composed_clat.NumStates() == 0) {
+        // Something went wrong. A warning will already have been printed.
+        KALDI_WARN << "Empty lattice after RNNLM rescoring.";
+        // FIXME: fall back to original?
+    } else {
+        if (decodable_config_.acoustic_scale != 1.0) {
+            if (decodable_config_.acoustic_scale == 0.0)
+                KALDI_ERR << "Acoustic scale cannot be zero.";
+            ScaleLattice(AcousticLatticeScale(1.0 / decodable_config_.acoustic_scale), &composed_clat);
+        }
+        clat = composed_clat;
+    }
+
+    delete lm_to_add;
 }
 
 template <typename Decoder>
