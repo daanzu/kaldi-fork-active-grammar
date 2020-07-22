@@ -62,6 +62,8 @@ BaseNNet3OnlineModelWrapper::BaseNNet3OnlineModelWrapper(BaseNNet3OnlineModelCon
         std::cerr << "[testing output latency][testing output latency][testing output latency]" << endl;
     }
 
+    ExecutionTimer timer("Initialization/loading");
+
     ParseOptions po("");
     feature_config_.Register(&po);
     decodable_config_.Register(&po);
