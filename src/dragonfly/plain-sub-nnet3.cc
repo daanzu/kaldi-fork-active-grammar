@@ -95,10 +95,10 @@ void PlainNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string,
     } else {
         decoder_->GetLattice(true, &decoded_clat_);
         if (decoded_clat_.NumStates() == 0) KALDI_ERR << "Empty decoded lattice";
-        if (config_->lm_weight != 10.0)
-            ScaleLattice(LatticeScale(config_->lm_weight, 10.0), &decoded_clat_);
-
         // WriteLattice(decoded_clat, "tmp/lattice");
+
+        if (config_->lm_weight != 10.0)
+            ScaleLattice(LatticeScale(config_->lm_weight / 10.0, 1.0), &decoded_clat_);
 
         CompactLattice decoded_clat_relabeled = decoded_clat_;
 
