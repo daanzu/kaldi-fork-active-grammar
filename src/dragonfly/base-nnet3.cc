@@ -273,13 +273,13 @@ bool BaseNNet3OnlineModelWrapper::GetWordAlignment(std::vector<string>& words, s
     return true;
 }
 
-void BaseNNet3OnlineModelWrapper::RescoreRnnlm(CompactLattice& clat, const std::string& prime) {
+void BaseNNet3OnlineModelWrapper::RescoreRnnlm(CompactLattice& clat, const std::string& prime_text) {
     ExecutionTimer timer("rnnlm rescoring");
     rnnlm::KaldiRnnlmDeterministicFst lm_to_add_orig(rnnlm_max_ngram_order_, *rnnlm_info_);
 
-    if (!prime.empty()) {
-        KALDI_LOG << "RNNLM Primed with: " << prime;
-        istringstream iss(prime);
+    if (!prime_text.empty()) {
+        KALDI_LOG << "RNNLM Primed with: \"" << prime_text << "\"";
+        istringstream iss(prime_text);
         vector<string> words{istream_iterator<string>{iss}, istream_iterator<string>{}};
         vector<int32> precontext(words.size());
         for (auto word : words) precontext.push_back(word_syms_->Find(word));
@@ -392,10 +392,16 @@ extern "C" {
 using namespace dragonfly;
 
 bool load_lexicon_base_nnet3(void* model_vp, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp) {
-    auto model = static_cast<BaseNNet3OnlineModelWrapper*>(model_vp);
-    std::string word_syms_filename(word_syms_filename_cp), word_align_lexicon_filename(word_align_lexicon_filename_cp);
-    bool result = model->LoadLexicon(word_syms_filename, word_align_lexicon_filename);
-    return result;
+    try {
+        auto model = static_cast<BaseNNet3OnlineModelWrapper*>(model_vp);
+        std::string word_syms_filename(word_syms_filename_cp), word_align_lexicon_filename(word_align_lexicon_filename_cp);
+        bool result = model->LoadLexicon(word_syms_filename, word_align_lexicon_filename);
+        return result;
+
+    } catch(const std::exception& e) {
+        KALDI_WARN << "Trying to survive fatal exception: " << e.what();
+        return false;
+    }
 }
 
 bool save_adaptation_state_base_nnet3(void* model_vp) {
@@ -414,6 +420,19 @@ bool reset_adaptation_state_base_nnet3(void* model_vp) {
     try {
         auto model = static_cast<BaseNNet3OnlineModelWrapper*>(model_vp);
         model->ResetAdaptationState();
+        return true;
+
+    } catch(const std::exception& e) {
+        KALDI_WARN << "Trying to survive fatal exception: " << e.what();
+        return false;
+    }
+}
+
+bool set_lm_prime_text_base_nnet3(void* model_vp, char* prime_text_cp) {
+    try {
+        auto model = static_cast<BaseNNet3OnlineModelWrapper*>(model_vp);
+        std::string prime_text(prime_text_cp);
+        model->SetLmPrimeText(prime_text);
         return true;
 
     } catch(const std::exception& e) {

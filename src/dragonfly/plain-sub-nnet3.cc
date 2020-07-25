@@ -98,7 +98,7 @@ void PlainNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string,
         // WriteLattice(decoded_clat, "tmp/lattice");
 
         if (enable_rnnlm_)
-            RescoreRnnlm(decoded_clat_);
+            RescoreRnnlm(decoded_clat_, lm_prime_text_);
         if (config_->lm_weight != 10.0)
             ScaleLattice(LatticeScale(config_->lm_weight / 10.0, 1.0), &decoded_clat_);
 

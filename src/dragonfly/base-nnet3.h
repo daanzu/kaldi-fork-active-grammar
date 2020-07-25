@@ -143,6 +143,7 @@ class BaseNNet3OnlineModelWrapper {
         bool SaveAdaptationState();
         void ResetAdaptationState();
         virtual bool GetWordAlignment(std::vector<string>& words, std::vector<int32>& times, std::vector<int32>& lengths, bool include_eps);
+        void SetLmPrimeText(const std::string& prime_text) { lm_prime_text_ = prime_text; };
 
         virtual bool Decode(BaseFloat samp_freq, const Vector<BaseFloat>& frames, bool finalize, bool save_adaptation_state = true) = 0;
         virtual void GetDecodedString(std::string& decoded_string, float* likelihood, float* am_score, float* lm_score, float* confidence, float* expected_error_rate) = 0;
@@ -188,6 +189,7 @@ class BaseNNet3OnlineModelWrapper {
         int32 rnnlm_max_ngram_order_;
         ComposeLatticePrunedOptions rnnlm_compose_opts_;
         BaseFloat rnnlm_scale_;
+        std::string lm_prime_text_;
 
         // Miscellaneous
         int32 tot_frames_ = 0, tot_frames_decoded_ = 0;
@@ -197,7 +199,7 @@ class BaseNNet3OnlineModelWrapper {
 
         StdConstFst* ReadFstFile(std::string filename);
         std::string WordIdsToString(const std::vector<int32> &wordIds);
-        void RescoreRnnlm(CompactLattice& clat, const std::string& prime = "");
+        void RescoreRnnlm(CompactLattice& clat, const std::string& prime_text = "");
 
         virtual void StartDecoding();
         virtual void CleanupDecoder();

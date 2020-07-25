@@ -51,6 +51,7 @@ bool get_word_align_base_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengt
 bool decode_base_nnet3(void* model_vp, float samp_freq, int32_t num_samples, float* samples, bool finalize, bool save_adaptation_state);
 bool get_output_base_nnet3(void* model_vp, char* output, int32_t output_max_length,
         float* likelihood_p, float* am_score_p, float* lm_score_p, float* confidence_p, float* expected_error_rate_p);
+DRAGONFLY_API bool set_lm_prime_text_base_nnet3(void* model_vp, char* prime_cp);
 
 DRAGONFLY_API void* init_plain_nnet3(char* model_dir_cp, char* config_str_cp, int32_t verbosity);
 DRAGONFLY_API bool load_lexicon_plain_nnet3(void* model_vp, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp);
