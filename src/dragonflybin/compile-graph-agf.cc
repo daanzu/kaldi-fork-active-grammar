@@ -74,7 +74,7 @@ int main(int argc, char *argv[]) {
     std::string grammar_append_nonterm_fst;
     int32 grammar_prepend_nonterm = -1;
     int32 grammar_append_nonterm = -1;
-    bool disambiguate_lg = true;
+    bool simplify_lg = true;
     po.Register("compile-grammar", &compile_grammar, "");
     po.Register("grammar-symbols", &grammar_symbols, "");
     po.Register("topsort-grammar", &topsort_grammar, "");
@@ -83,7 +83,7 @@ int main(int argc, char *argv[]) {
     po.Register("grammar-append-nonterm-fst", &grammar_append_nonterm_fst, "");
     po.Register("grammar-prepend-nonterm", &grammar_prepend_nonterm, "");
     po.Register("grammar-append-nonterm", &grammar_append_nonterm, "");
-    po.Register("disambiguate-lg", &disambiguate_lg, "Bool whether to disambiguate LG (do for command grammars, but not for dictation graph!)");
+    po.Register("simplify-lg", &simplify_lg, "Bool whether to simplify LG (do for command grammars, but not for dictation graph!)");
 
     po.Read(argc, argv);
 
@@ -137,11 +137,11 @@ int main(int argc, char *argv[]) {
       fst::ArcSort(grammar_fst, fst::ILabelCompare<StdArc>());
     }
 
-    if (grammar_prepend_nonterm_fst.size()) {
+    if (!grammar_prepend_nonterm_fst.empty()) {
       VectorFst<StdArc> *nonterm_fst = fst::ReadFstKaldi(grammar_prepend_nonterm_fst);
       fst::Concat(*nonterm_fst, grammar_fst);
     }
-    if (grammar_append_nonterm_fst.size()) {
+    if (!grammar_append_nonterm_fst.empty()) {
       VectorFst<StdArc> *nonterm_fst = fst::ReadFstKaldi(grammar_append_nonterm_fst);
       fst::Concat(grammar_fst, *nonterm_fst);
     }
@@ -162,6 +162,14 @@ int main(int argc, char *argv[]) {
       nonterm_fst.SetFinal(1, 0.0);
       nonterm_fst.AddArc(0, StdArc(grammar_append_nonterm, 0, 0.0, 1));
       fst::Concat(grammar_fst, nonterm_fst);
+    }
+
+    if (simplify_lg) {
+      // I think this should speed later stages
+      KALDI_VLOG(1) << "Determinizing G fst...";
+      VectorFst<StdArc> tmp_fst;
+      Determinize(*grammar_fst, &tmp_fst);
+      *grammar_fst = tmp_fst;
     }
 
     std::vector<int32> disambig_syms;
@@ -197,7 +205,11 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    if (disambiguate_lg) {
+    if (simplify_lg) {
+      // Remove epsilons to ease Determinization (Caster text manipulation hanging bug)
+      // We need to use full RmEpsilon, because RemoveEpsLocal is not sufficient
+      KALDI_VLOG(1) << "RmEpsiloning LG fst...";
+      RmEpsilon(&lg_fst);
       // Disambiguate LG to ease Determinization (caspark's hanging bug)
       KALDI_VLOG(1) << "Disambiguating LG fst...";
       VectorFst<StdArc> tmp_fst;
