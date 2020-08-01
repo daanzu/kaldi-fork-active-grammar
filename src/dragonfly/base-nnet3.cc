@@ -64,22 +64,25 @@ BaseNNet3OnlineModelWrapper::BaseNNet3OnlineModelWrapper(BaseNNet3OnlineModelCon
 
     ExecutionTimer timer("Initialization/loading");
 
-    ParseOptions po("");
-    feature_config_.Register(&po);
-    decodable_config_.Register(&po);
-    decoder_config_.Register(&po);
-    endpoint_config_.Register(&po);
-
-    feature_config_.mfcc_config = config_->mfcc_config_filename;
-    feature_config_.ivector_extraction_config = config_->ie_config_filename;
-    feature_config_.silence_weighting_config.silence_weight = config_->silence_weight;
-    feature_config_.silence_weighting_config.silence_phones_str = config_->silence_phones_str;
-    decoder_config_.max_active = config_->max_active;
-    decoder_config_.min_active = config_->min_active;
-    decoder_config_.beam = config_->beam;
-    decoder_config_.lattice_beam = config_->lattice_beam;
-    decodable_config_.acoustic_scale = config_->acoustic_scale;
-    decodable_config_.frame_subsampling_factor = config_->frame_subsampling_factor;
+    if (!config_->ivector_extraction_config_json.empty()) {
+        feature_info_ = new OnlineNnet2FeaturePipelineInfo();
+        ReadConfigFromFile(config_->mfcc_config_filename, &feature_info_->mfcc_opts);  // set from mfcc_config_filename
+        // feature_info_->use_cmvn = true;
+        // feature_info_->cmvn_opts;  // set from cmvn_config_filename
+        feature_info_->use_ivectors = true;
+        auto json_str = nlohmann::json::parse(config_->ivector_extraction_config_json);
+        auto tmp_config = nlohmann::json::parse(config_->ivector_extraction_config_json).get<OnlineIvectorExtractionConfig>();
+        auto ivector_extraction_config = nlohmann::json::parse(config_->ivector_extraction_config_json).get<OnlineIvectorExtractionConfig>();  // from ie_config_filename
+        feature_info_->ivector_extractor_info.Init(ivector_extraction_config);
+        feature_info_->silence_weighting_config.silence_weight = config_->silence_weight;
+        feature_info_->silence_weighting_config.silence_phones_str = config_->silence_phones_str;
+    } else {
+        feature_config_.mfcc_config = config_->mfcc_config_filename;
+        feature_config_.ivector_extraction_config = config_->ie_config_filename;
+        feature_config_.silence_weighting_config.silence_weight = config_->silence_weight;
+        feature_config_.silence_weighting_config.silence_phones_str = config_->silence_phones_str;
+        feature_info_ = new OnlineNnet2FeaturePipelineInfo(feature_config_);
+    }
 
     {
         bool binary;
@@ -91,8 +94,13 @@ BaseNNet3OnlineModelWrapper::BaseNNet3OnlineModelWrapper(BaseNNet3OnlineModelCon
         nnet3::CollapseModel(nnet3::CollapseModelConfig(), &(am_nnet_.GetNnet()));
     }
 
-    feature_info_ = new OnlineNnet2FeaturePipelineInfo(feature_config_);
+    decodable_config_.acoustic_scale = config_->acoustic_scale;
+    decodable_config_.frame_subsampling_factor = config_->frame_subsampling_factor;
     decodable_info_ = new nnet3::DecodableNnetSimpleLoopedInfo(decodable_config_, &am_nnet_);
+    decoder_config_.max_active = config_->max_active;
+    decoder_config_.min_active = config_->min_active;
+    decoder_config_.beam = config_->beam;
+    decoder_config_.lattice_beam = config_->lattice_beam;
     ResetAdaptationState();
 
     LoadLexicon(config_->word_syms_filename, config_->word_align_lexicon_filename);
@@ -384,6 +392,29 @@ template bool BaseNNet3OnlineModelWrapper::Decode(SingleUtteranceNnet3DecoderTpl
     BaseFloat samp_freq, const Vector<BaseFloat>& frames, bool finalize, bool save_adaptation_state);
 
 } // namespace dragonfly
+
+
+namespace kaldi {
+    // Load IvectorExtractor config from JSON object. See src\online2\online-ivector-feature.h
+    void from_json(const nlohmann::json& j, OnlineIvectorExtractionConfig& c) {
+        if (!j.is_object()) KALDI_ERR << "Not an object!";
+        if (j.contains("lda-matrix")) j.at("lda-matrix").get_to(c.lda_mat_rxfilename);
+        if (j.contains("global-cmvn-stats")) j.at("global-cmvn-stats").get_to(c.global_cmvn_stats_rxfilename);
+        if (j.contains("cmvn-config")) j.at("cmvn-config").get_to(c.cmvn_config_rxfilename);
+        if (j.contains("online-cmvn-iextractor")) j.at("online-cmvn-iextractor").get_to(c.online_cmvn_iextractor);
+        if (j.contains("splice-config")) j.at("splice-config").get_to(c.splice_config_rxfilename);
+        if (j.contains("diag-ubm")) j.at("diag-ubm").get_to(c.diag_ubm_rxfilename);
+        if (j.contains("ivector-extractor")) j.at("ivector-extractor").get_to(c.ivector_extractor_rxfilename);
+        if (j.contains("ivector-period")) j.at("ivector-period").get_to(c.ivector_period);
+        if (j.contains("num-gselect")) j.at("num-gselect").get_to(c.num_gselect);
+        if (j.contains("min-post")) j.at("min-post").get_to(c.min_post);
+        if (j.contains("posterior-scale")) j.at("posterior-scale").get_to(c.posterior_scale);
+        if (j.contains("max-count")) j.at("max-count").get_to(c.max_count);
+        if (j.contains("use-most-recent-ivector")) j.at("use-most-recent-ivector").get_to(c.use_most_recent_ivector);
+        if (j.contains("greedy-ivector-extractor")) j.at("greedy-ivector-extractor").get_to(c.greedy_ivector_extractor);
+        if (j.contains("max-remembered-frames")) j.at("max-remembered-frames").get_to(c.max_remembered_frames);
+    }
+} // namespace kaldi
 
 
 extern "C" {

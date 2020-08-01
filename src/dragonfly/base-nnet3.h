@@ -54,7 +54,7 @@ struct BaseNNet3OnlineModelConfig {
     BaseFloat lattice_beam = 8.0;
     BaseFloat acoustic_scale = 1.0;
     BaseFloat lm_weight = 7.0;  // 10.0 would be "neutral", with no scaling
-    BaseFloat silence_weight = 1.0;  // default means silence weighting disabled
+    BaseFloat silence_weight = 1.0;  // default (1.0) means silence weighting disabled
     int32 frame_subsampling_factor = 3;
     std::string model_dir;
     std::string mfcc_config_filename;
@@ -66,26 +66,28 @@ struct BaseNNet3OnlineModelConfig {
     std::string rnnlm_nnet_filename;
     std::string rnnlm_word_embed_filename;
     std::string rnnlm_orig_grammar_filename;
+    std::string ivector_extraction_config_json;  // from ie_config_filename
 
     virtual bool Set(const std::string& name, const nlohmann::json& value) {
-        if (name == "beam") { beam = value.get<BaseFloat>(); return true; }
-        if (name == "max_active") { max_active = value.get<int32>(); return true; }
-        if (name == "min_active") { min_active = value.get<int32>(); return true; }
-        if (name == "lattice_beam") { lattice_beam = value.get<BaseFloat>(); return true; }
-        if (name == "acoustic_scale") { acoustic_scale = value.get<BaseFloat>(); return true; }
-        if (name == "lm_weight") { lm_weight = value.get<BaseFloat>(); return true; }
-        if (name == "silence_weight") { silence_weight = value.get<BaseFloat>(); return true; }
-        if (name == "frame_subsampling_factor") { frame_subsampling_factor = value.get<int32>(); return true; }
-        if (name == "model_dir") { model_dir = value.get<std::string>(); return true; }
-        if (name == "mfcc_config_filename") { mfcc_config_filename = value.get<std::string>(); return true; }
-        if (name == "ie_config_filename") { ie_config_filename = value.get<std::string>(); return true; }
-        if (name == "silence_phones_str") { silence_phones_str = value.get<std::string>(); return true; }
-        if (name == "model_filename") { model_filename = value.get<std::string>(); return true; }
-        if (name == "word_syms_filename") { word_syms_filename = value.get<std::string>(); return true; }
-        if (name == "word_align_lexicon_filename") { word_align_lexicon_filename = value.get<std::string>(); return true; }
-        if (name == "rnnlm_nnet_filename") { rnnlm_nnet_filename = value.get<std::string>(); return true; }
-        if (name == "rnnlm_word_embed_filename") { rnnlm_word_embed_filename = value.get<std::string>(); return true; }
-        if (name == "rnnlm_orig_grammar_filename") { rnnlm_orig_grammar_filename = value.get<std::string>(); return true; }
+        if (name == "beam") { value.get_to(beam); return true; }
+        if (name == "max_active") { value.get_to(max_active); return true; }
+        if (name == "min_active") { value.get_to(min_active); return true; }
+        if (name == "lattice_beam") { value.get_to(lattice_beam); return true; }
+        if (name == "acoustic_scale") { value.get_to(acoustic_scale); return true; }
+        if (name == "lm_weight") { value.get_to(lm_weight); return true; }
+        if (name == "silence_weight") { value.get_to(silence_weight); return true; }
+        if (name == "frame_subsampling_factor") { value.get_to(frame_subsampling_factor); return true; }
+        if (name == "model_dir") { value.get_to(model_dir); return true; }
+        if (name == "mfcc_config_filename") { value.get_to(mfcc_config_filename); return true; }
+        if (name == "ie_config_filename") { value.get_to(ie_config_filename); return true; }
+        if (name == "silence_phones_str") { value.get_to(silence_phones_str); return true; }
+        if (name == "model_filename") { value.get_to(model_filename); return true; }
+        if (name == "word_syms_filename") { value.get_to(word_syms_filename); return true; }
+        if (name == "word_align_lexicon_filename") { value.get_to(word_align_lexicon_filename); return true; }
+        if (name == "rnnlm_nnet_filename") { value.get_to(rnnlm_nnet_filename); return true; }
+        if (name == "rnnlm_word_embed_filename") { value.get_to(rnnlm_word_embed_filename); return true; }
+        if (name == "rnnlm_orig_grammar_filename") { value.get_to(rnnlm_orig_grammar_filename); return true; }
+        if (name == "ivector_extraction_config_json") { ivector_extraction_config_json = value.dump(); return true; }
         return false;
     }
 
@@ -110,6 +112,7 @@ struct BaseNNet3OnlineModelConfig {
         ss << "\n    " << "rnnlm_nnet_filename: " << rnnlm_nnet_filename;
         ss << "\n    " << "rnnlm_word_embed_filename: " << rnnlm_word_embed_filename;
         ss << "\n    " << "rnnlm_orig_grammar_filename: " << rnnlm_orig_grammar_filename;
+        ss << "\n    " << "ivector_extraction_config_json: " << ivector_extraction_config_json;
         return ss.str();
     }
 

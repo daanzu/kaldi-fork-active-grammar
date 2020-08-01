@@ -1,4 +1,4 @@
-// Kaldi Utils
+// Kaldi Utils for AG
 
 // Copyright   2019  David Zurow
 
@@ -20,6 +20,13 @@
 #include <ctime>
 #include <iomanip>
 #include "fstext/fstext-lib.h"
+#include "online2/online-ivector-feature.h"
+
+#include "nlohmann_json.hpp"
+
+namespace kaldi {
+    void from_json(const nlohmann::json& j, OnlineIvectorExtractionConfig& c);
+}
 
 namespace dragonfly {
 
