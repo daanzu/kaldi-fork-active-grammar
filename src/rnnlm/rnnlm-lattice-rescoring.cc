@@ -73,10 +73,10 @@ KaldiRnnlmDeterministicFst::KaldiRnnlmDeterministicFst(int32 max_ngram_order,
 
 void KaldiRnnlmDeterministicFst::Prime(const std::vector<Label> &words) {
   // RNNLM is empty other than bos_index_
-  KALDI_ASSERT(state_to_rnnlm_state_.size() == 1);
-  KALDI_ASSERT(wseq_to_state_.size() == 1);
+  if (state_to_rnnlm_state_.size() != 1) KALDI_ERR << "RNNLM not fresh, so can't prime.";
+  if (wseq_to_state_.size() != 1) KALDI_ERR << "RNNLM not fresh, so can't prime.";
   std::vector<Label> bos_seq({bos_index_});
-  KALDI_ASSERT(wseq_to_state_[bos_seq] == 0);
+  if (wseq_to_state_[bos_seq] != 0) KALDI_ERR << "RNNLM not fresh, so can't prime.";
   auto rnnlm = state_to_rnnlm_state_[0];
   for (auto word : words) {
     rnnlm->AddWord(word);

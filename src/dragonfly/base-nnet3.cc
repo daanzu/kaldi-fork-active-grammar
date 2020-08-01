@@ -278,12 +278,13 @@ void BaseNNet3OnlineModelWrapper::RescoreRnnlm(CompactLattice& clat, const std::
     rnnlm::KaldiRnnlmDeterministicFst lm_to_add_orig(rnnlm_max_ngram_order_, *rnnlm_info_);
 
     if (!prime_text.empty()) {
-        KALDI_LOG << "RNNLM Primed with: \"" << prime_text << "\"";
         istringstream iss(prime_text);
         vector<string> words{istream_iterator<string>{iss}, istream_iterator<string>{}};
-        vector<int32> precontext(words.size());
-        for (auto word : words) precontext.push_back(word_syms_->Find(word));
-        lm_to_add_orig.Prime(precontext);
+        vector<int32> word_ids;
+        word_ids.reserve(words.size());
+        for (auto word : words) word_ids.push_back(word_syms_->Find(word));
+        lm_to_add_orig.Prime(word_ids);
+        KALDI_LOG << "RNNLM Primed with: \"" << prime_text << "\"";
     }
 
     DeterministicOnDemandFst<StdArc> *lm_to_add = new ScaleDeterministicOnDemandFst(rnnlm_scale_, &lm_to_add_orig);
