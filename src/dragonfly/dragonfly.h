@@ -44,12 +44,12 @@ DRAGONFLY_API bool decode_otf_gmm(void* model_vp, float samp_freq, int32_t num_f
 	bool* grammars_activity, int32_t grammars_activity_size);
 DRAGONFLY_API bool get_output_otf_gmm(void* model_vp, char* output, int32_t output_length, double* likelihood_p);
 
-bool load_lexicon_base_nnet3(void* model_vp, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp);
-bool save_adaptation_state_base_nnet3(void* model_vp);
-bool reset_adaptation_state_base_nnet3(void* model_vp);
-bool get_word_align_base_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words);
-bool decode_base_nnet3(void* model_vp, float samp_freq, int32_t num_samples, float* samples, bool finalize, bool save_adaptation_state);
-bool get_output_base_nnet3(void* model_vp, char* output, int32_t output_max_length,
+DRAGONFLY_API bool load_lexicon_base_nnet3(void* model_vp, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp);
+DRAGONFLY_API bool save_adaptation_state_base_nnet3(void* model_vp);
+DRAGONFLY_API bool reset_adaptation_state_base_nnet3(void* model_vp);
+DRAGONFLY_API bool get_word_align_base_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words);
+DRAGONFLY_API bool decode_base_nnet3(void* model_vp, float samp_freq, int32_t num_samples, float* samples, bool finalize, bool save_adaptation_state);
+DRAGONFLY_API bool get_output_base_nnet3(void* model_vp, char* output, int32_t output_max_length,
         float* likelihood_p, float* am_score_p, float* lm_score_p, float* confidence_p, float* expected_error_rate_p);
 DRAGONFLY_API bool set_lm_prime_text_base_nnet3(void* model_vp, char* prime_cp);
 
