@@ -64,24 +64,51 @@ BaseNNet3OnlineModelWrapper::BaseNNet3OnlineModelWrapper(BaseNNet3OnlineModelCon
 
     ExecutionTimer timer("Initialization/loading");
 
+    enable_ivector_ = config_->enable_ivector;
+    if (!enable_ivector_) KALDI_ERR << "Disabling ivector not tested!";
+
     if (!config_->ivector_extraction_config_json.empty()) {
-        feature_info_ = new OnlineNnet2FeaturePipelineInfo();
-        ReadConfigFromFile(config_->mfcc_config_filename, &feature_info_->mfcc_opts);  // set from mfcc_config_filename
-        // feature_info_->use_cmvn = true;
-        // feature_info_->cmvn_opts;  // set from cmvn_config_filename
-        feature_info_->use_ivectors = true;
-        auto json_str = nlohmann::json::parse(config_->ivector_extraction_config_json);
-        auto tmp_config = nlohmann::json::parse(config_->ivector_extraction_config_json).get<OnlineIvectorExtractionConfig>();
-        auto ivector_extraction_config = nlohmann::json::parse(config_->ivector_extraction_config_json).get<OnlineIvectorExtractionConfig>();  // from ie_config_filename
+        // Load ivector-extractor from json passed in config, directly into constructed object.
+        feature_info_ = new OnlineNnet2FeaturePipelineInfo();  // starts with defaults
+
+        // From BaseNNet3OnlineModelConfig.mfcc_config_filename, aka OnlineNnet2FeaturePipelineConfig.mfcc_config
+        ReadConfigFromFile(config_->mfcc_config_filename, &feature_info_->mfcc_opts);
+
+        feature_info_->use_ivectors = config_->enable_ivector;
+        // From BaseNNet3OnlineModelConfig.ie_config_filename, aka OnlineNnet2FeaturePipelineConfig.ivector_extraction_config
+        auto ivector_extraction_config = nlohmann::json::parse(config_->ivector_extraction_config_json).get<OnlineIvectorExtractionConfig>();
         feature_info_->ivector_extractor_info.Init(ivector_extraction_config);
+
+        enable_online_cmvn_ = config_->enable_online_cmvn;
+        if (enable_online_cmvn_) {
+            feature_info_->use_cmvn = true;
+            if (!config_->online_cmvn_config_filename.empty())
+                // From BaseNNet3OnlineModelConfig.online_cmvn_config_filename, aka OnlineNnet2FeaturePipelineConfig.cmvn_config.
+                ReadConfigFromFile(config_->online_cmvn_config_filename, &feature_info_->cmvn_opts);
+            // If config filename is empty, assume the original file itself was empty as well, and thus left options at defaults.
+            // We could set feature_info_->cmvn_opts members directly ourselves, after starting with the defaults.
+            if (ivector_extraction_config.global_cmvn_stats_rxfilename.empty()) KALDI_ERR << "Must give global_cmvn_stats_rxfilename";
+            feature_info_->global_cmvn_stats_rxfilename = ivector_extraction_config.global_cmvn_stats_rxfilename;
+            ReadKaldiObject(feature_info_->global_cmvn_stats_rxfilename, &global_cmvn_stats_);
+            // global_cmvn_stats_ = feature_info_->ivector_extractor_info.global_cmvn_stats;  // Just copy from ivector, since we have it
+            if (!ivector_extraction_config.online_cmvn_iextractor) KALDI_ERR << "enable_online_cmvn_ is true, but ivector_extraction_config.online_cmvn_iextractor is false";
+            if (!feature_info_->ivector_extractor_info.online_cmvn_iextractor) KALDI_ERR << "enable_online_cmvn_ is true, but feature_info_->ivector_extractor_info.online_cmvn_iextractor is false";
+            feature_info_->ivector_extractor_info.online_cmvn_iextractor = true;
+        } else {
+            if (feature_info_->ivector_extractor_info.online_cmvn_iextractor) KALDI_ERR << "enable_online_cmvn_ is false, but feature_info_->ivector_extractor_info.online_cmvn_iextractor is true";
+        }
+
         feature_info_->silence_weighting_config.silence_weight = config_->silence_weight;
         feature_info_->silence_weighting_config.silence_phones_str = config_->silence_phones_str;
+
     } else {
+        // Deprecated rewritten-file configuration.
         feature_config_.mfcc_config = config_->mfcc_config_filename;
         feature_config_.ivector_extraction_config = config_->ie_config_filename;
         feature_config_.silence_weighting_config.silence_weight = config_->silence_weight;
         feature_config_.silence_weighting_config.silence_phones_str = config_->silence_phones_str;
         feature_info_ = new OnlineNnet2FeaturePipelineInfo(feature_config_);
+        if (config_->enable_online_cmvn) KALDI_WARN << "online-cmvn not supported with this configuration";
     }
 
     {
@@ -105,7 +132,7 @@ BaseNNet3OnlineModelWrapper::BaseNNet3OnlineModelWrapper(BaseNNet3OnlineModelCon
 
     LoadLexicon(config_->word_syms_filename, config_->word_align_lexicon_filename);
 
-    enable_rnnlm_ = (!config_->rnnlm_nnet_filename.empty() && !config_->rnnlm_word_embed_filename.empty() && !config_->rnnlm_orig_grammar_filename.empty());
+    enable_rnnlm_ = config_->enable_rnnlm;
     if (enable_rnnlm_) {
         ExecutionTimer timer("loading rnnlm");
         // config_->rnnlm_nnet_filename = "rnnlm/" + "final.raw";
@@ -125,7 +152,8 @@ BaseNNet3OnlineModelWrapper::BaseNNet3OnlineModelWrapper(BaseNNet3OnlineModelCon
         rnnlm_opts_.eos_index = word_syms_->Find("</s>");
         rnnlm_info_ = new rnnlm::RnnlmComputeStateInfo(rnnlm_opts_, rnnlm_, word_embedding_mat_);
         rnnlm_max_ngram_order_ = 4;
-    }
+    } else if (!config_->rnnlm_nnet_filename.empty() || !config_->rnnlm_word_embed_filename.empty() || !config_->rnnlm_orig_grammar_filename.empty())
+        KALDI_ERR << "enable_rnnlm_ is false, but some rnnlm options are set";
 }
 
 BaseNNet3OnlineModelWrapper::~BaseNNet3OnlineModelWrapper() {
@@ -200,7 +228,8 @@ void BaseNNet3OnlineModelWrapper::StartDecoding() {
 
     // Setup
     feature_pipeline_ = new OnlineNnet2FeaturePipeline(*feature_info_);
-    feature_pipeline_->SetAdaptationState(*adaptation_state_);
+    if (enable_ivector_) feature_pipeline_->SetAdaptationState(*adaptation_state_);
+    if (enable_online_cmvn_) feature_pipeline_->SetCmvnState(*online_cmvn_state_);
     silence_weighting_ = new OnlineSilenceWeighting(
         trans_model_, feature_info_->silence_weighting_config,
         decodable_config_.frame_subsampling_factor);
@@ -215,8 +244,9 @@ void BaseNNet3OnlineModelWrapper::CleanupDecoder() {
 }
 
 bool BaseNNet3OnlineModelWrapper::SaveAdaptationState() {
-    if (feature_pipeline_ != nullptr) {
-        feature_pipeline_->GetAdaptationState(adaptation_state_);
+    if (feature_pipeline_) {
+        if (enable_ivector_) feature_pipeline_->GetAdaptationState(adaptation_state_);
+        if (enable_online_cmvn_) feature_pipeline_->GetCmvnState(online_cmvn_state_);
         KALDI_LOG << "Saved adaptation state.";
         return true;
     }
@@ -225,7 +255,11 @@ bool BaseNNet3OnlineModelWrapper::SaveAdaptationState() {
 
 void BaseNNet3OnlineModelWrapper::ResetAdaptationState() {
     delete adaptation_state_;
-    adaptation_state_ = new OnlineIvectorExtractorAdaptationState(feature_info_->ivector_extractor_info);
+    adaptation_state_ = nullptr;
+    if (enable_ivector_) adaptation_state_ = new OnlineIvectorExtractorAdaptationState(feature_info_->ivector_extractor_info);
+    delete online_cmvn_state_;
+    online_cmvn_state_ = nullptr;
+    if (enable_online_cmvn_) online_cmvn_state_ = new OnlineCmvnState(global_cmvn_stats_);
 }
 
 bool BaseNNet3OnlineModelWrapper::GetWordAlignment(std::vector<string>& words, std::vector<int32>& times, std::vector<int32>& lengths, bool include_eps) {
@@ -366,21 +400,8 @@ bool BaseNNet3OnlineModelWrapper::Decode(Decoder* decoder, BaseFloat samp_freq, 
         tot_frames_decoded_ += tot_frames_;
         tot_frames_ = 0;
 
-        if (save_adaptation_state) {
-            feature_pipeline_->GetAdaptationState(adaptation_state_);
-            KALDI_LOG << "Saved adaptation state";
-            // std::string output;
-            // double likelihood;
-            // GetDecodedString(output, likelihood);
-            // // int count_terminals = std::count_if(output.begin(), output.end(), [](std::string word){ return word[0] != '#'; });
-            // if (output.size() > 0) {
-            //     feature_pipeline->GetAdaptationState(adaptation_state);
-            //     KALDI_LOG << "Saved adaptation state." << output;
-            //     free_decoder();
-            // } else {
-            //     KALDI_LOG << "Did not save adaptation state, because empty recognition.";
-            // }
-        }
+        if (save_adaptation_state)
+            SaveAdaptationState();
     }
 
     return true;

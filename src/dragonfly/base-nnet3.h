@@ -63,10 +63,14 @@ struct BaseNNet3OnlineModelConfig {
     std::string model_filename;
     std::string word_syms_filename;
     std::string word_align_lexicon_filename;
+    bool enable_ivector = true;
+    bool enable_online_cmvn = false;
+    std::string online_cmvn_config_filename;  // frequently file exists but is empty (except for comment)
+    bool enable_rnnlm = false;
     std::string rnnlm_nnet_filename;
     std::string rnnlm_word_embed_filename;
     std::string rnnlm_orig_grammar_filename;
-    std::string ivector_extraction_config_json;  // from ie_config_filename
+    std::string ivector_extraction_config_json;  // extracted from ie_config_filename
 
     virtual bool Set(const std::string& name, const nlohmann::json& value) {
         if (name == "beam") { value.get_to(beam); return true; }
@@ -84,6 +88,10 @@ struct BaseNNet3OnlineModelConfig {
         if (name == "model_filename") { value.get_to(model_filename); return true; }
         if (name == "word_syms_filename") { value.get_to(word_syms_filename); return true; }
         if (name == "word_align_lexicon_filename") { value.get_to(word_align_lexicon_filename); return true; }
+        if (name == "enable_ivector") { value.get_to(enable_ivector); return true; }
+        if (name == "enable_online_cmvn") { value.get_to(enable_online_cmvn); return true; }
+        if (name == "online_cmvn_config_filename") { value.get_to(online_cmvn_config_filename); return true; }
+        if (name == "enable_rnnlm") { value.get_to(enable_rnnlm); return true; }
         if (name == "rnnlm_nnet_filename") { value.get_to(rnnlm_nnet_filename); return true; }
         if (name == "rnnlm_word_embed_filename") { value.get_to(rnnlm_word_embed_filename); return true; }
         if (name == "rnnlm_orig_grammar_filename") { value.get_to(rnnlm_orig_grammar_filename); return true; }
@@ -109,6 +117,10 @@ struct BaseNNet3OnlineModelConfig {
         ss << "\n    " << "model_filename: " << model_filename;
         ss << "\n    " << "word_syms_filename: " << word_syms_filename;
         ss << "\n    " << "word_align_lexicon_filename: " << word_align_lexicon_filename;
+        ss << "\n    " << "enable_ivector: " << enable_ivector;
+        ss << "\n    " << "enable_online_cmvn: " << enable_online_cmvn;
+        ss << "\n    " << "online_cmvn_config_filename: " << online_cmvn_config_filename;
+        ss << "\n    " << "enable_rnnlm: " << enable_rnnlm;
         ss << "\n    " << "rnnlm_nnet_filename: " << rnnlm_nnet_filename;
         ss << "\n    " << "rnnlm_word_embed_filename: " << rnnlm_word_embed_filename;
         ss << "\n    " << "rnnlm_orig_grammar_filename: " << rnnlm_orig_grammar_filename;
@@ -143,8 +155,8 @@ class BaseNNet3OnlineModelWrapper {
 
         bool LoadLexicon(std::string& word_syms_filename, std::string& word_align_lexicon_filename);
 
-        bool SaveAdaptationState();
-        void ResetAdaptationState();
+        bool SaveAdaptationState();  // Handles ivector-adaptation and online-cmvn
+        void ResetAdaptationState();  // Handles ivector-adaptation and online-cmvn
         virtual bool GetWordAlignment(std::vector<string>& words, std::vector<int32>& times, std::vector<int32>& lengths, bool include_eps);
         void SetLmPrimeText(const std::string& prime_text) { lm_prime_text_ = prime_text; };
 
@@ -178,9 +190,17 @@ class BaseNNet3OnlineModelWrapper {
         // Decoder objects
         OnlineNnet2FeaturePipeline* feature_pipeline_ = nullptr;  // reinstantiated per utterance
         OnlineSilenceWeighting* silence_weighting_ = nullptr;  // reinstantiated per utterance
-        OnlineIvectorExtractorAdaptationState* adaptation_state_ = nullptr;
         WordAlignLatticeLexiconInfo* word_align_lexicon_info_ = nullptr;
         std::set<int32> word_align_lexicon_words_;  // contains word-ids that are in word_align_lexicon_info_
+
+        // Ivector
+        bool enable_ivector_ = false;
+        OnlineIvectorExtractorAdaptationState* adaptation_state_ = nullptr;
+
+        // Online-CMVN
+        bool enable_online_cmvn_ = false;
+        Matrix<double> global_cmvn_stats_;
+        OnlineCmvnState* online_cmvn_state_ = nullptr;
 
         // RNNLM
         bool enable_rnnlm_ = false;
