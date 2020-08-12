@@ -160,3 +160,5 @@ GSYMS
 /build*
 
 .vscode/
+
+egs/**/export/
