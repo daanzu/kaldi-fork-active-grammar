@@ -13,7 +13,7 @@ OBJFILES = base-nnet3.o agf-sub-nnet3.o plain-sub-nnet3.o
 
 LIBNAME = kaldi-dragonfly
 DynamicLibrary = kaldi-dragonfly
-DynamicLibraryExtras = dragonfly.h targetver.h dllmain.cc
+DynamicLibraryExtras = dragonfly.h windows-targetver.h windows-dllmain.cc
 
 ADDLIBS = ../ivector/kaldi-ivector.a ../nnet3/kaldi-nnet3.a \
           ../chain/kaldi-chain.a ../nnet2/kaldi-nnet2.a \
