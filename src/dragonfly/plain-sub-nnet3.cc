@@ -208,27 +208,6 @@ void* init_plain_nnet3(char* model_dir_cp, char* config_str_cp, int32_t verbosit
     return model;
 }
 
-bool load_lexicon_plain_nnet3(void* model_vp, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp) {
-    return load_lexicon_base_nnet3(model_vp, word_syms_filename_cp, word_align_lexicon_filename_cp);
-}
-
-bool save_adaptation_state_plain_nnet3(void* model_vp) {
-    return save_adaptation_state_base_nnet3(model_vp);
-}
-
-bool reset_adaptation_state_plain_nnet3(void* model_vp) {
-    return reset_adaptation_state_base_nnet3(model_vp);
-}
-
-bool get_word_align_plain_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words) {
-    return get_word_align_base_nnet3(model_vp, times_cp, lengths_cp, num_words);
-}
-
 bool decode_plain_nnet3(void* model_vp, float samp_freq, int32_t num_samples, float* samples, bool finalize, bool save_adaptation_state) {
     return decode_base_nnet3(model_vp, samp_freq, num_samples, samples, finalize, save_adaptation_state);
-}
-
-bool get_output_plain_nnet3(void* model_vp, char* output, int32_t output_max_length,
-        float* likelihood_p, float* am_score_p, float* lm_score_p, float* confidence_p, float* expected_error_rate_p) {
-    return get_output_base_nnet3(model_vp, output, output_max_length, likelihood_p, am_score_p, lm_score_p, confidence_p, expected_error_rate_p);
 }
