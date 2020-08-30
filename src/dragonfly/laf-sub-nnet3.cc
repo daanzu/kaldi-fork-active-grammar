@@ -45,7 +45,18 @@ using namespace fst;
 LafNNet3OnlineModelWrapper::LafNNet3OnlineModelWrapper(LafNNet3OnlineModelConfig::Ptr config, int32 verbosity)
     : BaseNNet3OnlineModelWrapper(config, verbosity), config_(config) {
     hcl_fst_ = fst::StdOLabelLookAheadFst::Read(config_->hcl_fst_filename);
-    ReadIntegerVectorSimple(config_->disambig_tids_filename, &disambig_tids_);
+    if (!ReadIntegerVectorSimple(config_->disambig_tids_filename, &disambig_tids_))
+        KALDI_ERR << "cannot read disambig_tids file";
+
+    {
+        std::vector<std::vector<int32> > list;
+        if (!ReadIntegerVectorVectorSimple(config_->relabel_ilabels_filename, &list))
+            KALDI_ERR << "cannot read relabel_ilabels file";
+        for (auto line : list) {
+            if (line.size() != 2) KALDI_ERR << "badly formatted relabel_ilabels file";
+            relabel_ilabels_.emplace_back(line[0], line[1]);
+        }
+    }
 
     if (!config_->dictation_fst_filename.empty())
         dictation_fst_ = ReadFstFile(config_->dictation_fst_filename);
@@ -62,33 +73,52 @@ LafNNet3OnlineModelWrapper::~LafNNet3OnlineModelWrapper() {
     delete rule_relabel_mapper_;
 }
 
+// void LafNNet3OnlineModelWrapper::PendNonterm()
+
 int32 LafNNet3OnlineModelWrapper::AddGrammarFst(std::string& grammar_fst_filename) {
+    ExecutionTimer timer("AddGrammarFst");
     auto grammar_fst_index = grammar_fsts_.size();
-    auto grammar_fst_in = ReadFstFile(grammar_fst_filename);
-    auto grammar_fst = new fst::StdVectorFst(*grammar_fst_in);
+    if (grammar_fst_index >= config_->max_num_rules) KALDI_ERR << "cannot add more than max number of rules";
+
+    // auto grammar_fst_in = ReadFstFile(grammar_fst_filename);
+    // auto grammar_fst = new fst::StdVectorFst(*grammar_fst_in);
+
+    auto grammar_fst = fst::StdVectorFst::Read(grammar_fst_filename);
+
+    timer.step();
+    static const std::vector<std::pair<StdArc::Label, StdArc::Label>> olabels;  // Always empty
+    fst::Relabel(grammar_fst, relabel_ilabels_, olabels);
+    timer.step();
+    fst::ArcSort(grammar_fst, fst::ILabelCompare<StdArc>());
+    timer.step();
+
+    if (false) {
+        {
+            int32 nonterm = word_syms_->Find("#nonterm:rule0") + grammar_fst_index;
+            VectorFst<StdArc> nonterm_fst;
+            nonterm_fst.AddState();
+            nonterm_fst.SetStart(0);
+            nonterm_fst.AddState();
+            nonterm_fst.SetFinal(1, 0.0);
+            nonterm_fst.AddArc(0, StdArc(0, nonterm, 0.0, 1));
+            fst::Concat(nonterm_fst, grammar_fst);
+        }
+        {
+            int32 nonterm = word_syms_->Find("#nonterm:end");
+            VectorFst<StdArc> nonterm_fst;
+            nonterm_fst.AddState();
+            nonterm_fst.SetStart(0);
+            nonterm_fst.AddState();
+            nonterm_fst.SetFinal(1, 0.0);
+            nonterm_fst.AddArc(0, StdArc(0, nonterm, 0.0, 1));
+            fst::Concat(grammar_fst, nonterm_fst);
+        }
+        timer.step();
+    }
+
+    auto grammar_const_fst = new fst::StdConstFst(*grammar_fst);
+    timer.step();
     KALDI_VLOG(2) << "adding FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst_filename;
-
-    {
-        int32 grammar_pend_nonterm = word_syms_->Find("#nonterm:rule0") + grammar_fst_index;
-        VectorFst<StdArc> nonterm_fst;
-        nonterm_fst.AddState();
-        nonterm_fst.SetStart(0);
-        nonterm_fst.AddState();
-        nonterm_fst.SetFinal(1, 0.0);
-        nonterm_fst.AddArc(0, StdArc(0, grammar_pend_nonterm, 0.0, 1));
-        fst::Concat(nonterm_fst, grammar_fst);
-    }
-    {
-        int32 grammar_pend_nonterm = word_syms_->Find("#nonterm:end");
-        VectorFst<StdArc> nonterm_fst;
-        nonterm_fst.AddState();
-        nonterm_fst.SetStart(0);
-        nonterm_fst.AddState();
-        nonterm_fst.SetFinal(1, 0.0);
-        nonterm_fst.AddArc(0, StdArc(0, grammar_pend_nonterm, 0.0, 1));
-        fst::Concat(grammar_fst, nonterm_fst);
-    }
-
     grammar_fsts_.emplace_back(grammar_fst);
     grammar_fsts_filename_map_[grammar_fst] = grammar_fst_filename;
     // if (active_grammar_fst_) {
@@ -143,12 +173,35 @@ void LafNNet3OnlineModelWrapper::StartDecoding() {
     //     active_grammar_fst_ = new ActiveGrammarFst(config_->nonterm_phones_offset, *top_fst_, ifsts);
     // }
 
-    if (grammar_fsts_.size() != 2) KALDI_ERR << "grammar_fsts_ bad size!";
-    // auto fst::ComposeFst()
-    // auto decode_fst = fst::LookaheadComposeFst(*grammar_fsts_[0], *grammar_fsts_[1], disambig_tids_);
-    auto union_fst = fst::UnionFst<StdArc>(*grammar_fsts_[0], *grammar_fsts_[1]);
+    // if (grammar_fsts_.size() != 2) KALDI_ERR << "grammar_fsts_ bad size!";
     // auto decode_fst = fst::LookaheadComposeFst(*hcl_fst_, *grammar_fsts_[0], disambig_tids_);
-    auto decode_fst = fst::LookaheadComposeFst(*hcl_fst_, union_fst, disambig_tids_);
+    // auto union_fst = fst::UnionFst<StdArc>(*grammar_fsts_[0], *grammar_fsts_[1]);
+    // auto decode_fst = fst::LookaheadComposeFst(*hcl_fst_, union_fst, disambig_tids_);
+
+    auto rules_words_offset = word_syms_->Find("#nonterm:rule0");
+    auto top_fst_nonterm = rules_words_offset + config_->max_num_rules + 1;
+    VectorFst<StdArc> top_fst;
+    auto start_state = top_fst.AddState();
+    top_fst.SetStart(start_state);
+    auto final_state = top_fst.AddState();
+    top_fst.SetFinal(final_state, 0.0);
+    top_fst.SetFinal(start_state, 0.0);  // Allow start state to be final for no rule
+    top_fst.AddArc(0, StdArc(0, 0, 0.0, final_state));  // Allow epsilon transition for no rule
+    // for (size_t i = 0; i <= config_->max_num_rules; ++i) {
+    for (size_t i = 0; i <= grammar_fsts_.size(); ++i) {
+        top_fst.AddState();
+        top_fst.AddArc(0, StdArc(0, (rules_words_offset + i), 0.0, final_state));
+    }
+
+    std::vector<std::pair<int32, const StdFst *> > ifsts;
+    ifsts.emplace_back(top_fst_nonterm, new fst::StdConstFst(top_fst));
+    // for (size_t i = 0; i <= config_->max_num_rules; ++i)
+    //     ifsts.emplace_back((rules_words_offset + i), grammar_fsts_.at(i));
+    for (auto grammar_fst : grammar_fsts_)
+        ifsts.emplace_back((rules_words_offset + ifsts.size() - 1), grammar_fst);
+    fst::ReplaceFstOptions<StdArc> replace_options(top_fst_nonterm, fst::REPLACE_LABEL_OUTPUT, fst::REPLACE_LABEL_OUTPUT, word_syms_->Find("#nonterm:end"));
+    auto replace_fst = fst::ReplaceFst<StdArc>(ifsts, replace_options);
+    auto decode_fst = fst::LookaheadComposeFst(*hcl_fst_, replace_fst, disambig_tids_);
 
     auto grammars_activity = grammars_activity_;
     grammars_activity.push_back(dictation_fst_ != nullptr);  // dictation_fst_ is only enabled if present

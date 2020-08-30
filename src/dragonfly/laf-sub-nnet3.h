@@ -48,15 +48,21 @@ struct LafNNet3OnlineModelConfig : public BaseNNet3OnlineModelConfig {
 
     static constexpr auto Create = BaseNNet3OnlineModelConfig::Create<LafNNet3OnlineModelConfig>;
 
-    std::string hcl_fst_filename;
-    std::string disambig_tids_filename;
+    std::string hcl_fst_filename = "HCLr.fst";
+    std::string disambig_tids_filename = "disambig_tids.int";
+    std::string relabel_ilabels_filename = "relabel_ilabels.int";
     std::string dictation_fst_filename;
+    int32 rules_words_offset = 1000000;
+    int32 max_num_rules = 9999;
 
     bool Set(const std::string& name, const nlohmann::json& value) override {
         if (BaseNNet3OnlineModelConfig::Set(name, value)) { return true; }
         if (name == "hcl_fst_filename") { hcl_fst_filename = value.get<std::string>(); return true; }
         if (name == "disambig_tids_filename") { disambig_tids_filename = value.get<std::string>(); return true; }
+        if (name == "relabel_ilabels_filename") { relabel_ilabels_filename = value.get<std::string>(); return true; }
         if (name == "dictation_fst_filename") { dictation_fst_filename = value.get<std::string>(); return true; }
+        if (name == "rules_words_offset") { rules_words_offset = value.get<int32>(); return true; }
+        if (name == "max_num_rules") { max_num_rules = value.get<int32>(); return true; }
         return false;
     }
 
@@ -66,7 +72,10 @@ struct LafNNet3OnlineModelConfig : public BaseNNet3OnlineModelConfig {
         ss << "LafNNet3OnlineModelConfig...";
         ss << "\n    " << "hcl_fst_filename: " << hcl_fst_filename;
         ss << "\n    " << "disambig_tids_filename: " << disambig_tids_filename;
+        ss << "\n    " << "relabel_ilabels_filename: " << relabel_ilabels_filename;
         ss << "\n    " << "dictation_fst_filename: " << dictation_fst_filename;
+        ss << "\n    " << "rules_words_offset: " << rules_words_offset;
+        ss << "\n    " << "max_num_rules: " << max_num_rules;
         return ss.str();
     }
 };
@@ -93,6 +102,7 @@ class LafNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
         // Model
         StdFst *hcl_fst_ = nullptr;
         std::vector<int32> disambig_tids_;
+        std::vector<std::pair<StdArc::Label, StdArc::Label>> relabel_ilabels_;
         StdConstFst *dictation_fst_ = nullptr;
         std::vector<StdFst*> grammar_fsts_;
         std::map<StdFst*, std::string> grammar_fsts_filename_map_;  // maps grammar_fst -> name; for debugging
