@@ -201,7 +201,9 @@ StdConstFst* BaseNNet3OnlineModelWrapper::ReadFstFile(std::string filename) {
         KALDI_WARN << "cannot read text fst file " << filename;
         return nullptr;
     } else {
-        return dynamic_cast<StdConstFst*>(ReadFstKaldiGeneric(filename));
+        auto fst = dynamic_cast<StdConstFst*>(ReadFstKaldiGeneric(filename));
+        if (!fst) KALDI_ERR << "could not load as StdConstFst";
+        return fst;
     }
 }
 
