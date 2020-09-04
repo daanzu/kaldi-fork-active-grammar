@@ -192,21 +192,8 @@ bool LafNNet3OnlineModelWrapper::RemoveGrammarFst(int32 grammar_fst_index) {
     return true;
 }
 
-void LafNNet3OnlineModelWrapper::StartDecoding() {
-    ExecutionTimer timer("StartDecoding", 2);
-    BaseNNet3OnlineModelWrapper::StartDecoding();
-
-    // if (active_grammar_fst_ == nullptr) {
-    //     std::vector<std::pair<int32, const StdConstFst *> > ifsts;
-    //     for (auto grammar_fst : grammar_fsts_) {
-    //         int32 nonterm_phone = config_->rules_phones_offset + ifsts.size();
-    //         ifsts.emplace_back(std::make_pair(nonterm_phone, grammar_fst));
-    //     }
-    //     if (dictation_fst_ != nullptr) {
-    //         ifsts.emplace_back(std::make_pair(config_->dictation_phones_offset, dictation_fst_));
-    //     }
-    //     active_grammar_fst_ = new ActiveGrammarFst(config_->nonterm_phones_offset, *top_fst_, ifsts);
-    // }
+fst::StdFst* LafNNet3OnlineModelWrapper::BuildDecodeFst(const std::vector<fst::StdFst*>& grammar_fsts) {
+    ExecutionTimer timer("BuildDecodeFst");
 
     // auto union_fst = fst::UnionFst<StdArc>(*grammar_fsts_[0], *grammar_fsts_[1]);
     // auto decode_fst = fst::LookaheadComposeFst(*hcl_fst_, union_fst, disambig_tids_);
@@ -222,15 +209,15 @@ void LafNNet3OnlineModelWrapper::StartDecoding() {
     top_fst.SetStart(start_state);
     auto final_state = top_fst.AddState();
     top_fst.SetFinal(final_state, 0.0);
+
     top_fst.SetFinal(start_state, 0.0);  // Allow start state to be final for no rule
     top_fst.AddArc(0, StdArc(0, 0, 0.0, final_state));  // Allow epsilon transition for no rule
     for (auto word : std::vector<std::string>{ "!SIL", "<unk>" })  // FIXME: make these configurable
         top_fst.AddArc(0, StdArc(word_syms_->Find(word), 0, 0.0, final_state));
+
     if (grammar_fsts_.size() > config_->max_num_rules) KALDI_ERR << "more grammars than max number";
-    // for (size_t i = 0; i <= config_->max_num_rules; ++i) {
     for (size_t i = 0; i < grammar_fsts_.size(); ++i) {
         top_fst.AddArc(0, StdArc(0, (rules_words_offset + i), 0.0, final_state));
-        // top_fst.AddArc(0, StdArc((rules_words_offset + i), (rules_words_offset + i), 0.0, final_state));
         label_fst_pairs.emplace_back((rules_words_offset + i), grammar_fsts_.at(i));
     }
     if (dictation_fst_ != nullptr)
@@ -239,20 +226,30 @@ void LafNNet3OnlineModelWrapper::StartDecoding() {
     fst::ArcSort(&top_fst, fst::StdILabelCompare());
 
     label_fst_pairs.emplace_back(top_fst_nonterm, new fst::StdConstFst(top_fst));
-    // for (size_t i = 0; i <= config_->max_num_rules; ++i)
-    //     label_fst_pairs.emplace_back((rules_words_offset + i), grammar_fsts_.at(i));
-    // for (auto grammar_fst : grammar_fsts_)
-    //     label_fst_pairs.emplace_back((rules_words_offset + label_fst_pairs.size() - 1), grammar_fst);
     fst::ReplaceFstOptions<StdArc> replace_options(top_fst_nonterm, fst::REPLACE_LABEL_OUTPUT, fst::REPLACE_LABEL_OUTPUT, word_syms_->Find("#nonterm:end"));
     auto replace_fst = fst::ReplaceFst<StdArc>(label_fst_pairs, replace_options);
     auto decode_fst = fst::LookaheadComposeFst(*hcl_fst_, replace_fst, disambig_tids_);
+    return decode_fst;
+}
 
-    auto grammars_activity = grammars_activity_;
-    grammars_activity.push_back(dictation_fst_ != nullptr);  // dictation_fst_ is only enabled if present
-    // active_grammar_fst_->UpdateActivity(grammars_activity);
+void LafNNet3OnlineModelWrapper::StartDecoding() {
+    ExecutionTimer timer("StartDecoding", 2);
+    BaseNNet3OnlineModelWrapper::StartDecoding();
+
+    if (!decode_fst_ || (decode_fst_grammars_activity_ != grammars_activity_)) {
+        delete decode_fst_;
+        KALDI_ASSERT(grammar_fsts_.size() == grammars_activity_.size());
+        decode_fst_grammars_activity_ = grammars_activity_;
+
+        std::vector<fst::StdFst*> active_grammar_fsts;
+        for (size_t i = 0; i < grammar_fsts_.size(); ++i)
+            if (decode_fst_grammars_activity_[i])
+                active_grammar_fsts.emplace_back(grammar_fsts_[i]);
+        decode_fst_ = BuildDecodeFst(active_grammar_fsts);
+    }
 
     decoder_ = new SingleUtteranceNnet3DecoderTpl<fst::StdFst>(
-        decoder_config_, trans_model_, *decodable_info_, *decode_fst, feature_pipeline_);
+        decoder_config_, trans_model_, *decodable_info_, *decode_fst_, feature_pipeline_);
 }
 
 void LafNNet3OnlineModelWrapper::CleanupDecoder() {

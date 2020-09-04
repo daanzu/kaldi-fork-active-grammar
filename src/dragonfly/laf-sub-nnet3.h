@@ -117,12 +117,14 @@ class LafNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
         std::vector<bool> grammars_activity_;  // bitfield of whether each grammar is active for current/upcoming utterance
 
         // Model objects
-        // ActiveGrammarFst* active_grammar_fst_ = nullptr;
+        StdFst* decode_fst_ = nullptr;
+        std::vector<bool> decode_fst_grammars_activity_;  // grammars_activity_ for decode_fst_ creation
 
         // Decoder objects
         SingleUtteranceNnet3DecoderTpl<fst::StdFst>* decoder_ = nullptr;  // reinstantiated per utterance
         CombineRuleNontermMapper<CompactLatticeArc>* rule_relabel_mapper_ = nullptr;
 
+        fst::StdFst* BuildDecodeFst(const std::vector<fst::StdFst*>& grammar_fsts);
         void StartDecoding() override;
         void CleanupDecoder() override;
 };
