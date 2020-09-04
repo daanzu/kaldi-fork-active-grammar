@@ -30,6 +30,8 @@ class ExecutionTimer {
 
    private:
     const Clock::time_point start_time_ = Clock::now();
+    Clock::time_point last_time_ = Clock::now();
+    int32 step_count_ = 0;
     const std::string description_;
     const int32 verbosity_;
     bool stopped_ = false;
@@ -47,8 +49,18 @@ class ExecutionTimer {
 
     inline void stop() {
         const auto end_time = Clock::now();
-        KALDI_VLOG(verbosity_) << "ExecutionTimer: Completed " << description_ << " in " << pretty_duration(start_time_, end_time);
+        KALDI_VLOG(verbosity_) << "ExecutionTimer: " << description_ << " completed in " << pretty_duration(start_time_, end_time);
         stopped_ = true;
+    }
+
+    inline void step(const std::string& step_description = "") {
+        const auto now_time = Clock::now();
+        step_count_ += 1;
+        KALDI_VLOG(verbosity_) << "ExecutionTimer: " << description_ << " hit Step "
+            << ((!step_description.empty()) ? step_description : ("#" + std::to_string(step_count_)))
+            << " with Split " << pretty_duration(start_time_, now_time)
+            << " and Lap " << pretty_duration(last_time_, now_time);
+        last_time_ = now_time;
     }
 
    private:
