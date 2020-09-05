@@ -86,9 +86,12 @@ class LafNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
         LafNNet3OnlineModelWrapper(LafNNet3OnlineModelConfig::Ptr config, int32 verbosity = DEFAULT_VERBOSITY);
         ~LafNNet3OnlineModelWrapper() override;
 
-        virtual int32 AddGrammarFst(std::string& grammar_fst_filename);
-        virtual bool ReloadGrammarFst(int32 grammar_fst_index, std::string& grammar_fst_filename);
-        virtual bool RemoveGrammarFst(int32 grammar_fst_index);
+        void PrepareGrammarFst(fst::StdVectorFst* grammar_fst);
+        int32 AddGrammarFst(fst::StdFst* grammar_fst, std::string grammar_name = "<unnamed>");
+        int32 AddGrammarFst(std::istream& grammar_text);
+        int32 AddGrammarFst(std::string& grammar_fst_filename);
+        bool ReloadGrammarFst(int32 grammar_fst_index, std::string& grammar_fst_filename);
+        bool RemoveGrammarFst(int32 grammar_fst_index);
         void SetActiveGrammars(const std::vector<bool>& grammars_activity) { grammars_activity_ = grammars_activity; };
 
         bool Decode(BaseFloat samp_freq, const Vector<BaseFloat>& frames, bool finalize, const std::vector<bool>& grammars_activity, bool save_adaptation_state = true);
@@ -105,8 +108,8 @@ class LafNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
         std::vector<std::pair<StdArc::Label, StdArc::Label>> relabel_ilabels_;
         StdConstFst *dictation_fst_ = nullptr;
         std::vector<StdFst*> grammar_fsts_;
-        std::map<StdFst*, std::string> grammar_fsts_filename_map_;  // maps grammar_fst -> name; for debugging
-        // INVARIANT: same size: grammar_fsts_, grammar_fsts_filename_map_
+        std::map<StdFst*, std::string> grammar_fsts_name_map_;  // maps grammar_fst -> name; for debugging
+        // INVARIANT: same size: grammar_fsts_, grammar_fsts_name_map_
         std::vector<bool> grammars_activity_;  // bitfield of whether each grammar is active for current/upcoming utterance
 
         // Model objects

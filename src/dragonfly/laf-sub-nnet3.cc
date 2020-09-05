@@ -29,6 +29,7 @@
 #include "lat/word-align-lattice-lexicon.h"
 #include "nnet3/nnet-utils.h"
 #include "decoder/active-grammar-fst.h"
+#include "fst/script/compile.h"
 
 #include "laf-sub-nnet3.h"
 #include "utils.h"
@@ -75,52 +76,66 @@ LafNNet3OnlineModelWrapper::~LafNNet3OnlineModelWrapper() {
 
 // void LafNNet3OnlineModelWrapper::PendNonterm()
 
-int32 LafNNet3OnlineModelWrapper::AddGrammarFst(std::string& grammar_fst_filename) {
-    ExecutionTimer timer("AddGrammarFst");
-    auto grammar_fst_index = grammar_fsts_.size();
-    if (grammar_fst_index >= config_->max_num_rules) KALDI_ERR << "cannot add more than max number of rules";
-
-    // auto grammar_fst_in = ReadFstFile(grammar_fst_filename);
-    // auto grammar_fst = new fst::StdVectorFst(*grammar_fst_in);
-
-    auto grammar_fst = fst::StdVectorFst::Read(grammar_fst_filename);
-
-    timer.step();
+void LafNNet3OnlineModelWrapper::PrepareGrammarFst(fst::StdVectorFst* grammar_fst) {
+    ExecutionTimer timer("PrepareGrammarFst");
     static const std::vector<std::pair<StdArc::Label, StdArc::Label>> olabels;  // Always empty
     fst::Relabel(grammar_fst, relabel_ilabels_, olabels);
     timer.step();
     fst::ArcSort(grammar_fst, fst::ILabelCompare<StdArc>());
     timer.step();
 
-    if (false) {
-        {
-            int32 nonterm = word_syms_->Find("#nonterm:rule0") + grammar_fst_index;
-            VectorFst<StdArc> nonterm_fst;
-            nonterm_fst.AddState();
-            nonterm_fst.SetStart(0);
-            nonterm_fst.AddState();
-            nonterm_fst.SetFinal(1, 0.0);
-            nonterm_fst.AddArc(0, StdArc(0, nonterm, 0.0, 1));
-            fst::Concat(nonterm_fst, grammar_fst);
-        }
-        {
-            int32 nonterm = word_syms_->Find("#nonterm:end");
-            VectorFst<StdArc> nonterm_fst;
-            nonterm_fst.AddState();
-            nonterm_fst.SetStart(0);
-            nonterm_fst.AddState();
-            nonterm_fst.SetFinal(1, 0.0);
-            nonterm_fst.AddArc(0, StdArc(0, nonterm, 0.0, 1));
-            fst::Concat(grammar_fst, nonterm_fst);
-        }
-        timer.step();
-    }
+    // if (true) {
+    //     {
+    //         int32 nonterm = word_syms_->Find("#nonterm:rule0") + grammar_fst_index;
+    //         VectorFst<StdArc> nonterm_fst;
+    //         nonterm_fst.AddState();
+    //         nonterm_fst.SetStart(0);
+    //         nonterm_fst.AddState();
+    //         nonterm_fst.SetFinal(1, 0.0);
+    //         nonterm_fst.AddArc(0, StdArc(0, nonterm, 0.0, 1));
+    //         fst::Concat(nonterm_fst, grammar_fst);
+    //     }
+    //     {
+    //         int32 nonterm = word_syms_->Find("#nonterm:end");
+    //         VectorFst<StdArc> nonterm_fst;
+    //         nonterm_fst.AddState();
+    //         nonterm_fst.SetStart(0);
+    //         nonterm_fst.AddState();
+    //         nonterm_fst.SetFinal(1, 0.0);
+    //         nonterm_fst.AddArc(0, StdArc(0, nonterm, 0.0, 1));
+    //         fst::Concat(grammar_fst, nonterm_fst);
+    //     }
+    //     timer.step();
+    // }
+}
 
-    auto grammar_const_fst = new fst::StdConstFst(*grammar_fst);
+int32 LafNNet3OnlineModelWrapper::AddGrammarFst(std::string& grammar_fst_filename) {
+    // auto grammar_fst_in = ReadFstFile(grammar_fst_filename);
+    // auto grammar_fst = new fst::StdVectorFst(*grammar_fst_in);
+    auto grammar_fst = fst::StdVectorFst::Read(grammar_fst_filename);
+    PrepareGrammarFst(grammar_fst);
+    return AddGrammarFst(new fst::StdConstFst(*grammar_fst), grammar_fst_filename);
+}
+
+int32 LafNNet3OnlineModelWrapper::AddGrammarFst(std::istream& grammar_text) {
+    ExecutionTimer timer("AddGrammarFst");
+    // std::istringstream iss(grammar_text);
+    // FIXME: fix build for linux and macos, and CI for windows
+    auto grammar_fstclass = fst::script::CompileFstInternal(grammar_text, "<AddGrammarFst>", "vector", "standard", word_syms_, word_syms_, nullptr, false, false, false, false, false);
     timer.step();
-    KALDI_VLOG(2) << "adding FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst_filename;
+    auto grammar_fst = dynamic_cast<StdVectorFst*>(fst::Convert(*grammar_fstclass->GetFst<StdArc>(), "vector"));
+    timer.step();
+    // auto grammar_fst = dynamic_cast<StdVectorFst*>(grammar_fstclass->GetFst<StdArc>());
+    PrepareGrammarFst(grammar_fst);
+    return AddGrammarFst(new fst::StdConstFst(*grammar_fst));
+}
+
+int32 LafNNet3OnlineModelWrapper::AddGrammarFst(fst::StdFst* grammar_fst, std::string grammar_name) {
+    auto grammar_fst_index = grammar_fsts_.size();
+    if (grammar_fst_index >= config_->max_num_rules) KALDI_ERR << "cannot add more than max number of rules";
+    KALDI_VLOG(2) << "adding FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_name;
     grammar_fsts_.emplace_back(grammar_fst);
-    grammar_fsts_filename_map_[grammar_fst] = grammar_fst_filename;
+    grammar_fsts_name_map_[grammar_fst] = grammar_name;
     // if (active_grammar_fst_) {
     //     delete active_grammar_fst_;
     //     active_grammar_fst_ = nullptr;
@@ -130,13 +145,13 @@ int32 LafNNet3OnlineModelWrapper::AddGrammarFst(std::string& grammar_fst_filenam
 
 bool LafNNet3OnlineModelWrapper::ReloadGrammarFst(int32 grammar_fst_index, std::string& grammar_fst_filename) {
     auto old_grammar_fst = grammar_fsts_.at(grammar_fst_index);
-    grammar_fsts_filename_map_.erase(old_grammar_fst);
+    grammar_fsts_name_map_.erase(old_grammar_fst);
     delete old_grammar_fst;
 
     auto grammar_fst = ReadFstFile(grammar_fst_filename);
     KALDI_VLOG(2) << "reloading FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst_filename;
     grammar_fsts_.at(grammar_fst_index) = grammar_fst;
-    grammar_fsts_filename_map_[grammar_fst] = grammar_fst_filename;
+    grammar_fsts_name_map_[grammar_fst] = grammar_fst_filename;
     // if (active_grammar_fst_) {
     //     delete active_grammar_fst_;
     //     active_grammar_fst_ = nullptr;
@@ -146,9 +161,9 @@ bool LafNNet3OnlineModelWrapper::ReloadGrammarFst(int32 grammar_fst_index, std::
 
 bool LafNNet3OnlineModelWrapper::RemoveGrammarFst(int32 grammar_fst_index) {
     auto grammar_fst = grammar_fsts_.at(grammar_fst_index);
-    KALDI_VLOG(2) << "removing FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fsts_filename_map_.at(grammar_fst);
+    KALDI_VLOG(2) << "removing FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fsts_name_map_.at(grammar_fst);
     grammar_fsts_.erase(grammar_fsts_.begin() + grammar_fst_index);
-    grammar_fsts_filename_map_.erase(grammar_fst);
+    grammar_fsts_name_map_.erase(grammar_fst);
     delete grammar_fst;
     // if (active_grammar_fst_) {
     //     delete active_grammar_fst_;
@@ -178,8 +193,11 @@ void LafNNet3OnlineModelWrapper::StartDecoding() {
     // auto union_fst = fst::UnionFst<StdArc>(*grammar_fsts_[0], *grammar_fsts_[1]);
     // auto decode_fst = fst::LookaheadComposeFst(*hcl_fst_, union_fst, disambig_tids_);
 
+    std::vector<std::pair<int32, const StdFst *> > label_fst_pairs;
     auto rules_words_offset = word_syms_->Find("#nonterm:rule0");
     auto top_fst_nonterm = rules_words_offset + config_->max_num_rules + 1;
+
+    // Build top_fst
     VectorFst<StdArc> top_fst;
     auto start_state = top_fst.AddState();
     top_fst.SetStart(start_state);
@@ -187,20 +205,23 @@ void LafNNet3OnlineModelWrapper::StartDecoding() {
     top_fst.SetFinal(final_state, 0.0);
     top_fst.SetFinal(start_state, 0.0);  // Allow start state to be final for no rule
     top_fst.AddArc(0, StdArc(0, 0, 0.0, final_state));  // Allow epsilon transition for no rule
+    for (auto word : std::vector<std::string>{"!SIL", "<unk>"})  // FIXME: make these configurable
+        top_fst.AddArc(0, StdArc(word_syms_->Find(word), 0, 0.0, final_state));
+    if (grammar_fsts_.size() > config_->max_num_rules) KALDI_ERR << "more grammars than max number";
     // for (size_t i = 0; i <= config_->max_num_rules; ++i) {
-    for (size_t i = 0; i <= grammar_fsts_.size(); ++i) {
-        top_fst.AddState();
+    for (size_t i = 0; i < grammar_fsts_.size(); ++i) {
+        // top_fst.AddState();
         top_fst.AddArc(0, StdArc(0, (rules_words_offset + i), 0.0, final_state));
+        // label_fst_pairs.emplace_back((rules_words_offset + i), grammar_fsts_.at(i));
     }
 
-    std::vector<std::pair<int32, const StdFst *> > ifsts;
-    ifsts.emplace_back(top_fst_nonterm, new fst::StdConstFst(top_fst));
+    label_fst_pairs.emplace_back(top_fst_nonterm, new fst::StdConstFst(top_fst));
     // for (size_t i = 0; i <= config_->max_num_rules; ++i)
-    //     ifsts.emplace_back((rules_words_offset + i), grammar_fsts_.at(i));
+    //     label_fst_pairs.emplace_back((rules_words_offset + i), grammar_fsts_.at(i));
     for (auto grammar_fst : grammar_fsts_)
-        ifsts.emplace_back((rules_words_offset + ifsts.size() - 1), grammar_fst);
+        label_fst_pairs.emplace_back((rules_words_offset + label_fst_pairs.size() - 1), grammar_fst);
     fst::ReplaceFstOptions<StdArc> replace_options(top_fst_nonterm, fst::REPLACE_LABEL_OUTPUT, fst::REPLACE_LABEL_OUTPUT, word_syms_->Find("#nonterm:end"));
-    auto replace_fst = fst::ReplaceFst<StdArc>(ifsts, replace_options);
+    auto replace_fst = fst::ReplaceFst<StdArc>(label_fst_pairs, replace_options);
     auto decode_fst = fst::LookaheadComposeFst(*hcl_fst_, replace_fst, disambig_tids_);
 
     auto grammars_activity = grammars_activity_;
@@ -383,10 +404,11 @@ void* init_laf_nnet3(char* model_dir_cp, char* config_str_cp, int32_t verbosity)
     return model;
 }
 
-int32_t add_grammar_fst_laf_nnet3(void* model_vp, char* grammar_fst_filename_cp) {
+int32_t add_grammar_fst_laf_nnet3(void* model_vp, char* grammar_fst_cp) {
     auto model = static_cast<LafNNet3OnlineModelWrapper*>(model_vp);
-    std::string grammar_fst_filename(grammar_fst_filename_cp);
-    int32_t grammar_fst_index = model->AddGrammarFst(grammar_fst_filename);
+    // int32_t grammar_fst_index = model->AddGrammarFst(std::string(grammar_fst_cp));
+    std::istringstream iss(grammar_fst_cp);
+    int32_t grammar_fst_index = model->AddGrammarFst(iss);
     return grammar_fst_index;
 }
 
