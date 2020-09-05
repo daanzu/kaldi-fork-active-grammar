@@ -192,12 +192,23 @@ bool LafNNet3OnlineModelWrapper::RemoveGrammarFst(int32 grammar_fst_index) {
     return true;
 }
 
+// Adapted from src/fstext/fstext-utils-inl.h
+template <class Arc, class I>
+LookaheadFst<Arc, I>* LookaheadComposeFst(const Fst<Arc>& ifst1, const Fst<Arc>& ifst2, const std::vector<I>& to_remove, size_t cache_size) {
+    fst::CacheOptions cache_opts(true, cache_size);
+    fst::ArcMapFstOptions arcmap_opts(cache_opts);  // TODO: should we set this, or leave the default of no caching?
+    RemoveSomeInputSymbolsMapper<Arc, I> mapper(to_remove);
+    auto compose_fst = ComposeFst<Arc>(ifst1, ifst2, cache_opts);
+    return new LookaheadFst<Arc, I>(compose_fst, mapper, arcmap_opts);
+}
+
 fst::StdFst* LafNNet3OnlineModelWrapper::BuildDecodeFst(const std::vector<fst::StdFst*>& grammar_fsts) {
     ExecutionTimer timer("BuildDecodeFst");
+    auto cache_size = config_->decode_fst_cache_size;
 
     // auto union_fst = fst::UnionFst<StdArc>(*grammar_fsts_[0], *grammar_fsts_[1]);
-    // auto decode_fst = fst::LookaheadComposeFst(*hcl_fst_, union_fst, disambig_tids_);
-    // auto decode_fst = fst::LookaheadComposeFst(*hcl_fst_, *dictation_fst_, disambig_tids_);
+    // auto decode_fst = LookaheadComposeFst(*hcl_fst_, union_fst, disambig_tids_, cache_size);
+    // auto decode_fst = LookaheadComposeFst(*hcl_fst_, *dictation_fst_, disambig_tids_, cache_size);
 
     std::vector<std::pair<int32, const StdFst *> > label_fst_pairs;
     auto rules_words_offset = word_syms_->Find("#nonterm:rule0");
@@ -227,8 +238,9 @@ fst::StdFst* LafNNet3OnlineModelWrapper::BuildDecodeFst(const std::vector<fst::S
 
     label_fst_pairs.emplace_back(top_fst_nonterm, new fst::StdConstFst(top_fst));
     fst::ReplaceFstOptions<StdArc> replace_options(top_fst_nonterm, fst::REPLACE_LABEL_OUTPUT, fst::REPLACE_LABEL_OUTPUT, word_syms_->Find("#nonterm:end"));
+    replace_options.gc_limit = cache_size;
     auto replace_fst = fst::ReplaceFst<StdArc>(label_fst_pairs, replace_options);
-    auto decode_fst = fst::LookaheadComposeFst(*hcl_fst_, replace_fst, disambig_tids_);
+    auto decode_fst = LookaheadComposeFst(*hcl_fst_, replace_fst, disambig_tids_, cache_size);
     return decode_fst;
 }
 

@@ -55,6 +55,7 @@ struct LafNNet3OnlineModelConfig : public BaseNNet3OnlineModelConfig {
     std::string dictation_fst_filename;
     int32 rules_words_offset = 1000000;
     int32 max_num_rules = 9999;
+    size_t decode_fst_cache_size = 1 << 30LL;  // Note: this is used independently for 3 separate Fsts! FIXME: should we adjust this based on size of grammars + dictation fsts?
 
     bool Set(const std::string& name, const nlohmann::json& value) override {
         if (BaseNNet3OnlineModelConfig::Set(name, value)) { return true; }
@@ -65,6 +66,7 @@ struct LafNNet3OnlineModelConfig : public BaseNNet3OnlineModelConfig {
         if (name == "dictation_fst_filename") { dictation_fst_filename = value.get<std::string>(); return true; }
         if (name == "rules_words_offset") { rules_words_offset = value.get<int32>(); return true; }
         if (name == "max_num_rules") { max_num_rules = value.get<int32>(); return true; }
+        if (name == "decode_fst_cache_size") { decode_fst_cache_size = value.get<size_t>(); return true; }
         return false;
     }
 
@@ -79,6 +81,7 @@ struct LafNNet3OnlineModelConfig : public BaseNNet3OnlineModelConfig {
         ss << "\n    " << "dictation_fst_filename: " << dictation_fst_filename;
         ss << "\n    " << "rules_words_offset: " << rules_words_offset;
         ss << "\n    " << "max_num_rules: " << max_num_rules;
+        ss << "\n    " << "decode_fst_cache_size: " << decode_fst_cache_size;
         return ss.str();
     }
 };
