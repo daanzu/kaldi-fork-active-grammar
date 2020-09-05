@@ -51,7 +51,7 @@ BaseNNet3OnlineModelWrapper::BaseNNet3OnlineModelWrapper(BaseNNet3OnlineModelCon
             }
         });
     } else {
-        // Silence kaldi output as well
+        // Silence kaldi output as well (even warnings and errors!)
         SetLogHandler([](const LogMessageEnvelope& envelope, const char* message) {});
     }
 

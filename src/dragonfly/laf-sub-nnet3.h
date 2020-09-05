@@ -55,7 +55,7 @@ struct LafNNet3OnlineModelConfig : public BaseNNet3OnlineModelConfig {
     std::string dictation_fst_filename;
     int32 rules_words_offset = 1000000;
     int32 max_num_rules = 9999;
-    size_t decode_fst_cache_size = 1 << 30LL;  // Note: this is used independently for 3 separate Fsts! FIXME: should we adjust this based on size of grammars + dictation fsts?
+    size_t decode_fst_cache_size = 1ULL << 30;  // Note: this is used independently for 3 separate Fsts! FIXME: should we adjust this based on size of grammars + dictation fsts?
 
     bool Set(const std::string& name, const nlohmann::json& value) override {
         if (BaseNNet3OnlineModelConfig::Set(name, value)) { return true; }
@@ -127,7 +127,8 @@ class LafNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
         SingleUtteranceNnet3DecoderTpl<fst::StdFst>* decoder_ = nullptr;  // reinstantiated per utterance
         CombineRuleNontermMapper<CompactLatticeArc>* rule_relabel_mapper_ = nullptr;
 
-        fst::StdFst* BuildDecodeFst(const std::vector<fst::StdFst*>& grammar_fsts);
+        void BuildDecodeFst();
+        void DestroyDecodeFst();
         void StartDecoding() override;
         void CleanupDecoder() override;
 };

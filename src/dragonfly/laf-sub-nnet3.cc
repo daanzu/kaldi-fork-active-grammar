@@ -156,10 +156,7 @@ int32 LafNNet3OnlineModelWrapper::AddGrammarFst(fst::StdFst* grammar_fst, std::s
     KALDI_VLOG(2) << "adding FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_name;
     grammar_fsts_.emplace_back(grammar_fst);
     grammar_fsts_name_map_[grammar_fst] = grammar_name;
-    // if (active_grammar_fst_) {
-    //     delete active_grammar_fst_;
-    //     active_grammar_fst_ = nullptr;
-    // }
+    DestroyDecodeFst();
     return grammar_fst_index;
 }
 
@@ -172,10 +169,7 @@ bool LafNNet3OnlineModelWrapper::ReloadGrammarFst(int32 grammar_fst_index, std::
     KALDI_VLOG(2) << "reloading FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst_filename;
     grammar_fsts_.at(grammar_fst_index) = grammar_fst;
     grammar_fsts_name_map_[grammar_fst] = grammar_fst_filename;
-    // if (active_grammar_fst_) {
-    //     delete active_grammar_fst_;
-    //     active_grammar_fst_ = nullptr;
-    // }
+    DestroyDecodeFst();
     return true;
 }
 
@@ -185,25 +179,26 @@ bool LafNNet3OnlineModelWrapper::RemoveGrammarFst(int32 grammar_fst_index) {
     grammar_fsts_.erase(grammar_fsts_.begin() + grammar_fst_index);
     grammar_fsts_name_map_.erase(grammar_fst);
     delete grammar_fst;
-    // if (active_grammar_fst_) {
-    //     delete active_grammar_fst_;
-    //     active_grammar_fst_ = nullptr;
-    // }
+    DestroyDecodeFst();
     return true;
 }
 
 // Adapted from src/fstext/fstext-utils-inl.h
 template <class Arc, class I>
 LookaheadFst<Arc, I>* LookaheadComposeFst(const Fst<Arc>& ifst1, const Fst<Arc>& ifst2, const std::vector<I>& to_remove, size_t cache_size) {
+    fst::CacheOptions cache_opts_0(false, 0);  // FirstCacheStore
     fst::CacheOptions cache_opts(true, cache_size);
-    fst::ArcMapFstOptions arcmap_opts(cache_opts);  // TODO: should we set this, or leave the default of no caching?
+    // fst::ArcMapFstOptions arcmap_opts(cache_opts);  // TODO: should we set this, or leave the default of no caching?
+    // fst::ArcMapFstOptions arcmap_opts(fst::CacheOptions(true, 1<<19));  // TODO: should we set this, or leave the default of no caching?
+    fst::ArcMapFstOptions arcmap_opts(fst::CacheOptions(false, 0));  // TODO: should we set this, or leave the default of no caching?
     RemoveSomeInputSymbolsMapper<Arc, I> mapper(to_remove);
-    auto compose_fst = ComposeFst<Arc>(ifst1, ifst2, cache_opts);
+    auto compose_fst = ComposeFst<Arc>(ifst1, ifst2, cache_opts_0);
     return new LookaheadFst<Arc, I>(compose_fst, mapper, arcmap_opts);
 }
 
-fst::StdFst* LafNNet3OnlineModelWrapper::BuildDecodeFst(const std::vector<fst::StdFst*>& grammar_fsts) {
-    ExecutionTimer timer("BuildDecodeFst");
+void LafNNet3OnlineModelWrapper::BuildDecodeFst() {
+    DestroyDecodeFst();
+    ExecutionTimer timer("BuildDecodeFst", -1);
     auto cache_size = config_->decode_fst_cache_size;
 
     // auto union_fst = fst::UnionFst<StdArc>(*grammar_fsts_[0], *grammar_fsts_[1]);
@@ -228,20 +223,31 @@ fst::StdFst* LafNNet3OnlineModelWrapper::BuildDecodeFst(const std::vector<fst::S
 
     if (grammar_fsts_.size() > config_->max_num_rules) KALDI_ERR << "more grammars than max number";
     for (size_t i = 0; i < grammar_fsts_.size(); ++i) {
-        top_fst.AddArc(0, StdArc(0, (rules_words_offset + i), 0.0, final_state));
-        label_fst_pairs.emplace_back((rules_words_offset + i), grammar_fsts_.at(i));
+        if (decode_fst_grammars_activity_[i]) {
+            top_fst.AddArc(0, StdArc(0, (rules_words_offset + i), 0.0, final_state));
+            label_fst_pairs.emplace_back((rules_words_offset + i), grammar_fsts_.at(i));
+        }
     }
     if (dictation_fst_ != nullptr)
         label_fst_pairs.emplace_back(word_syms_->Find("#nonterm:dictation"), dictation_fst_);
     // top_fst.AddArc(0, StdArc(0, word_syms_->Find("#nonterm:dictation"), 0.0, final_state));
     fst::ArcSort(&top_fst, fst::StdILabelCompare());
-
     label_fst_pairs.emplace_back(top_fst_nonterm, new fst::StdConstFst(top_fst));
+    timer.step("top_fst");
+
     fst::ReplaceFstOptions<StdArc> replace_options(top_fst_nonterm, fst::REPLACE_LABEL_OUTPUT, fst::REPLACE_LABEL_OUTPUT, word_syms_->Find("#nonterm:end"));
-    replace_options.gc_limit = cache_size;
+    replace_options.gc_limit = cache_size;  // ReplaceFst needs the most cache space of the 3 delayed Fsts?
     auto replace_fst = fst::ReplaceFst<StdArc>(label_fst_pairs, replace_options);
-    auto decode_fst = LookaheadComposeFst(*hcl_fst_, replace_fst, disambig_tids_, cache_size);
-    return decode_fst;
+    timer.step("replace_fst");
+    auto decode_fst = LookaheadComposeFst(*hcl_fst_, replace_fst, disambig_tids_, 1ULL<<25);
+    decode_fst_ = decode_fst;
+}
+
+void LafNNet3OnlineModelWrapper::DestroyDecodeFst() {
+    if (decode_fst_) {
+        delete decode_fst_;
+        decode_fst_ = nullptr;
+    }
 }
 
 void LafNNet3OnlineModelWrapper::StartDecoding() {
@@ -249,7 +255,7 @@ void LafNNet3OnlineModelWrapper::StartDecoding() {
     BaseNNet3OnlineModelWrapper::StartDecoding();
 
     if (!decode_fst_ || (decode_fst_grammars_activity_ != grammars_activity_)) {
-        delete decode_fst_;
+        DestroyDecodeFst();
         KALDI_ASSERT(grammar_fsts_.size() == grammars_activity_.size());
         decode_fst_grammars_activity_ = grammars_activity_;
 
@@ -257,7 +263,7 @@ void LafNNet3OnlineModelWrapper::StartDecoding() {
         for (size_t i = 0; i < grammar_fsts_.size(); ++i)
             if (decode_fst_grammars_activity_[i])
                 active_grammar_fsts.emplace_back(grammar_fsts_[i]);
-        decode_fst_ = BuildDecodeFst(active_grammar_fsts);
+        BuildDecodeFst();
     }
 
     decoder_ = new SingleUtteranceNnet3DecoderTpl<fst::StdFst>(
