@@ -56,11 +56,11 @@ struct AgfNNet3OnlineModelConfig : public BaseNNet3OnlineModelConfig {
 
     bool Set(const std::string& name, const nlohmann::json& value) override {
         if (BaseNNet3OnlineModelConfig::Set(name, value)) { return true; }
-        if (name == "nonterm_phones_offset") { nonterm_phones_offset = value.get<int32>(); return true; }
-        if (name == "rules_phones_offset") { rules_phones_offset = value.get<int32>(); return true; }
-        if (name == "dictation_phones_offset") { dictation_phones_offset = value.get<int32>(); return true; }
-        if (name == "top_fst_filename") { top_fst_filename = value.get<std::string>(); return true; }
-        if (name == "dictation_fst_filename") { dictation_fst_filename = value.get<std::string>(); return true; }
+        if (name == "nonterm_phones_offset") { value.get_to(nonterm_phones_offset); return true; }
+        if (name == "rules_phones_offset") { value.get_to(rules_phones_offset); return true; }
+        if (name == "dictation_phones_offset") { value.get_to(dictation_phones_offset); return true; }
+        if (name == "top_fst_filename") { value.get_to(top_fst_filename); return true; }
+        if (name == "dictation_fst_filename") { value.get_to(dictation_fst_filename); return true; }
         return false;
     }
 
