@@ -59,14 +59,14 @@ struct LafNNet3OnlineModelConfig : public BaseNNet3OnlineModelConfig {
 
     bool Set(const std::string& name, const nlohmann::json& value) override {
         if (BaseNNet3OnlineModelConfig::Set(name, value)) { return true; }
-        if (name == "hcl_fst_filename") { hcl_fst_filename = value.get<std::string>(); return true; }
-        if (name == "disambig_tids_filename") { disambig_tids_filename = value.get<std::string>(); return true; }
-        if (name == "relabel_ilabels_filename") { relabel_ilabels_filename = value.get<std::string>(); return true; }
-        if (name == "word_syms_relabeled_filename") { word_syms_relabeled_filename = value.get<std::string>(); return true; }
-        if (name == "dictation_fst_filename") { dictation_fst_filename = value.get<std::string>(); return true; }
-        if (name == "rules_words_offset") { rules_words_offset = value.get<int32>(); return true; }
-        if (name == "max_num_rules") { max_num_rules = value.get<int32>(); return true; }
-        if (name == "decode_fst_cache_size") { decode_fst_cache_size = value.get<size_t>(); return true; }
+        if (name == "hcl_fst_filename") { value.get_to(hcl_fst_filename); return true; }
+        if (name == "disambig_tids_filename") { value.get_to(disambig_tids_filename); return true; }
+        if (name == "relabel_ilabels_filename") { value.get_to(relabel_ilabels_filename); return true; }
+        if (name == "word_syms_relabeled_filename") { value.get_to(word_syms_relabeled_filename); return true; }
+        if (name == "dictation_fst_filename") { value.get_to(dictation_fst_filename); return true; }
+        if (name == "rules_words_offset") { value.get_to(rules_words_offset); return true; }
+        if (name == "max_num_rules") { value.get_to(max_num_rules); return true; }
+        if (name == "decode_fst_cache_size") { value.get_to(decode_fst_cache_size); return true; }
         return false;
     }
 
