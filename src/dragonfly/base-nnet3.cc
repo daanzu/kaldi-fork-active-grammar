@@ -27,6 +27,8 @@
 #include "lat/lattice-functions.h"
 #include "lat/sausages.h"
 #include "lat/word-align-lattice-lexicon.h"
+#include "lm/const-arpa-lm.h"
+#include "rnnlm/rnnlm-lattice-rescoring.h"
 #include "nnet3/nnet-utils.h"
 #include "decoder/active-grammar-fst.h"
 
@@ -132,6 +134,19 @@ BaseNNet3OnlineModelWrapper::BaseNNet3OnlineModelWrapper(BaseNNet3OnlineModelCon
 
     LoadLexicon(config_->word_syms_filename, config_->word_align_lexicon_filename);
 
+    enable_carpa_ = config_->enable_carpa;
+    if (enable_carpa_) {
+        ExecutionTimer timer("loading carpa");
+        ReadKaldiObject(config_->model_dir + "/" + config_->carpa_filename, &carpa_);
+
+        VectorFst<StdArc> *lm_to_subtract_fst = ReadAndPrepareLmFst(config_->model_dir + "/" + config_->orig_grammar_filename);  // FIXME: manage this and delete it, and share
+        fst::CacheOptions cache_opts(true, 50000000);  // Faster than 50000?
+        fst::MapFstOptions mapfst_opts(cache_opts);
+        fst::StdToLatticeMapper<kaldi::BaseFloat> mapper;
+        unscore_lm_fst_ = new fst::MapFst<fst::StdArc, kaldi::LatticeArc, fst::StdToLatticeMapper<kaldi::BaseFloat> >(*lm_to_subtract_fst, mapper, mapfst_opts);
+    } else if (!config_->carpa_filename.empty())
+        KALDI_ERR << "enable_carpa_ is false, but some carpa options are set";
+
     enable_rnnlm_ = config_->enable_rnnlm;
     if (enable_rnnlm_) {
         ExecutionTimer timer("loading rnnlm");
@@ -139,9 +154,8 @@ BaseNNet3OnlineModelWrapper::BaseNNet3OnlineModelWrapper(BaseNNet3OnlineModelCon
         // config_->rnnlm_word_embed_filename = "rnnlm/" + "word_embedding.mat";
         // config_->rnnlm_orig_grammar_filename = "G.fst";
         
-        VectorFst<StdArc> *lm_to_subtract_fst = ReadAndPrepareLmFst(config_->model_dir + "/" + config_->rnnlm_orig_grammar_filename);
+        VectorFst<StdArc> *lm_to_subtract_fst = ReadAndPrepareLmFst(config_->model_dir + "/" + config_->orig_grammar_filename);  // FIXME: manage this and delete it, and share
         BackoffDeterministicOnDemandFst<StdArc> *lm_to_subtract_det_backoff = new BackoffDeterministicOnDemandFst<StdArc>(*lm_to_subtract_fst);
-        rnnlm_scale_ = 1.0;
         lm_to_subtract_det_scale_ = new ScaleDeterministicOnDemandFst(-rnnlm_scale_, lm_to_subtract_det_backoff);
 
         ReadKaldiObject((config_->model_dir + "/" + config_->rnnlm_nnet_filename), &rnnlm_);
@@ -152,8 +166,11 @@ BaseNNet3OnlineModelWrapper::BaseNNet3OnlineModelWrapper(BaseNNet3OnlineModelCon
         rnnlm_opts_.eos_index = word_syms_->Find("</s>");
         rnnlm_info_ = new rnnlm::RnnlmComputeStateInfo(rnnlm_opts_, rnnlm_, word_embedding_mat_);
         rnnlm_max_ngram_order_ = 4;
-    } else if (!config_->rnnlm_nnet_filename.empty() || !config_->rnnlm_word_embed_filename.empty() || !config_->rnnlm_orig_grammar_filename.empty())
+    } else if (!config_->rnnlm_nnet_filename.empty() || !config_->rnnlm_word_embed_filename.empty())
         KALDI_ERR << "enable_rnnlm_ is false, but some rnnlm options are set";
+    
+    if (enable_carpa_ && enable_rnnlm_)
+        KALDI_WARN << "are you sure you want to enable both CARPA and RNNLM rescoring?";
 }
 
 BaseNNet3OnlineModelWrapper::~BaseNNet3OnlineModelWrapper() {
@@ -317,8 +334,36 @@ bool BaseNNet3OnlineModelWrapper::GetWordAlignment(std::vector<string>& words, s
     return true;
 }
 
+void BaseNNet3OnlineModelWrapper::RescoreConstArpaLm(CompactLattice& clat) {
+    ExecutionTimer timer("carpa rescoring");
+    // See lattice-lmrescore.cc
+    Lattice lat1;
+    ConvertLattice(clat, &lat1);
+    fst::ScaleLattice(fst::GraphLatticeScale(-1.0), &lat1);
+    fst::ArcSort(&lat1, fst::OLabelCompare<kaldi::LatticeArc>());
+    kaldi::Lattice composed_lat;
+    fst::Compose(lat1, *unscore_lm_fst_, &composed_lat);
+    fst::Invert(&composed_lat);
+    kaldi::CompactLattice determinized_lat;
+    DeterminizeLattice(composed_lat, &determinized_lat);
+    fst::ScaleLattice(fst::GraphLatticeScale(-1.0), &determinized_lat);
+    if (determinized_lat.Start() == fst::kNoStateId)
+      KALDI_WARN << "Empty lattice while RescoreConstArpaLm (incompatible LM?)";
+
+    // See lattice-lmrescore-const-arpa.cc
+    fst::ArcSort(&determinized_lat, fst::OLabelCompare<kaldi::CompactLatticeArc>());
+    kaldi::ConstArpaLmDeterministicFst const_arpa_fst(carpa_);
+    kaldi::CompactLattice composed_clat;
+    kaldi::ComposeCompactLatticeDeterministic(determinized_lat, &const_arpa_fst, &composed_clat);
+    kaldi::Lattice composed_lat1;
+    ConvertLattice(composed_clat, &composed_lat1);
+    fst::Invert(&composed_lat1);
+    DeterminizeLattice(composed_lat1, &clat);
+}
+
 void BaseNNet3OnlineModelWrapper::RescoreRnnlm(CompactLattice& clat, const std::string& prime_text) {
     ExecutionTimer timer("rnnlm rescoring");
+    // See lattice-lmrescore-kaldi-rnnlm-pruned.cc
     rnnlm::KaldiRnnlmDeterministicFst lm_to_add_orig(rnnlm_max_ngram_order_, *rnnlm_info_);
 
     if (!prime_text.empty()) {

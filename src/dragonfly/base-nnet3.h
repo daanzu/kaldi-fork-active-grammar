@@ -30,6 +30,7 @@
 #include "lat/lattice-functions.h"
 #include "lat/sausages.h"
 #include "lat/word-align-lattice-lexicon.h"
+#include "lm/const-arpa-lm.h"
 #include "rnnlm/rnnlm-lattice-rescoring.h"
 #include "nnet3/nnet-utils.h"
 #include "decoder/active-grammar-fst.h"
@@ -66,10 +67,12 @@ struct BaseNNet3OnlineModelConfig {
     bool enable_ivector = true;
     bool enable_online_cmvn = false;
     std::string online_cmvn_config_filename;  // frequently file exists but is empty (except for comment)
+    std::string orig_grammar_filename;
+    bool enable_carpa = false;
+    std::string carpa_filename;
     bool enable_rnnlm = false;
     std::string rnnlm_nnet_filename;
     std::string rnnlm_word_embed_filename;
-    std::string rnnlm_orig_grammar_filename;
     std::string ivector_extraction_config_json;  // extracted from ie_config_filename
 
     virtual bool Set(const std::string& name, const nlohmann::json& value) {
@@ -91,10 +94,12 @@ struct BaseNNet3OnlineModelConfig {
         if (name == "enable_ivector") { value.get_to(enable_ivector); return true; }
         if (name == "enable_online_cmvn") { value.get_to(enable_online_cmvn); return true; }
         if (name == "online_cmvn_config_filename") { value.get_to(online_cmvn_config_filename); return true; }
+        if (name == "orig_grammar_filename") { value.get_to(orig_grammar_filename); return true; }
+        if (name == "enable_carpa") { value.get_to(enable_carpa); return true; }
+        if (name == "carpa_filename") { value.get_to(carpa_filename); return true; }
         if (name == "enable_rnnlm") { value.get_to(enable_rnnlm); return true; }
         if (name == "rnnlm_nnet_filename") { value.get_to(rnnlm_nnet_filename); return true; }
         if (name == "rnnlm_word_embed_filename") { value.get_to(rnnlm_word_embed_filename); return true; }
-        if (name == "rnnlm_orig_grammar_filename") { value.get_to(rnnlm_orig_grammar_filename); return true; }
         if (name == "ivector_extraction_config_json") { ivector_extraction_config_json = value.dump(); return true; }
         return false;
     }
@@ -120,10 +125,12 @@ struct BaseNNet3OnlineModelConfig {
         ss << "\n    " << "enable_ivector: " << enable_ivector;
         ss << "\n    " << "enable_online_cmvn: " << enable_online_cmvn;
         ss << "\n    " << "online_cmvn_config_filename: " << online_cmvn_config_filename;
+        ss << "\n    " << "orig_grammar_filename: " << orig_grammar_filename;
+        ss << "\n    " << "enable_carpa: " << enable_carpa;
+        ss << "\n    " << "carpa_filename: " << carpa_filename;
         ss << "\n    " << "enable_rnnlm: " << enable_rnnlm;
         ss << "\n    " << "rnnlm_nnet_filename: " << rnnlm_nnet_filename;
         ss << "\n    " << "rnnlm_word_embed_filename: " << rnnlm_word_embed_filename;
-        ss << "\n    " << "rnnlm_orig_grammar_filename: " << rnnlm_orig_grammar_filename;
         ss << "\n    " << "ivector_extraction_config_json: " << ivector_extraction_config_json;
         return ss.str();
     }
@@ -202,6 +209,12 @@ class BaseNNet3OnlineModelWrapper {
         Matrix<double> global_cmvn_stats_;
         OnlineCmvnState* online_cmvn_state_ = nullptr;
 
+        // CARPA
+        bool enable_carpa_ = false;
+        fst::MapFst<fst::StdArc, kaldi::LatticeArc, fst::StdToLatticeMapper<kaldi::BaseFloat> >* unscore_lm_fst_ = nullptr;
+        ConstArpaLm carpa_;
+        BaseFloat carpa_scale_ = 1.0;
+
         // RNNLM
         bool enable_rnnlm_ = false;
         nnet3::Nnet rnnlm_;
@@ -211,7 +224,7 @@ class BaseNNet3OnlineModelWrapper {
         rnnlm::RnnlmComputeStateInfo* rnnlm_info_ = nullptr;
         int32 rnnlm_max_ngram_order_;
         ComposeLatticePrunedOptions rnnlm_compose_opts_;
-        BaseFloat rnnlm_scale_;
+        BaseFloat rnnlm_scale_ = 1.0;
         std::string lm_prime_text_;
 
         // Miscellaneous
@@ -222,6 +235,7 @@ class BaseNNet3OnlineModelWrapper {
 
         StdConstFst* ReadFstFile(std::string filename);
         std::string WordIdsToString(const std::vector<int32> &wordIds);
+        void RescoreConstArpaLm(CompactLattice& clat);
         void RescoreRnnlm(CompactLattice& clat, const std::string& prime_text = "");
 
         virtual void StartDecoding();

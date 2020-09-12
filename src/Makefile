@@ -181,4 +181,4 @@ online2: decoder gmm transform feat matrix util base lat hmm tree ivector cudama
 kws: base util hmm tree matrix lat
 cudadecoder:  cudamatrix cudafeat online2 nnet3 ivector feat fstext lat chain transform
 cudadecoderbin: cudadecoder cudafeat cudamatrix online2 nnet3 ivector feat fstext lat chain transform
-dragonfly: online2 rnnlm
+dragonfly: online2 lm rnnlm

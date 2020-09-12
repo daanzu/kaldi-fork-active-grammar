@@ -52,6 +52,9 @@ AgfNNet3OnlineModelWrapper::AgfNNet3OnlineModelWrapper(AgfNNet3OnlineModelConfig
     auto first_rule_sym = word_syms_->Find("#nonterm:rule0"),
         last_rule_sym = first_rule_sym + 9999;
     rule_relabel_mapper_ = new CombineRuleNontermMapper<CompactLatticeArc>(first_rule_sym, last_rule_sym);
+
+    if (enable_carpa_) KALDI_ERR << "AgfNNet3OnlineModelWrapper does not support carpa rescoring";
+    if (enable_rnnlm_) KALDI_ERR << "AgfNNet3OnlineModelWrapper does not support rnnlm rescoring";
 }
 
 AgfNNet3OnlineModelWrapper::~AgfNNet3OnlineModelWrapper() {

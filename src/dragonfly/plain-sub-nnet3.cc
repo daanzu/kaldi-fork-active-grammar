@@ -99,6 +99,10 @@ void PlainNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string,
 
         if (enable_rnnlm_)
             RescoreRnnlm(decoded_clat_, lm_prime_text_);
+        else if (!lm_prime_text_.empty())
+            KALDI_WARN << "prime text only supported by rnnlm";
+        if (enable_carpa_)
+            RescoreConstArpaLm(decoded_clat_);
         if (config_->lm_weight != 10.0)
             ScaleLattice(LatticeScale(config_->lm_weight / 10.0, 1.0), &decoded_clat_);
 
