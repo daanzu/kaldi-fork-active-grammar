@@ -137,6 +137,8 @@ BaseNNet3OnlineModelWrapper::BaseNNet3OnlineModelWrapper(BaseNNet3OnlineModelCon
     enable_carpa_ = config_->enable_carpa;
     if (enable_carpa_) {
         ExecutionTimer timer("loading carpa");
+        if (config_->orig_grammar_filename.empty()) KALDI_ERR << "orig_grammar_filename not set";
+        if (config_->carpa_filename.empty()) KALDI_ERR << "carpa_filename not set";
         ReadKaldiObject(config_->model_dir + "/" + config_->carpa_filename, &carpa_);
 
         VectorFst<StdArc> *lm_to_subtract_fst = ReadAndPrepareLmFst(config_->model_dir + "/" + config_->orig_grammar_filename);  // FIXME: manage this and delete it, and share
@@ -150,9 +152,9 @@ BaseNNet3OnlineModelWrapper::BaseNNet3OnlineModelWrapper(BaseNNet3OnlineModelCon
     enable_rnnlm_ = config_->enable_rnnlm;
     if (enable_rnnlm_) {
         ExecutionTimer timer("loading rnnlm");
-        // config_->rnnlm_nnet_filename = "rnnlm/" + "final.raw";
-        // config_->rnnlm_word_embed_filename = "rnnlm/" + "word_embedding.mat";
-        // config_->rnnlm_orig_grammar_filename = "G.fst";
+        if (config_->orig_grammar_filename.empty()) KALDI_ERR << "orig_grammar_filename not set";
+        if (config_->rnnlm_nnet_filename.empty()) KALDI_ERR << "rnnlm_nnet_filename not set";
+        if (config_->rnnlm_word_embed_filename.empty()) KALDI_ERR << "rnnlm_word_embed_filename not set";
         
         VectorFst<StdArc> *lm_to_subtract_fst = ReadAndPrepareLmFst(config_->model_dir + "/" + config_->orig_grammar_filename);  // FIXME: manage this and delete it, and share
         BackoffDeterministicOnDemandFst<StdArc> *lm_to_subtract_det_backoff = new BackoffDeterministicOnDemandFst<StdArc>(*lm_to_subtract_fst);
