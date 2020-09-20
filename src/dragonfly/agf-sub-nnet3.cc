@@ -31,6 +31,7 @@
 #include "decoder/active-grammar-fst.h"
 
 #include "agf-sub-nnet3.h"
+#include "compile-graph-agf.hh"
 #include "utils.h"
 #include "kaldi-utils.h"
 #include "nlohmann_json.hpp"
@@ -333,4 +334,9 @@ bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_samples, floa
         model->SetActiveGrammars(std::move(grammars_activity));
     }
     return decode_base_nnet3(model_vp, samp_freq, num_samples, samples, finalize, save_adaptation_state);
+}
+
+bool compile_graph_agf(void* model_vp, int32_t argc, char** argv) {
+    int result = CompileGraphAgfMain(argc, argv);
+    return (result == 0);
 }

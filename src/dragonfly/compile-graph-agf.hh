@@ -1,7 +1,6 @@
-// bin/compile-graph-agf.cc
+// compile-graph-agf
 
 // Copyright   2019  David Zurow
-// Copyright 2018     Johns Hopkins University (Author: Daniel Povey)
 
 // This program is free software: you can redistribute it and/or modify it
 // under the terms of the GNU Affero General Public License as published by
@@ -16,6 +15,8 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+#pragma once
+
 #include "base/kaldi-common.h"
 #include "util/common-utils.h"
 #include "tree/context-dep.h"
@@ -28,8 +29,7 @@
 #include "fst/script/compile.h"
 
 
-
-int main(int argc, char *argv[]) {
+int CompileGraphAgfMain(int argc, char *argv[]) {
   try {
     using namespace kaldi;
     typedef kaldi::int32 int32;
