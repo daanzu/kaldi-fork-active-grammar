@@ -63,3 +63,11 @@ DRAGONFLY_API bool remove_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_
 DRAGONFLY_API bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,
     bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state);
 DRAGONFLY_API bool compile_graph_agf(void* model_vp, int32_t argc, char** argv);
+
+DRAGONFLY_API bool fst__init(int32_t eps_labels_len, int32_t eps_labels_cp[], int32_t silent_labels_len, int32_t silent_labels_cp[], int32_t wildcard_labels_len, int32_t wildcard_labels_cp[]);
+DRAGONFLY_API void* fst__construct();
+DRAGONFLY_API bool fst__destruct(void* fst_vp);
+DRAGONFLY_API int32_t fst__add_state(void* fst_vp, float weight, bool initial);
+DRAGONFLY_API bool fst__add_arc(void* fst_vp, int32_t src_state_id, int32_t dst_state_id, int32_t ilabel, int32_t olabel, float weight);
+DRAGONFLY_API bool fst__has_eps_path(void* fst_vp, int32_t path_src_state, int32_t path_dst_state);
+DRAGONFLY_API bool fst__does_match(void* fst_vp, int32_t target_labels_len, int32_t target_labels_cp[], int32_t output_labels_cp[], int32_t* output_labels_len);
