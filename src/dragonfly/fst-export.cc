@@ -29,20 +29,20 @@ using Weight = StdArc::Weight;
 using Label = StdArc::Label;
 
 // FIXME: this is static and is used by all!
-static std::unordered_set<Label> eps_labels;
-static std::unordered_set<Label> silent_labels;
-static std::unordered_set<Label> wildcard_labels;
+static std::unordered_set<Label> eps_like_ilabels;
+static std::unordered_set<Label> silent_olabels;
+static std::unordered_set<Label> wildcard_olabels;
 
-bool fst__init(int32_t eps_labels_len, int32_t eps_labels_cp[], int32_t silent_labels_len, int32_t silent_labels_cp[], int32_t wildcard_labels_len, int32_t wildcard_labels_cp[]) {
-    eps_labels.clear();
-    for (int32_t i = 0; i < eps_labels_len; ++i)
-        eps_labels.emplace(eps_labels_cp[i]);
-    silent_labels.clear();
-    for (int32_t i = 0; i < silent_labels_len; ++i)
-        silent_labels.emplace(silent_labels_cp[i]);
-    wildcard_labels.clear();
-    for (int32_t i = 0; i < wildcard_labels_len; ++i)
-        wildcard_labels.emplace(wildcard_labels_cp[i]);
+bool fst__init(int32_t eps_like_ilabels_len, int32_t eps_like_ilabels_cp[], int32_t silent_olabels_len, int32_t silent_olabels_cp[], int32_t wildcard_olabels_len, int32_t wildcard_olabels_cp[]) {
+    eps_like_ilabels.clear();
+    for (int32_t i = 0; i < eps_like_ilabels_len; ++i)
+        eps_like_ilabels.emplace(eps_like_ilabels_cp[i]);
+    silent_olabels.clear();
+    for (int32_t i = 0; i < silent_olabels_len; ++i)
+        silent_olabels.emplace(silent_olabels_cp[i]);
+    wildcard_olabels.clear();
+    for (int32_t i = 0; i < wildcard_olabels_len; ++i)
+        wildcard_olabels.emplace(wildcard_olabels_cp[i]);
     return true;
 }
 
@@ -85,7 +85,7 @@ bool fst__has_eps_path(void* fst_vp, int32_t path_src_state, int32_t path_dst_st
             return true;
         for (ArcIterator<StdFst> aiter(*fst, state); !aiter.Done(); aiter.Next()) {
             auto arc = aiter.Value();
-            if (eps_labels.count(arc.ilabel) && !queued.count(arc.nextstate)) {
+            if (eps_like_ilabels.count(arc.ilabel) && !queued.count(arc.nextstate)) {
                 state_queue.emplace_back(arc.nextstate);
                 queued.emplace(arc.nextstate);
             }
@@ -124,7 +124,7 @@ bool fst__does_match(void* fst_vp, int32_t target_labels_len, int32_t target_lab
                 Path next_path(path);
                 next_path.emplace_back(arc.olabel);
                 queue.emplace_back(std::forward_as_tuple(arc.nextstate, next_path, target_label_index+1));
-            } else if (wildcard_labels.count(arc.ilabel)) {
+            } else if (wildcard_olabels.count(arc.ilabel)) {
                 if (std::find(path.begin(), path.end(), arc.olabel) == path.end())
                     path.emplace_back(arc.olabel);
                 if (target_label != -1) {
@@ -133,7 +133,7 @@ bool fst__does_match(void* fst_vp, int32_t target_labels_len, int32_t target_lab
                     queue.emplace_back(std::forward_as_tuple(state, next_path, target_label_index+1));
                 }
                 queue.emplace_back(std::forward_as_tuple(arc.nextstate, path, target_label_index));
-            } else if (silent_labels.count(arc.ilabel)) {
+            } else if (silent_olabels.count(arc.ilabel)) {
                 Path next_path(path);
                 next_path.emplace_back(arc.olabel);
                 queue.emplace_back(std::forward_as_tuple(arc.nextstate, next_path, target_label_index));
