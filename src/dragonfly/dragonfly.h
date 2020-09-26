@@ -64,7 +64,8 @@ DRAGONFLY_API bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num
     bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state);
 
 DRAGONFLY_API void* init_laf_nnet3(char* model_dir_cp, char* config_str_cp, int32_t verbosity);
-DRAGONFLY_API int32_t add_grammar_fst_laf_nnet3(void* model_vp, char* grammar_fst_cp);
+DRAGONFLY_API int32_t add_grammar_fst_laf_nnet3(void* model_vp, void* grammar_fst_cp);
+DRAGONFLY_API int32_t add_grammar_fst_text_laf_nnet3(void* model_vp, char* grammar_fst_cp);
 DRAGONFLY_API bool reload_grammar_fst_laf_nnet3(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp);
 DRAGONFLY_API bool remove_grammar_fst_laf_nnet3(void* model_vp, int32_t grammar_fst_index);
 DRAGONFLY_API bool decode_laf_nnet3(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,

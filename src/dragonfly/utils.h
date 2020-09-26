@@ -56,7 +56,7 @@ class ExecutionTimer {
     inline void step(const std::string& step_description = "") {
         const auto now_time = Clock::now();
         step_count_ += 1;
-        KALDI_VLOG(verbosity_) << "ExecutionTimer: " << description_ << " hit Step "
+        KALDI_VLOG(verbosity_) << "ExecutionTimer: " << description_ << " completed Step "
             << ((!step_description.empty()) ? step_description : ("#" + std::to_string(step_count_)))
             << " with Split " << pretty_duration(start_time_, now_time)
             << " and Lap " << pretty_duration(last_time_, now_time);

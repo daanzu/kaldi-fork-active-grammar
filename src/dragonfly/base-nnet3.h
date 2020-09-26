@@ -174,8 +174,8 @@ class BaseNNet3OnlineModelWrapper {
         BaseNNet3OnlineModelConfig::Ptr config_;
 
         // Model
-        fst::SymbolTable *word_syms_ = nullptr;
-        std::vector<std::vector<int32> > word_align_lexicon_;  // for each word, its word-id + word-id + a list of its phones
+        fst::SymbolTable *word_syms_ = nullptr;  // Word symbol table
+        std::vector<std::vector<int32> > word_align_lexicon_;  // For each word, its word-id + word-id + a list of its phones
 
         // Model objects
         OnlineNnet2FeaturePipelineConfig feature_config_;

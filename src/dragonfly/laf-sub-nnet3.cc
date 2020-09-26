@@ -49,8 +49,6 @@ LafNNet3OnlineModelWrapper::LafNNet3OnlineModelWrapper(LafNNet3OnlineModelConfig
     if (!ReadIntegerVectorSimple(config_->disambig_tids_filename, &disambig_tids_))
         KALDI_ERR << "cannot read disambig_tids file";
 
-    if (config_->relabel_ilabels_filename.empty() == config_->word_syms_relabeled_filename.empty())
-        KALDI_ERR << "must use exactly one of relabel_ilabels_filename and word_syms_relabeled_filename";
     if (!config_->relabel_ilabels_filename.empty()) {
         std::vector<std::vector<int32> > list;
         if (!ReadIntegerVectorVectorSimple(config_->relabel_ilabels_filename, &list))
@@ -65,14 +63,15 @@ LafNNet3OnlineModelWrapper::LafNNet3OnlineModelWrapper(LafNNet3OnlineModelConfig
             KALDI_ERR << "cannot read word_syms_relabeled_filename";
 
     if (!config_->dictation_fst_filename.empty()) {
-        if (!relabel_ilabels_.empty()) {
-            KALDI_WARN << "relabeling dictation_fst is inefficient";
-            ExecutionTimer timer("relabeling dictation_fst");
+        if (false) {
+            KALDI_WARN << "preparing dictation_fst is inefficient; should be done ahead of time";
+            ExecutionTimer timer("preparing dictation_fst");
             auto fst = CastOrConvertToVectorFst(ReadFstKaldiGeneric(config_->dictation_fst_filename));
+            // if (relabel_ilabels_.empty()) KALDI_ERR << "relabel_ilabels_ not loaded";
             // static const std::vector<std::pair<StdArc::Label, StdArc::Label>> olabels;  // Always empty
             // fst::Relabel(fst, relabel_ilabels_, olabels);
             // fst::ArcSort(fst, fst::StdILabelCompare());
-            PrepareGrammarFst(fst);
+            PrepareGrammarFst(fst, true);  // Was this file already relabeled?
             dictation_fst_ = CastOrConvertToConstFst(fst);
         } else
             dictation_fst_ = CastOrConvertToConstFst(ReadFstKaldiGeneric(config_->dictation_fst_filename));
@@ -95,15 +94,16 @@ LafNNet3OnlineModelWrapper::~LafNNet3OnlineModelWrapper() {
 
 // void LafNNet3OnlineModelWrapper::PendNonterm()
 
-void LafNNet3OnlineModelWrapper::PrepareGrammarFst(fst::StdVectorFst* grammar_fst) {
+void LafNNet3OnlineModelWrapper::PrepareGrammarFst(fst::StdVectorFst* grammar_fst, bool relabel) {
     ExecutionTimer timer("PrepareGrammarFst");
-    if (!relabel_ilabels_.empty()) {
-        static const std::vector<std::pair<StdArc::Label, StdArc::Label>> olabels;  // Always empty
+    if (relabel) {
+        if (relabel_ilabels_.empty()) KALDI_ERR << "relabel_ilabels_ not loaded";
+        static const std::vector<std::pair<StdArc::Label, StdArc::Label>> olabels;  // Always empty, because only relabeling ilabels
         fst::Relabel(grammar_fst, relabel_ilabels_, olabels);
-        timer.step();
+        timer.step("relabeling");
     }
     fst::ArcSort(grammar_fst, fst::StdILabelCompare());
-    timer.step();
+    timer.step("arcsorting");
 
     // if (true) {
     //     {
@@ -131,26 +131,28 @@ void LafNNet3OnlineModelWrapper::PrepareGrammarFst(fst::StdVectorFst* grammar_fs
 }
 
 int32 LafNNet3OnlineModelWrapper::AddGrammarFst(std::string& grammar_fst_filename) {
+    ExecutionTimer timer("AddGrammarFst:loading from file");
     auto grammar_fst = CastOrConvertToVectorFst(ReadFstKaldiGeneric(grammar_fst_filename));
-    PrepareGrammarFst(grammar_fst);
+    PrepareGrammarFst(grammar_fst, true);  // Was this file already relabeled?
     return AddGrammarFst(CastOrConvertToConstFst(grammar_fst), grammar_fst_filename);
 }
 
 int32 LafNNet3OnlineModelWrapper::AddGrammarFst(std::istream& grammar_text) {
     ExecutionTimer timer("AddGrammarFst:compiling");
-    auto word_syms_maybe_relabeled = (word_syms_relabeled_) ? word_syms_relabeled_ : word_syms_;
-    // FIXME: fix build for linux and macos, and CI for windows
+    auto word_syms_maybe_relabeled = (word_syms_relabeled_) ? word_syms_relabeled_ : word_syms_;  // Use composed if we have it
+    // FIXME: fix build for linux and macos, and CI for windows, to include fst::script for CompileFstInternal
     auto grammar_fstclass = fst::script::CompileFstInternal(grammar_text, "<AddGrammarFst>", "vector", "standard",
         word_syms_maybe_relabeled, word_syms_, nullptr, false, false, false, false, false);
     timer.step();
     auto grammar_fst = dynamic_cast<StdVectorFst*>(fst::Convert(*grammar_fstclass->GetFst<StdArc>(), "vector"));
     if (!grammar_fst) KALDI_ERR << "could not convert grammar Fst to StdVectorFst";
     timer.step();
-    PrepareGrammarFst(grammar_fst);
+    PrepareGrammarFst(grammar_fst, (word_syms_maybe_relabeled != word_syms_relabeled_));
     return AddGrammarFst(new fst::StdConstFst(*grammar_fst));
 }
 
 int32 LafNNet3OnlineModelWrapper::AddGrammarFst(fst::StdFst* grammar_fst, std::string grammar_name) {
+    // ExecutionTimer timer("AddGrammarFst:loading");
     auto grammar_fst_index = grammar_fsts_.size();
     if (grammar_fst_index >= config_->max_num_rules) KALDI_ERR << "cannot add more than max number of rules";
     KALDI_VLOG(2) << "adding FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_name;
@@ -442,9 +444,19 @@ void* init_laf_nnet3(char* model_dir_cp, char* config_str_cp, int32_t verbosity)
     return model;
 }
 
-int32_t add_grammar_fst_laf_nnet3(void* model_vp, char* grammar_fst_cp) {
+int32_t add_grammar_fst_laf_nnet3(void* model_vp, void* grammar_fst_cp) {
     auto model = static_cast<LafNNet3OnlineModelWrapper*>(model_vp);
-    // int32_t grammar_fst_index = model->AddGrammarFst(std::string(grammar_fst_cp));
+    auto fst = static_cast<StdVectorFst*>(grammar_fst_cp);
+    fst->Write("tmp.fst");
+    bool built_relabeled = true;
+    model->PrepareGrammarFst(fst, !built_relabeled);
+    fst->Write("tmp2.fst");
+    int32_t grammar_fst_index = model->AddGrammarFst(fst);
+    return grammar_fst_index;
+}
+
+int32_t add_grammar_fst_text_laf_nnet3(void* model_vp, char* grammar_fst_cp) {
+    auto model = static_cast<LafNNet3OnlineModelWrapper*>(model_vp);
     std::istringstream iss(grammar_fst_cp);
     int32_t grammar_fst_index = model->AddGrammarFst(iss);
     return grammar_fst_index;

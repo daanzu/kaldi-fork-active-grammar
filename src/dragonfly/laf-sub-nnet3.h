@@ -92,7 +92,7 @@ class LafNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
         LafNNet3OnlineModelWrapper(LafNNet3OnlineModelConfig::Ptr config, int32 verbosity = DEFAULT_VERBOSITY);
         ~LafNNet3OnlineModelWrapper() override;
 
-        void PrepareGrammarFst(fst::StdVectorFst* grammar_fst);
+        void PrepareGrammarFst(fst::StdVectorFst* grammar_fst, bool relabel);
         int32 AddGrammarFst(fst::StdFst* grammar_fst, std::string grammar_name = "<unnamed>");
         int32 AddGrammarFst(std::istream& grammar_text);
         int32 AddGrammarFst(std::string& grammar_fst_filename);
@@ -111,8 +111,8 @@ class LafNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
         // Model
         StdFst *hcl_fst_ = nullptr;
         std::vector<int32> disambig_tids_;
-        std::vector<std::pair<StdArc::Label, StdArc::Label>> relabel_ilabels_;
-        fst::SymbolTable *word_syms_relabeled_ = nullptr;
+        std::vector<std::pair<StdArc::Label, StdArc::Label>> relabel_ilabels_;  // Lookahead relabel mapping (word-ids -> relabeled-word-ids)
+        fst::SymbolTable *word_syms_relabeled_ = nullptr;  // Word symbol table composed with relabeling, allowing compiling directly to relabeled grammar
         StdConstFst *dictation_fst_ = nullptr;
         std::vector<StdFst*> grammar_fsts_;
         std::map<StdFst*, std::string> grammar_fsts_name_map_;  // maps grammar_fst -> name; for debugging
