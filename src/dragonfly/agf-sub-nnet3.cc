@@ -336,7 +336,41 @@ bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_samples, floa
     return decode_base_nnet3(model_vp, samp_freq, num_samples, samples, finalize, save_adaptation_state);
 }
 
-bool compile_graph_agf(void* model_vp, int32_t argc, char** argv) {
-    int result = CompileGraphAgfMain(argc, argv);
-    return (result == 0);
+// bool nnet3_agf__compile_graph_file(void* model_vp, int32_t argc, char** argv) {
+//     int result = CompileGraphAgfMain(argc, argv);
+//     return (result == 0);
+// }
+
+void* nnet3_agf__init_compiler(char* config_str_cp) {
+    std::string config_str((config_str_cp != nullptr) ? config_str_cp : "");
+    auto config = nlohmann::json::parse(config_str).get<AgfCompilerConfig>();
+    auto compiler = new AgfCompiler(config);
+    return compiler;
 }
+
+void* nnet3_agf__compile_graph_text(void* compiler_vp, char* config_str_cp, char* grammar_fst_text_cp, char* grammar_fst_out_filename_cp, bool return_graph) {
+    auto compiler = static_cast<AgfCompiler*>(compiler_vp);
+    std::string config_str((config_str_cp != nullptr) ? config_str_cp : "");
+    auto config = nlohmann::json::parse(config_str).get<AgfCompilerConfig>();
+    std::istringstream iss(grammar_fst_text_cp);
+    auto fst = compiler->CompileFstText(iss);
+    std::string grammar_fst_out_filename((grammar_fst_out_filename_cp != nullptr) ? grammar_fst_out_filename_cp : "");
+    auto result = compiler->CompileGrammar(fst, grammar_fst_out_filename);
+    if (!return_graph) {
+        delete result;
+        result = nullptr;
+    }
+    return result;
+}
+
+// void* nnet3_agf__compile_graph(void* compiler_vp, void* grammar_fst_cp, char* grammar_fst_out_filename_cp, bool return_graph) {
+//     auto compiler = static_cast<AgfCompiler*>(compiler_vp);
+//     auto fst = static_cast<StdVectorFst*>(grammar_fst_cp);
+//     std::string grammar_fst_out_filename((grammar_fst_out_filename_cp != nullptr) ? grammar_fst_out_filename_cp : "");
+//     auto result = compiler->CompileGrammar(fst, grammar_fst_out_filename);
+//     if (!return_graph) {
+//         delete result;
+//         result = nullptr;
+//     }
+//     return result;
+// }
