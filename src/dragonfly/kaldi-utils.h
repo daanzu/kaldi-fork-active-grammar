@@ -33,6 +33,7 @@ namespace dragonfly {
 using namespace kaldi;
 using namespace fst;
 
+
 inline ConstFst<StdArc>* CastOrConvertToConstFst(Fst<StdArc>* fst) {
     // This version currently supports ConstFst<StdArc> or VectorFst<StdArc>
     std::string real_type = fst->Type();
@@ -65,6 +66,26 @@ inline void WriteLattice(const CompactLattice clat_in, std::string name = "latti
     WriteFstKaldi(fst, ss.str());
     KALDI_WARN << "Wrote " << filename;
 }
+
+
+// RAII object that sets Kaldi verbosity level upon construction, and resets it upon destruction.
+class VerboseLevelResetter {
+   public:
+    VerboseLevelResetter(int32 verbosity) {
+        orig_verbosity_ = GetVerboseLevel();
+        SetVerboseLevel(verbosity);
+    }
+
+    ~VerboseLevelResetter() {
+        SetVerboseLevel(orig_verbosity_);
+    }
+
+    int32 GetOrigVerbosity() const { return orig_verbosity_; }
+
+   private:
+    int32 orig_verbosity_;
+};
+
 
 // ArcMapper that takes acceptor and relabels all nonterm:rules to nonterm:rule0, so redundant/ambiguous rules don't count as differing for measuring
 // confidence.
