@@ -468,21 +468,24 @@ namespace kaldi {
     // Load IvectorExtractor config from JSON object. See src\online2\online-ivector-feature.h
     void from_json(const nlohmann::json& j, OnlineIvectorExtractionConfig& c) {
         if (!j.is_object()) KALDI_ERR << "Not an object!";
-        if (j.contains("lda-matrix")) j.at("lda-matrix").get_to(c.lda_mat_rxfilename);
-        if (j.contains("global-cmvn-stats")) j.at("global-cmvn-stats").get_to(c.global_cmvn_stats_rxfilename);
-        if (j.contains("cmvn-config")) j.at("cmvn-config").get_to(c.cmvn_config_rxfilename);
-        if (j.contains("online-cmvn-iextractor")) j.at("online-cmvn-iextractor").get_to(c.online_cmvn_iextractor);
-        if (j.contains("splice-config")) j.at("splice-config").get_to(c.splice_config_rxfilename);
-        if (j.contains("diag-ubm")) j.at("diag-ubm").get_to(c.diag_ubm_rxfilename);
-        if (j.contains("ivector-extractor")) j.at("ivector-extractor").get_to(c.ivector_extractor_rxfilename);
-        if (j.contains("ivector-period")) j.at("ivector-period").get_to(c.ivector_period);
-        if (j.contains("num-gselect")) j.at("num-gselect").get_to(c.num_gselect);
-        if (j.contains("min-post")) j.at("min-post").get_to(c.min_post);
-        if (j.contains("posterior-scale")) j.at("posterior-scale").get_to(c.posterior_scale);
-        if (j.contains("max-count")) j.at("max-count").get_to(c.max_count);
-        if (j.contains("use-most-recent-ivector")) j.at("use-most-recent-ivector").get_to(c.use_most_recent_ivector);
-        if (j.contains("greedy-ivector-extractor")) j.at("greedy-ivector-extractor").get_to(c.greedy_ivector_extractor);
-        if (j.contains("max-remembered-frames")) j.at("max-remembered-frames").get_to(c.max_remembered_frames);
+        for (auto& el : j.items()) {
+            if (el.key() == "lda-matrix") j.at(el.key()).get_to(c.lda_mat_rxfilename);
+            else if (el.key() == "global-cmvn-stats") j.at(el.key()).get_to(c.global_cmvn_stats_rxfilename);
+            else if (el.key() == "cmvn-config") j.at(el.key()).get_to(c.cmvn_config_rxfilename);
+            else if (el.key() == "online-cmvn-iextractor") j.at(el.key()).get_to(c.online_cmvn_iextractor);
+            else if (el.key() == "splice-config") j.at(el.key()).get_to(c.splice_config_rxfilename);
+            else if (el.key() == "diag-ubm") j.at(el.key()).get_to(c.diag_ubm_rxfilename);
+            else if (el.key() == "ivector-extractor") j.at(el.key()).get_to(c.ivector_extractor_rxfilename);
+            else if (el.key() == "ivector-period") j.at(el.key()).get_to(c.ivector_period);
+            else if (el.key() == "num-gselect") j.at(el.key()).get_to(c.num_gselect);
+            else if (el.key() == "min-post") j.at(el.key()).get_to(c.min_post);
+            else if (el.key() == "posterior-scale") j.at(el.key()).get_to(c.posterior_scale);
+            else if (el.key() == "max-count") j.at(el.key()).get_to(c.max_count);
+            else if (el.key() == "use-most-recent-ivector") j.at(el.key()).get_to(c.use_most_recent_ivector);
+            else if (el.key() == "greedy-ivector-extractor") j.at(el.key()).get_to(c.greedy_ivector_extractor);
+            else if (el.key() == "max-remembered-frames") j.at(el.key()).get_to(c.max_remembered_frames);
+            else KALDI_WARN << "unrecognized json object item " << el.key() << ": " << el.value();
+        }
     }
 } // namespace kaldi
 

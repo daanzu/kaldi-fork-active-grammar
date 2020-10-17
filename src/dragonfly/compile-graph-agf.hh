@@ -64,26 +64,29 @@ struct AgfCompilerConfig {
 
 void from_json(const nlohmann::json& j, AgfCompilerConfig& c) {
     if (!j.is_object()) KALDI_ERR << "Not an object!";
-    if (j.contains("tree_rxfilename")) j.at("tree_rxfilename").get_to(c.tree_rxfilename);
-    if (j.contains("model_rxfilename")) j.at("model_rxfilename").get_to(c.model_rxfilename);
-    if (j.contains("lex_rxfilename")) j.at("lex_rxfilename").get_to(c.lex_rxfilename);
-    if (j.contains("grammar_rxfilename")) j.at("grammar_rxfilename").get_to(c.grammar_rxfilename);
-    if (j.contains("hclg_wxfilename")) j.at("hclg_wxfilename").get_to(c.hclg_wxfilename);
-    if (j.contains("transition_scale")) j.at("transition_scale").get_to(c.transition_scale);
-    if (j.contains("self_loop_scale")) j.at("self_loop_scale").get_to(c.self_loop_scale);
-    if (j.contains("nonterm_phones_offset")) j.at("nonterm_phones_offset").get_to(c.nonterm_phones_offset);
-    if (j.contains("disambig_rxfilename")) j.at("disambig_rxfilename").get_to(c.disambig_rxfilename);
-    if (j.contains("verbose")) j.at("verbose").get_to(c.verbose);
-    if (j.contains("compile_grammar")) j.at("compile_grammar").get_to(c.compile_grammar);
-    if (j.contains("grammar_symbols")) j.at("grammar_symbols").get_to(c.grammar_symbols);
-    if (j.contains("topsort_grammar")) j.at("topsort_grammar").get_to(c.topsort_grammar);
-    if (j.contains("arcsort_grammar")) j.at("arcsort_grammar").get_to(c.arcsort_grammar);
-    if (j.contains("grammar_prepend_nonterm_fst")) j.at("grammar_prepend_nonterm_fst").get_to(c.grammar_prepend_nonterm_fst);
-    if (j.contains("grammar_append_nonterm_fst")) j.at("grammar_append_nonterm_fst").get_to(c.grammar_append_nonterm_fst);
-    if (j.contains("grammar_prepend_nonterm")) j.at("grammar_prepend_nonterm").get_to(c.grammar_prepend_nonterm);
-    if (j.contains("grammar_append_nonterm")) j.at("grammar_append_nonterm").get_to(c.grammar_append_nonterm);
-    if (j.contains("simplify_lg")) j.at("simplify_lg").get_to(c.simplify_lg);
-    if (j.contains("word_syms_filename")) j.at("word_syms_filename").get_to(c.word_syms_filename);
+    for (auto& el : j.items()) {
+        if (el.key() == "tree_rxfilename") j.at(el.key()).get_to(c.tree_rxfilename);
+        else if (el.key() == "model_rxfilename") j.at(el.key()).get_to(c.model_rxfilename);
+        else if (el.key() == "lex_rxfilename") j.at(el.key()).get_to(c.lex_rxfilename);
+        else if (el.key() == "grammar_rxfilename") j.at(el.key()).get_to(c.grammar_rxfilename);
+        else if (el.key() == "hclg_wxfilename") j.at(el.key()).get_to(c.hclg_wxfilename);
+        else if (el.key() == "transition_scale") j.at(el.key()).get_to(c.transition_scale);
+        else if (el.key() == "self_loop_scale") j.at(el.key()).get_to(c.self_loop_scale);
+        else if (el.key() == "nonterm_phones_offset") j.at(el.key()).get_to(c.nonterm_phones_offset);
+        else if (el.key() == "disambig_rxfilename") j.at(el.key()).get_to(c.disambig_rxfilename);
+        else if (el.key() == "verbose") j.at(el.key()).get_to(c.verbose);
+        else if (el.key() == "compile_grammar") j.at(el.key()).get_to(c.compile_grammar);
+        else if (el.key() == "grammar_symbols") j.at(el.key()).get_to(c.grammar_symbols);
+        else if (el.key() == "topsort_grammar") j.at(el.key()).get_to(c.topsort_grammar);
+        else if (el.key() == "arcsort_grammar") j.at(el.key()).get_to(c.arcsort_grammar);
+        else if (el.key() == "grammar_prepend_nonterm_fst") j.at(el.key()).get_to(c.grammar_prepend_nonterm_fst);
+        else if (el.key() == "grammar_append_nonterm_fst") j.at(el.key()).get_to(c.grammar_append_nonterm_fst);
+        else if (el.key() == "grammar_prepend_nonterm") j.at(el.key()).get_to(c.grammar_prepend_nonterm);
+        else if (el.key() == "grammar_append_nonterm") j.at(el.key()).get_to(c.grammar_append_nonterm);
+        else if (el.key() == "simplify_lg") j.at(el.key()).get_to(c.simplify_lg);
+        else if (el.key() == "word_syms_filename") j.at(el.key()).get_to(c.word_syms_filename);
+        else KALDI_WARN << "unrecognized json object item " << el.key() << ": " << el.value();
+    }
 }
 
 
