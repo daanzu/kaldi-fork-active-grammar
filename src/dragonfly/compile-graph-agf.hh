@@ -47,7 +47,7 @@ struct AgfCompilerConfig {
     BaseFloat self_loop_scale = 1.0;  // Caution: the script default is 0.1.
     int32 nonterm_phones_offset = -1;
     std::string disambig_rxfilename;
-    bool verbose = false;
+    int32 verbose = 0;
 
     bool compile_grammar = false;
     std::string grammar_symbols;
@@ -95,7 +95,7 @@ class AgfCompiler {
     AgfCompiler(const AgfCompilerConfig& config);
     ~AgfCompiler() { };
 
-    StdVectorFst* CompileGrammar(const StdVectorFst* grammar_fst_in, const std::string& hclg_wxfilename = "");
+    StdVectorFst* CompileGrammar(const StdFst* grammar_fst_in, const AgfCompilerConfig* config = nullptr);
     StdVectorFst* CompileFstText(std::istream& grammar_text);
 
    private:
@@ -111,10 +111,10 @@ class AgfCompiler {
 };
 
 AgfCompiler::AgfCompiler(const AgfCompilerConfig& config) : config_(config) {
-    if (config_.compile_grammar
-        || !config_.grammar_rxfilename.empty()
-        || !config_.hclg_wxfilename.empty()
-        ) KALDI_ERR << "illegal config";
+    // if (config_.compile_grammar
+    //     || !config_.grammar_rxfilename.empty()
+    //     || !config_.hclg_wxfilename.empty()
+    //     ) KALDI_ERR << "illegal config";
 
     ReadKaldiObject(config_.tree_rxfilename, &ctx_dep);
 
@@ -145,43 +145,53 @@ AgfCompiler::AgfCompiler(const AgfCompilerConfig& config) : config_(config) {
             KALDI_ERR << "Could not read symbol table from file " << config_.word_syms_filename;
 }
 
-StdVectorFst* AgfCompiler::CompileGrammar(const StdVectorFst* grammar_fst_in, const std::string& hclg_wxfilename) {
-    KALDI_VLOG(1) << "Preparing G...";
+StdVectorFst* AgfCompiler::CompileGrammar(const StdFst* grammar_fst_in, const AgfCompilerConfig* config) {
+    if (config) {
+        if (!config->tree_rxfilename.empty() && config->tree_rxfilename != config_.tree_rxfilename) KALDI_ERR << "config.tree_rxfilename != config_.tree_rxfilename";
+        if (!config->model_rxfilename.empty() && config->model_rxfilename != config_.model_rxfilename) KALDI_ERR << "config.model_rxfilename != config_.model_rxfilename";
+        if (!config->lex_rxfilename.empty() && config->lex_rxfilename != config_.lex_rxfilename) KALDI_ERR << "config.lex_rxfilename != config_.lex_rxfilename";
+        if (!config->disambig_rxfilename.empty() && config->disambig_rxfilename != config_.disambig_rxfilename) KALDI_ERR << "config.disambig_rxfilename != config_.disambig_rxfilename";
+        if (!config->word_syms_filename.empty() && config->word_syms_filename != config_.word_syms_filename) KALDI_ERR << "config.word_syms_filename != config_.word_syms_filename";
+    } else {
+        config = &config_;
+    }
 
+    VerboseLevelResetter vlr(config->verbose);
+    KALDI_VLOG(1) << "Preparing G...";
     VectorFst<StdArc>* grammar_fst = new StdVectorFst(*grammar_fst_in);
 
-    if (config_.arcsort_grammar) {
+    if (config->arcsort_grammar) {
       fst::ArcSort(grammar_fst, fst::ILabelCompare<StdArc>());
     }
 
-    if (!config_.grammar_prepend_nonterm_fst.empty()) {
-      VectorFst<StdArc> *nonterm_fst = fst::ReadFstKaldi(config_.grammar_prepend_nonterm_fst);
+    if (!config->grammar_prepend_nonterm_fst.empty()) {
+      VectorFst<StdArc> *nonterm_fst = fst::ReadFstKaldi(config->grammar_prepend_nonterm_fst);
       fst::Concat(*nonterm_fst, grammar_fst);
     }
-    if (!config_.grammar_append_nonterm_fst.empty()) {
-      VectorFst<StdArc> *nonterm_fst = fst::ReadFstKaldi(config_.grammar_append_nonterm_fst);
+    if (!config->grammar_append_nonterm_fst.empty()) {
+      VectorFst<StdArc> *nonterm_fst = fst::ReadFstKaldi(config->grammar_append_nonterm_fst);
       fst::Concat(grammar_fst, *nonterm_fst);
     }
-    if (config_.grammar_prepend_nonterm > 0) {
+    if (config->grammar_prepend_nonterm > 0) {
       VectorFst<StdArc> nonterm_fst;
       nonterm_fst.AddState();
       nonterm_fst.SetStart(0);
       nonterm_fst.AddState();
       nonterm_fst.SetFinal(1, 0.0);
-      nonterm_fst.AddArc(0, StdArc(config_.grammar_prepend_nonterm, 0, 0.0, 1));
+      nonterm_fst.AddArc(0, StdArc(config->grammar_prepend_nonterm, 0, 0.0, 1));
       fst::Concat(nonterm_fst, grammar_fst);
     }
-    if (config_.grammar_append_nonterm > 0) {
+    if (config->grammar_append_nonterm > 0) {
       VectorFst<StdArc> nonterm_fst;
       nonterm_fst.AddState();
       nonterm_fst.SetStart(0);
       nonterm_fst.AddState();
       nonterm_fst.SetFinal(1, 0.0);
-      nonterm_fst.AddArc(0, StdArc(config_.grammar_append_nonterm, 0, 0.0, 1));
+      nonterm_fst.AddArc(0, StdArc(config->grammar_append_nonterm, 0, 0.0, 1));
       fst::Concat(grammar_fst, nonterm_fst);
     }
 
-    if (config_.simplify_lg) {
+    if (config->simplify_lg) {
       // I think this should speed later stages
       KALDI_VLOG(1) << "Determinizing G fst...";
       VectorFst<StdArc> tmp_fst;
@@ -193,7 +203,7 @@ StdVectorFst* AgfCompiler::CompileGrammar(const StdVectorFst* grammar_fst_in, co
     VectorFst<StdArc> lg_fst;
     TableCompose(*lex_fst, *grammar_fst, &lg_fst);
 
-    if (config_.topsort_grammar) {
+    if (config->topsort_grammar) {
       bool acyclic = fst::TopSort(&lg_fst);
       if (!acyclic) {
         KALDI_ERR
@@ -203,7 +213,7 @@ StdVectorFst* AgfCompiler::CompileGrammar(const StdVectorFst* grammar_fst_in, co
       }
     }
 
-    if (config_.simplify_lg) {
+    if (config->simplify_lg) {
       // Remove epsilons to ease Determinization (Caster text manipulation hanging bug)
       // We need to use full RmEpsilon, because RemoveEpsLocal is not sufficient
       KALDI_VLOG(1) << "RmEpsiloning LG fst...";
@@ -233,7 +243,7 @@ StdVectorFst* AgfCompiler::CompileGrammar(const StdVectorFst* grammar_fst_in, co
         central_position = ctx_dep.CentralPosition();
 
     KALDI_VLOG(1) << "Composing CLG fst...";
-    if (config_.nonterm_phones_offset < 0) {
+    if (config->nonterm_phones_offset < 0) {
       // The normal case.
       ComposeContext(disambig_syms, context_width, central_position,
                      &lg_fst, &clg_fst, &ilabels);
@@ -243,15 +253,15 @@ StdVectorFst* AgfCompiler::CompileGrammar(const StdVectorFst* grammar_fst_in, co
         KALDI_ERR << "Grammar-fst graph creation only supports models with left-"
             "biphone context.  (--nonterm-phones-offset option was supplied).";
       }
-      ComposeContextLeftBiphone(config_.nonterm_phones_offset,  disambig_syms,
+      ComposeContextLeftBiphone(config->nonterm_phones_offset,  disambig_syms,
                                 lg_fst, &clg_fst, &ilabels);
     }
     lg_fst.DeleteStates();
 
     KALDI_VLOG(1) << "Constructing H fst...";
     HTransducerConfig h_cfg;
-    h_cfg.transition_scale = config_.transition_scale;
-    h_cfg.nonterm_phones_offset = config_.nonterm_phones_offset;
+    h_cfg.transition_scale = config->transition_scale;
+    h_cfg.nonterm_phones_offset = config->nonterm_phones_offset;
     std::vector<int32> disambig_syms_h; // disambiguation symbols on
                                         // input side of H.
     VectorFst<StdArc> *h_fst = GetHTransducer(ilabels,
@@ -287,30 +297,31 @@ StdVectorFst* AgfCompiler::CompileGrammar(const StdVectorFst* grammar_fst_in, co
         reorder = true;
     AddSelfLoops(trans_model,
                  disambig,
-                 config_.self_loop_scale,
+                 config->self_loop_scale,
                  reorder,
                  check_no_self_loops,
                  &hclg_fst);
 
-    if (config_.nonterm_phones_offset >= 0)
-      PrepareForActiveGrammarFst(config_.nonterm_phones_offset, &hclg_fst);
+    if (config->nonterm_phones_offset >= 0)
+      PrepareForActiveGrammarFst(config->nonterm_phones_offset, &hclg_fst);
 
-    if (!hclg_wxfilename.empty()) {
+    if (!config->hclg_wxfilename.empty()) {
         fst::ConstFst<StdArc> const_hclg(hclg_fst);
         bool binary = true, write_binary_header = false;  // suppress the ^@B
-        Output ko(hclg_wxfilename, binary, write_binary_header);
-        fst::FstWriteOptions wopts(PrintableWxfilename(hclg_wxfilename));
+        Output ko(config->hclg_wxfilename, binary, write_binary_header);
+        fst::FstWriteOptions wopts(PrintableWxfilename(config->hclg_wxfilename));
         const_hclg.Write(ko.Stream(), wopts);
+        KALDI_LOG << "Wrote graph with " << hclg_fst.NumStates()
+                << " states to " << config->hclg_wxfilename;
     }
 
-    KALDI_LOG << "Wrote graph with " << hclg_fst.NumStates()
-              << " states to " << hclg_wxfilename;
     return hclg_fst_p;
 }
 
 StdVectorFst* AgfCompiler::CompileFstText(std::istream& grammar_text) {
+    if (!word_syms_) KALDI_ERR << "word_syms_ empty";
     // FIXME: fix build for linux and macos, and CI for windows, to include fst::script for CompileFstInternal
-    auto grammar_fstclass = fst::script::CompileFstInternal(grammar_text, "<AddGrammarFst>", "vector", "standard",
+    auto grammar_fstclass = fst::script::CompileFstInternal(grammar_text, "<CompileFstText>", "vector", "standard",
         word_syms_, word_syms_, nullptr, false, false, false, false, false);
     auto grammar_fst = dynamic_cast<StdVectorFst*>(fst::Convert(*grammar_fstclass->GetFst<StdArc>(), "vector"));
     if (!grammar_fst) KALDI_ERR << "could not convert grammar Fst to StdVectorFst";

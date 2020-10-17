@@ -62,7 +62,9 @@ DRAGONFLY_API bool reload_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_
 DRAGONFLY_API bool remove_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index);
 DRAGONFLY_API bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,
     bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state);
-DRAGONFLY_API bool compile_graph_agf(void* model_vp, int32_t argc, char** argv);
+DRAGONFLY_API void* nnet3_agf__init_compiler(char* config_str_cp);
+DRAGONFLY_API void* nnet3_agf__compile_graph_text(void* compiler_vp, char* config_str_cp, char* grammar_fst_text_cp, bool return_graph);
+DRAGONFLY_API void* nnet3_agf__compile_graph_file(void* compiler_vp, char* config_str_cp, char* grammar_fst_filename_cp, bool return_graph);
 
 DRAGONFLY_API void* init_laf_nnet3(char* model_dir_cp, char* config_str_cp, int32_t verbosity);
 DRAGONFLY_API int32_t add_grammar_fst_laf_nnet3(void* model_vp, void* grammar_fst_cp);
