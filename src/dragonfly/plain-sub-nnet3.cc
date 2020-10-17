@@ -205,7 +205,7 @@ extern "C" {
 
 using namespace dragonfly;
 
-void* init_plain_nnet3(char* model_dir_cp, char* config_str_cp, int32_t verbosity) {
+void* nnet3_plain__init(char* model_dir_cp, char* config_str_cp, int32_t verbosity) {
     BEGIN_INTERFACE_CATCH_HANDLER
     std::string model_dir(model_dir_cp),
         config_str((config_str_cp != nullptr) ? config_str_cp : "");
@@ -214,6 +214,6 @@ void* init_plain_nnet3(char* model_dir_cp, char* config_str_cp, int32_t verbosit
     END_INTERFACE_CATCH_HANDLER(nullptr)
 }
 
-bool decode_plain_nnet3(void* model_vp, float samp_freq, int32_t num_samples, float* samples, bool finalize, bool save_adaptation_state) {
-    return decode_base_nnet3(model_vp, samp_freq, num_samples, samples, finalize, save_adaptation_state);
+bool nnet3_plain__decode(void* model_vp, float samp_freq, int32_t num_samples, float* samples, bool finalize, bool save_adaptation_state) {
+    return nnet3_base__decode(model_vp, samp_freq, num_samples, samples, finalize, save_adaptation_state);
 }

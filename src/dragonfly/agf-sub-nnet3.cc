@@ -297,7 +297,7 @@ extern "C" {
 
 using namespace dragonfly;
 
-void* init_agf_nnet3(char* model_dir_cp, char* config_str_cp, int32_t verbosity) {
+void* nnet3_agf__init(char* model_dir_cp, char* config_str_cp, int32_t verbosity) {
     BEGIN_INTERFACE_CATCH_HANDLER
     std::string model_dir(model_dir_cp),
         config_str((config_str_cp != nullptr) ? config_str_cp : "");
@@ -306,7 +306,7 @@ void* init_agf_nnet3(char* model_dir_cp, char* config_str_cp, int32_t verbosity)
     END_INTERFACE_CATCH_HANDLER(nullptr)
 }
 
-int32_t add_grammar_fst_agf_nnet3(void* model_vp, char* grammar_fst_filename_cp) {
+int32_t nnet3_agf__add_grammar_fst(void* model_vp, char* grammar_fst_filename_cp) {
     BEGIN_INTERFACE_CATCH_HANDLER
     auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
     std::string grammar_fst_filename(grammar_fst_filename_cp);
@@ -315,7 +315,7 @@ int32_t add_grammar_fst_agf_nnet3(void* model_vp, char* grammar_fst_filename_cp)
     END_INTERFACE_CATCH_HANDLER(-1)
 }
 
-bool reload_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp) {
+bool nnet3_agf__reload_grammar_fst(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp) {
     BEGIN_INTERFACE_CATCH_HANDLER
     auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
     std::string grammar_fst_filename(grammar_fst_filename_cp);
@@ -324,7 +324,7 @@ bool reload_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index, cha
     END_INTERFACE_CATCH_HANDLER(false)
 }
 
-bool remove_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index) {
+bool nnet3_agf__remove_grammar_fst(void* model_vp, int32_t grammar_fst_index) {
     BEGIN_INTERFACE_CATCH_HANDLER
     auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
     bool result = model->RemoveGrammarFst(grammar_fst_index);
@@ -332,7 +332,7 @@ bool remove_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index) {
     END_INTERFACE_CATCH_HANDLER(false)
 }
 
-bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_samples, float* samples, bool finalize,
+bool nnet3_agf__decode(void* model_vp, float samp_freq, int32_t num_samples, float* samples, bool finalize,
     bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state) {
     BEGIN_INTERFACE_CATCH_HANDLER
     if (grammars_activity_cp_size) {
@@ -342,7 +342,7 @@ bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_samples, floa
             grammars_activity[i] = grammars_activity_cp[i];
         model->SetActiveGrammars(std::move(grammars_activity));
     }
-    return decode_base_nnet3(model_vp, samp_freq, num_samples, samples, finalize, save_adaptation_state);
+    return nnet3_base__decode(model_vp, samp_freq, num_samples, samples, finalize, save_adaptation_state);
     END_INTERFACE_CATCH_HANDLER(false)
 }
 

@@ -496,7 +496,7 @@ extern "C" {
 
 using namespace dragonfly;
 
-bool load_lexicon_base_nnet3(void* model_vp, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp) {
+bool nnet3_base__load_lexicon(void* model_vp, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp) {
     BEGIN_INTERFACE_CATCH_HANDLER
     auto model = static_cast<BaseNNet3OnlineModelWrapper*>(model_vp);
     std::string word_syms_filename(word_syms_filename_cp), word_align_lexicon_filename(word_align_lexicon_filename_cp);
@@ -505,7 +505,7 @@ bool load_lexicon_base_nnet3(void* model_vp, char* word_syms_filename_cp, char* 
     END_INTERFACE_CATCH_HANDLER(false)
 }
 
-bool save_adaptation_state_base_nnet3(void* model_vp) {
+bool nnet3_base__save_adaptation_state(void* model_vp) {
     BEGIN_INTERFACE_CATCH_HANDLER
     auto model = static_cast<BaseNNet3OnlineModelWrapper*>(model_vp);
     bool result = model->SaveAdaptationState();
@@ -513,7 +513,7 @@ bool save_adaptation_state_base_nnet3(void* model_vp) {
     END_INTERFACE_CATCH_HANDLER(false)
 }
 
-bool reset_adaptation_state_base_nnet3(void* model_vp) {
+bool nnet3_base__reset_adaptation_state(void* model_vp) {
     BEGIN_INTERFACE_CATCH_HANDLER
     auto model = static_cast<BaseNNet3OnlineModelWrapper*>(model_vp);
     model->ResetAdaptationState();
@@ -521,7 +521,7 @@ bool reset_adaptation_state_base_nnet3(void* model_vp) {
     END_INTERFACE_CATCH_HANDLER(false)
 }
 
-bool set_lm_prime_text_base_nnet3(void* model_vp, char* prime_text_cp) {
+bool nnet3_base__set_lm_prime_text(void* model_vp, char* prime_text_cp) {
     BEGIN_INTERFACE_CATCH_HANDLER
     auto model = static_cast<BaseNNet3OnlineModelWrapper*>(model_vp);
     std::string prime_text(prime_text_cp);
@@ -530,7 +530,7 @@ bool set_lm_prime_text_base_nnet3(void* model_vp, char* prime_text_cp) {
     END_INTERFACE_CATCH_HANDLER(false)
 }
 
-bool get_word_align_base_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words) {
+bool nnet3_base__get_word_align(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words) {
     BEGIN_INTERFACE_CATCH_HANDLER
     auto model = static_cast<BaseNNet3OnlineModelWrapper*>(model_vp);
     std::vector<string> words;
@@ -551,7 +551,7 @@ bool get_word_align_base_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengt
     END_INTERFACE_CATCH_HANDLER(false)
 }
 
-bool decode_base_nnet3(void* model_vp, float samp_freq, int32_t num_samples, float* samples, bool finalize, bool save_adaptation_state) {
+bool nnet3_base__decode(void* model_vp, float samp_freq, int32_t num_samples, float* samples, bool finalize, bool save_adaptation_state) {
     BEGIN_INTERFACE_CATCH_HANDLER
     auto model = static_cast<BaseNNet3OnlineModelWrapper*>(model_vp);
     // if (num_samples > 3200)
@@ -564,7 +564,7 @@ bool decode_base_nnet3(void* model_vp, float samp_freq, int32_t num_samples, flo
     END_INTERFACE_CATCH_HANDLER(false)
 }
 
-bool get_output_base_nnet3(void* model_vp, char* output, int32_t output_max_length,
+bool nnet3_base__get_output(void* model_vp, char* output, int32_t output_max_length,
         float* likelihood_p, float* am_score_p, float* lm_score_p, float* confidence_p, float* expected_error_rate_p) {
     BEGIN_INTERFACE_CATCH_HANDLER
     auto model = static_cast<BaseNNet3OnlineModelWrapper*>(model_vp);
