@@ -298,34 +298,43 @@ extern "C" {
 using namespace dragonfly;
 
 void* init_agf_nnet3(char* model_dir_cp, char* config_str_cp, int32_t verbosity) {
+    BEGIN_INTERFACE_CATCH_HANDLER
     std::string model_dir(model_dir_cp),
         config_str((config_str_cp != nullptr) ? config_str_cp : "");
     auto model = new AgfNNet3OnlineModelWrapper(AgfNNet3OnlineModelConfig::Create(model_dir, config_str), verbosity);
     return model;
+    END_INTERFACE_CATCH_HANDLER(nullptr)
 }
 
 int32_t add_grammar_fst_agf_nnet3(void* model_vp, char* grammar_fst_filename_cp) {
+    BEGIN_INTERFACE_CATCH_HANDLER
     auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
     std::string grammar_fst_filename(grammar_fst_filename_cp);
     int32_t grammar_fst_index = model->AddGrammarFst(grammar_fst_filename);
     return grammar_fst_index;
+    END_INTERFACE_CATCH_HANDLER(-1)
 }
 
 bool reload_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp) {
+    BEGIN_INTERFACE_CATCH_HANDLER
     auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
     std::string grammar_fst_filename(grammar_fst_filename_cp);
     bool result = model->ReloadGrammarFst(grammar_fst_index, grammar_fst_filename);
     return result;
+    END_INTERFACE_CATCH_HANDLER(false)
 }
 
 bool remove_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index) {
+    BEGIN_INTERFACE_CATCH_HANDLER
     auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
     bool result = model->RemoveGrammarFst(grammar_fst_index);
     return result;
+    END_INTERFACE_CATCH_HANDLER(false)
 }
 
 bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_samples, float* samples, bool finalize,
     bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state) {
+    BEGIN_INTERFACE_CATCH_HANDLER
     if (grammars_activity_cp_size) {
         auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
         std::vector<bool> grammars_activity(grammars_activity_cp_size, false);
@@ -334,6 +343,7 @@ bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_samples, floa
         model->SetActiveGrammars(std::move(grammars_activity));
     }
     return decode_base_nnet3(model_vp, samp_freq, num_samples, samples, finalize, save_adaptation_state);
+    END_INTERFACE_CATCH_HANDLER(false)
 }
 
 // bool nnet3_agf__compile_graph_file(void* model_vp, int32_t argc, char** argv) {
@@ -342,13 +352,16 @@ bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_samples, floa
 // }
 
 void* nnet3_agf__init_compiler(char* config_str_cp) {
+    BEGIN_INTERFACE_CATCH_HANDLER
     std::string config_str((config_str_cp != nullptr) ? config_str_cp : "");
     auto config = nlohmann::json::parse(config_str).get<AgfCompilerConfig>();
     auto compiler = new AgfCompiler(config);
     return compiler;
+    END_INTERFACE_CATCH_HANDLER(nullptr)
 }
 
 void* nnet3_agf__compile_graph_text(void* compiler_vp, char* config_str_cp, char* grammar_fst_text_cp, char* grammar_fst_out_filename_cp, bool return_graph) {
+    BEGIN_INTERFACE_CATCH_HANDLER
     auto compiler = static_cast<AgfCompiler*>(compiler_vp);
     std::string config_str((config_str_cp != nullptr) ? config_str_cp : "");
     auto config = nlohmann::json::parse(config_str).get<AgfCompilerConfig>();
@@ -361,6 +374,7 @@ void* nnet3_agf__compile_graph_text(void* compiler_vp, char* config_str_cp, char
         result = nullptr;
     }
     return result;
+    END_INTERFACE_CATCH_HANDLER(nullptr)
 }
 
 // void* nnet3_agf__compile_graph(void* compiler_vp, void* grammar_fst_cp, char* grammar_fst_out_filename_cp, bool return_graph) {

@@ -497,116 +497,88 @@ extern "C" {
 using namespace dragonfly;
 
 bool load_lexicon_base_nnet3(void* model_vp, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp) {
-    try {
-        auto model = static_cast<BaseNNet3OnlineModelWrapper*>(model_vp);
-        std::string word_syms_filename(word_syms_filename_cp), word_align_lexicon_filename(word_align_lexicon_filename_cp);
-        bool result = model->LoadLexicon(word_syms_filename, word_align_lexicon_filename);
-        return result;
-
-    } catch(const std::exception& e) {
-        KALDI_WARN << "Trying to survive fatal exception: " << e.what();
-        return false;
-    }
+    BEGIN_INTERFACE_CATCH_HANDLER
+    auto model = static_cast<BaseNNet3OnlineModelWrapper*>(model_vp);
+    std::string word_syms_filename(word_syms_filename_cp), word_align_lexicon_filename(word_align_lexicon_filename_cp);
+    bool result = model->LoadLexicon(word_syms_filename, word_align_lexicon_filename);
+    return result;
+    END_INTERFACE_CATCH_HANDLER(false)
 }
 
 bool save_adaptation_state_base_nnet3(void* model_vp) {
-    try {
-        auto model = static_cast<BaseNNet3OnlineModelWrapper*>(model_vp);
-        bool result = model->SaveAdaptationState();
-        return result;
-
-    } catch(const std::exception& e) {
-        KALDI_WARN << "Trying to survive fatal exception: " << e.what();
-        return false;
-    }
+    BEGIN_INTERFACE_CATCH_HANDLER
+    auto model = static_cast<BaseNNet3OnlineModelWrapper*>(model_vp);
+    bool result = model->SaveAdaptationState();
+    return result;
+    END_INTERFACE_CATCH_HANDLER(false)
 }
 
 bool reset_adaptation_state_base_nnet3(void* model_vp) {
-    try {
-        auto model = static_cast<BaseNNet3OnlineModelWrapper*>(model_vp);
-        model->ResetAdaptationState();
-        return true;
-
-    } catch(const std::exception& e) {
-        KALDI_WARN << "Trying to survive fatal exception: " << e.what();
-        return false;
-    }
+    BEGIN_INTERFACE_CATCH_HANDLER
+    auto model = static_cast<BaseNNet3OnlineModelWrapper*>(model_vp);
+    model->ResetAdaptationState();
+    return true;
+    END_INTERFACE_CATCH_HANDLER(false)
 }
 
 bool set_lm_prime_text_base_nnet3(void* model_vp, char* prime_text_cp) {
-    try {
-        auto model = static_cast<BaseNNet3OnlineModelWrapper*>(model_vp);
-        std::string prime_text(prime_text_cp);
-        model->SetLmPrimeText(prime_text);
-        return true;
-
-    } catch(const std::exception& e) {
-        KALDI_WARN << "Trying to survive fatal exception: " << e.what();
-        return false;
-    }
+    BEGIN_INTERFACE_CATCH_HANDLER
+    auto model = static_cast<BaseNNet3OnlineModelWrapper*>(model_vp);
+    std::string prime_text(prime_text_cp);
+    model->SetLmPrimeText(prime_text);
+    return true;
+    END_INTERFACE_CATCH_HANDLER(false)
 }
 
 bool get_word_align_base_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words) {
-    try {
-        auto model = static_cast<BaseNNet3OnlineModelWrapper*>(model_vp);
-        std::vector<string> words;
-        std::vector<int32> times, lengths;
-        bool result = model->GetWordAlignment(words, times, lengths, false);
+    BEGIN_INTERFACE_CATCH_HANDLER
+    auto model = static_cast<BaseNNet3OnlineModelWrapper*>(model_vp);
+    std::vector<string> words;
+    std::vector<int32> times, lengths;
+    bool result = model->GetWordAlignment(words, times, lengths, false);
 
-        if (result) {
-            KALDI_ASSERT(words.size() == num_words);
-            for (size_t i = 0; i < words.size(); i++) {
-                times_cp[i] = times[i];
-                lengths_cp[i] = lengths[i];
-            }
-        } else {
-            KALDI_WARN << "alignment failed";
+    if (result) {
+        KALDI_ASSERT(words.size() == num_words);
+        for (size_t i = 0; i < words.size(); i++) {
+            times_cp[i] = times[i];
+            lengths_cp[i] = lengths[i];
         }
-
-        return result;
-
-    } catch(const std::exception& e) {
-        KALDI_WARN << "Trying to survive fatal exception: " << e.what();
-        return false;
+    } else {
+        KALDI_WARN << "alignment failed";
     }
+
+    return result;
+    END_INTERFACE_CATCH_HANDLER(false)
 }
 
 bool decode_base_nnet3(void* model_vp, float samp_freq, int32_t num_samples, float* samples, bool finalize, bool save_adaptation_state) {
-    try {
-        auto model = static_cast<BaseNNet3OnlineModelWrapper*>(model_vp);
-        // if (num_samples > 3200)
-        //     KALDI_WARN << "Decoding large block of " << num_samples << " samples!";
-        Vector<BaseFloat> wave_data(num_samples, kUndefined);
-        for (int i = 0; i < num_samples; i++)
-            wave_data(i) = samples[i];
-        bool result = model->Decode(samp_freq, wave_data, finalize, save_adaptation_state);
-        return result;
-
-    } catch(const std::exception& e) {
-        KALDI_WARN << "Trying to survive fatal exception: " << e.what();
-        return false;
-    }
+    BEGIN_INTERFACE_CATCH_HANDLER
+    auto model = static_cast<BaseNNet3OnlineModelWrapper*>(model_vp);
+    // if (num_samples > 3200)
+    //     KALDI_WARN << "Decoding large block of " << num_samples << " samples!";
+    Vector<BaseFloat> wave_data(num_samples, kUndefined);
+    for (int i = 0; i < num_samples; i++)
+        wave_data(i) = samples[i];
+    bool result = model->Decode(samp_freq, wave_data, finalize, save_adaptation_state);
+    return result;
+    END_INTERFACE_CATCH_HANDLER(false)
 }
 
 bool get_output_base_nnet3(void* model_vp, char* output, int32_t output_max_length,
         float* likelihood_p, float* am_score_p, float* lm_score_p, float* confidence_p, float* expected_error_rate_p) {
-    try {
-        auto model = static_cast<BaseNNet3OnlineModelWrapper*>(model_vp);
-        if (output_max_length < 1) return false;
-        std::string decoded_string;
-        model->GetDecodedString(decoded_string, likelihood_p, am_score_p, lm_score_p, confidence_p, expected_error_rate_p);
+    BEGIN_INTERFACE_CATCH_HANDLER
+    auto model = static_cast<BaseNNet3OnlineModelWrapper*>(model_vp);
+    if (output_max_length < 1) return false;
+    std::string decoded_string;
+    model->GetDecodedString(decoded_string, likelihood_p, am_score_p, lm_score_p, confidence_p, expected_error_rate_p);
 
-        // KALDI_LOG << "sleeping";
-        // std::this_thread::sleep_for(std::chrono::milliseconds(25));
-        // KALDI_LOG << "slept";
+    // KALDI_LOG << "sleeping";
+    // std::this_thread::sleep_for(std::chrono::milliseconds(25));
+    // KALDI_LOG << "slept";
 
-        const char* cstr = decoded_string.c_str();
-        strncpy(output, cstr, output_max_length);
-        output[output_max_length - 1] = 0;
-        return true;
-
-    } catch(const std::exception& e) {
-        KALDI_WARN << "Trying to survive fatal exception: " << e.what();
-        return false;
-    }
+    const char* cstr = decoded_string.c_str();
+    strncpy(output, cstr, output_max_length);
+    output[output_max_length - 1] = 0;
+    return true;
+    END_INTERFACE_CATCH_HANDLER(false)
 }

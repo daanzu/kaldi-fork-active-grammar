@@ -41,6 +41,14 @@
 
 #define DEFAULT_VERBOSITY 0
 
+#define BEGIN_INTERFACE_CATCH_HANDLER \
+    try {
+#define END_INTERFACE_CATCH_HANDLER(expr) \
+    } catch(const std::exception& e) { \
+        KALDI_WARN << "Trying to survive fatal exception: " << e.what(); \
+        return (expr); \
+    }
+
 namespace dragonfly {
 
 using namespace kaldi;
