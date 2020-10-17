@@ -360,47 +360,33 @@ void* nnet3_agf__init_compiler(char* config_str_cp) {
     END_INTERFACE_CATCH_HANDLER(nullptr)
 }
 
-void* nnet3_agf__compile_graph_text(void* compiler_vp, char* config_str_cp, char* grammar_fst_text_cp, bool return_graph) {
+void* nnet3_agf__compile_graph(void* compiler_vp, char* config_str_cp, void* grammar_fst_cp, bool return_graph) {
     BEGIN_INTERFACE_CATCH_HANDLER
     auto compiler = static_cast<AgfCompiler*>(compiler_vp);
     std::string config_str((config_str_cp != nullptr) ? config_str_cp : "");
     auto config = nlohmann::json::parse(config_str).get<AgfCompilerConfig>();
-    std::istringstream iss(grammar_fst_text_cp);
-    auto fst = compiler->CompileFstText(iss);
+    auto fst = static_cast<StdFst*>(grammar_fst_cp);
     auto result = compiler->CompileGrammar(fst, &config);
-    // FIXME delete fst;
     if (!return_graph) {
         delete result;
         result = nullptr;
     }
     return result;
+    END_INTERFACE_CATCH_HANDLER(nullptr)
+}
+
+void* nnet3_agf__compile_graph_text(void* compiler_vp, char* config_str_cp, char* grammar_fst_text_cp, bool return_graph) {
+    BEGIN_INTERFACE_CATCH_HANDLER
+    auto compiler = static_cast<AgfCompiler*>(compiler_vp);
+    std::istringstream iss(grammar_fst_text_cp);
+    auto fst = compiler->CompileFstText(iss);
+    return nnet3_agf__compile_graph(compiler_vp, config_str_cp, fst, return_graph);
     END_INTERFACE_CATCH_HANDLER(nullptr)
 }
 
 void* nnet3_agf__compile_graph_file(void* compiler_vp, char* config_str_cp, char* grammar_fst_filename_cp, bool return_graph) {
     BEGIN_INTERFACE_CATCH_HANDLER
-    auto compiler = static_cast<AgfCompiler*>(compiler_vp);
-    std::string config_str((config_str_cp != nullptr) ? config_str_cp : "");
-    auto config = nlohmann::json::parse(config_str).get<AgfCompilerConfig>();
     auto fst = ReadFstKaldiGeneric(grammar_fst_filename_cp);
-    auto result = compiler->CompileGrammar(fst, &config);
-    // FIXME delete fst;
-    if (!return_graph) {
-        delete result;
-        result = nullptr;
-    }
-    return result;
+    return nnet3_agf__compile_graph(compiler_vp, config_str_cp, fst, return_graph);
     END_INTERFACE_CATCH_HANDLER(nullptr)
 }
-
-// void* nnet3_agf__compile_graph(void* compiler_vp, void* grammar_fst_cp, char* grammar_fst_out_filename_cp, bool return_graph) {
-//     auto compiler = static_cast<AgfCompiler*>(compiler_vp);
-//     auto fst = static_cast<StdVectorFst*>(grammar_fst_cp);
-//     std::string grammar_fst_out_filename((grammar_fst_out_filename_cp != nullptr) ? grammar_fst_out_filename_cp : "");
-//     auto result = compiler->CompileGrammar(fst, grammar_fst_out_filename);
-//     if (!return_graph) {
-//         delete result;
-//         result = nullptr;
-//     }
-//     return result;
-// }
