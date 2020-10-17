@@ -205,13 +205,21 @@ extern "C" {
 
 using namespace dragonfly;
 
-void* nnet3_plain__init(char* model_dir_cp, char* config_str_cp, int32_t verbosity) {
+void* nnet3_plain__construct(char* model_dir_cp, char* config_str_cp, int32_t verbosity) {
     BEGIN_INTERFACE_CATCH_HANDLER
     std::string model_dir(model_dir_cp),
         config_str((config_str_cp != nullptr) ? config_str_cp : "");
     auto model = new PlainNNet3OnlineModelWrapper(PlainNNet3OnlineModelConfig::Create(model_dir, config_str), verbosity);
     return model;
     END_INTERFACE_CATCH_HANDLER(nullptr)
+}
+
+bool nnet3_plain__destruct(void* model_vp) {
+    BEGIN_INTERFACE_CATCH_HANDLER
+    auto model = static_cast<PlainNNet3OnlineModelWrapper*>(model_vp);
+    delete model;
+    return true;
+    END_INTERFACE_CATCH_HANDLER(false)
 }
 
 bool nnet3_plain__decode(void* model_vp, float samp_freq, int32_t num_samples, float* samples, bool finalize, bool save_adaptation_state) {

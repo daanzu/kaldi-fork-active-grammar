@@ -297,13 +297,21 @@ extern "C" {
 
 using namespace dragonfly;
 
-void* nnet3_agf__init(char* model_dir_cp, char* config_str_cp, int32_t verbosity) {
+void* nnet3_agf__construct(char* model_dir_cp, char* config_str_cp, int32_t verbosity) {
     BEGIN_INTERFACE_CATCH_HANDLER
     std::string model_dir(model_dir_cp),
         config_str((config_str_cp != nullptr) ? config_str_cp : "");
     auto model = new AgfNNet3OnlineModelWrapper(AgfNNet3OnlineModelConfig::Create(model_dir, config_str), verbosity);
     return model;
     END_INTERFACE_CATCH_HANDLER(nullptr)
+}
+
+bool nnet3_agf__destruct(void* model_vp) {
+    BEGIN_INTERFACE_CATCH_HANDLER
+    auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
+    delete model;
+    return true;
+    END_INTERFACE_CATCH_HANDLER(false)
 }
 
 int32_t nnet3_agf__add_grammar_fst(void* model_vp, char* grammar_fst_filename_cp) {
@@ -351,13 +359,21 @@ bool nnet3_agf__decode(void* model_vp, float samp_freq, int32_t num_samples, flo
 //     return (result == 0);
 // }
 
-void* nnet3_agf__init_compiler(char* config_str_cp) {
+void* nnet3_agf__construct_compiler(char* config_str_cp) {
     BEGIN_INTERFACE_CATCH_HANDLER
     std::string config_str((config_str_cp != nullptr) ? config_str_cp : "");
     auto config = nlohmann::json::parse(config_str).get<AgfCompilerConfig>();
     auto compiler = new AgfCompiler(config);
     return compiler;
     END_INTERFACE_CATCH_HANDLER(nullptr)
+}
+
+bool nnet3_agf__destruct_compiler(void* compiler_vp) {
+    BEGIN_INTERFACE_CATCH_HANDLER
+    auto compiler = static_cast<AgfCompiler*>(compiler_vp);
+    delete compiler;
+    return true;
+    END_INTERFACE_CATCH_HANDLER(false)
 }
 
 void* nnet3_agf__compile_graph(void* compiler_vp, char* config_str_cp, void* grammar_fst_cp, bool return_graph) {

@@ -437,13 +437,21 @@ extern "C" {
 
 using namespace dragonfly;
 
-void* nnet3_laf__init(char* model_dir_cp, char* config_str_cp, int32_t verbosity) {
+void* nnet3_laf__construct(char* model_dir_cp, char* config_str_cp, int32_t verbosity) {
     BEGIN_INTERFACE_CATCH_HANDLER
     std::string model_dir(model_dir_cp),
         config_str((config_str_cp != nullptr) ? config_str_cp : "");
     auto model = new LafNNet3OnlineModelWrapper(LafNNet3OnlineModelConfig::Create(model_dir, config_str), verbosity);
     return model;
     END_INTERFACE_CATCH_HANDLER(nullptr)
+}
+
+bool nnet3_laf__destruct(void* model_vp) {
+    BEGIN_INTERFACE_CATCH_HANDLER
+    auto model = static_cast<LafNNet3OnlineModelWrapper*>(model_vp);
+    delete model;
+    return true;
+    END_INTERFACE_CATCH_HANDLER(false)
 }
 
 int32_t nnet3_laf__add_grammar_fst(void* model_vp, void* grammar_fst_cp) {
