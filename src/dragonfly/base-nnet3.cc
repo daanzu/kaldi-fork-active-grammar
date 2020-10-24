@@ -30,6 +30,7 @@
 #include "lm/const-arpa-lm.h"
 #include "rnnlm/rnnlm-lattice-rescoring.h"
 #include "nnet3/nnet-utils.h"
+#include "fst/log.h"
 #include "decoder/active-grammar-fst.h"
 
 #include "base-nnet3.h"
@@ -63,6 +64,8 @@ BaseNNet3OnlineModelWrapper::BaseNNet3OnlineModelWrapper(BaseNNet3OnlineModelCon
         ExecutionTimer timer("testing output latency");
         std::cerr << "[testing output latency][testing output latency][testing output latency]" << endl;
     }
+    if (true && verbosity >= 2)
+        FLAGS_v = 1;  // Set openfst logging verbosity
 
     ExecutionTimer timer("Initialization/loading");
 
