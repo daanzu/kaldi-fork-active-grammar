@@ -360,6 +360,7 @@ bool nnet3_agf__decode(void* model_vp, float samp_freq, int32_t num_samples, flo
 // }
 
 void* nnet3_agf__construct_compiler(char* config_str_cp) {
+    // FIXME: are we thread safe here?
     BEGIN_INTERFACE_CATCH_HANDLER
     std::string config_str((config_str_cp != nullptr) ? config_str_cp : "");
     auto config = nlohmann::json::parse(config_str).get<AgfCompilerConfig>();
@@ -377,6 +378,7 @@ bool nnet3_agf__destruct_compiler(void* compiler_vp) {
 }
 
 void* nnet3_agf__compile_graph(void* compiler_vp, char* config_str_cp, void* grammar_fst_cp, bool return_graph) {
+    // FIXME: are we thread safe here?
     BEGIN_INTERFACE_CATCH_HANDLER
     auto compiler = static_cast<AgfCompiler*>(compiler_vp);
     std::string config_str((config_str_cp != nullptr) ? config_str_cp : "");

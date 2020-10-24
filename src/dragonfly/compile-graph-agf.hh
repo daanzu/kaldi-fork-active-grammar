@@ -156,7 +156,8 @@ StdVectorFst* AgfCompiler::CompileGrammar(const StdFst* grammar_fst_in, const Ag
         config = &config_;
     }
 
-    VerboseLevelResetter vlr(config->verbose);
+    VerboseLevelResetter vlr(config->verbose);  // NOTE: not thread-safe!
+    // KALDI_WARN << "Compiler starting 0x" << grammar_fst_in;
     KALDI_VLOG(1) << "Preparing G...";
     VectorFst<StdArc>* grammar_fst = new StdVectorFst(*grammar_fst_in);
 
@@ -315,6 +316,7 @@ StdVectorFst* AgfCompiler::CompileGrammar(const StdFst* grammar_fst_in, const Ag
                 << " states to " << config->hclg_wxfilename;
     }
 
+    // KALDI_WARN << "Compiler done 0x" << grammar_fst_in;
     return hclg_fst_p;
 }
 
