@@ -4,8 +4,7 @@ all:
 
 EXTRA_CXXFLAGS = -Wno-sign-compare
 include ../kaldi.mk
-
-# BINFILES = compile-graph-agf
+EXTRA_LDLIBS = $(subst libfst,libfstscript,$(OPENFSTLIBS))
 
 TESTFILES =
 

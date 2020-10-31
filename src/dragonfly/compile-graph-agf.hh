@@ -322,7 +322,6 @@ StdVectorFst* AgfCompiler::CompileGrammar(const StdFst* grammar_fst_in, const Ag
 
 StdVectorFst* AgfCompiler::CompileFstText(std::istream& grammar_text) {
     if (!word_syms_) KALDI_ERR << "word_syms_ empty";
-    // FIXME: fix build for linux and macos, and CI for windows, to include fst::script for CompileFstInternal
     auto grammar_fstclass = fst::script::CompileFstInternal(grammar_text, "<CompileFstText>", "vector", "standard",
         word_syms_, word_syms_, nullptr, false, false, false, false, false);
     auto grammar_fst = dynamic_cast<StdVectorFst*>(fst::Convert(*grammar_fstclass->GetFst<StdArc>(), "vector"));

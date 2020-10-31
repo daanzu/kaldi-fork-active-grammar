@@ -140,7 +140,6 @@ int32 LafNNet3OnlineModelWrapper::AddGrammarFst(std::string& grammar_fst_filenam
 int32 LafNNet3OnlineModelWrapper::AddGrammarFst(std::istream& grammar_text) {
     ExecutionTimer timer("AddGrammarFst:compiling");
     auto word_syms_maybe_relabeled = (word_syms_relabeled_) ? word_syms_relabeled_ : word_syms_;  // Use composed if we have it
-    // FIXME: fix build for linux and macos, and CI for windows, to include fst::script for CompileFstInternal
     auto grammar_fstclass = fst::script::CompileFstInternal(grammar_text, "<AddGrammarFst>", "vector", "standard",
         word_syms_maybe_relabeled, word_syms_, nullptr, false, false, false, false, false);
     timer.step();
