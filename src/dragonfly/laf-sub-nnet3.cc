@@ -155,7 +155,7 @@ int32 LafNNet3OnlineModelWrapper::AddGrammarFst(fst::StdFst* grammar_fst, std::s
     auto grammar_fst_index = grammar_fsts_.size();
     if (grammar_fst_index >= config_->max_num_rules) KALDI_ERR << "cannot add more than max number of rules";
     KALDI_VLOG(2) << "adding FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_name;
-    grammar_fsts_.emplace_back(grammar_fst);
+    grammar_fsts_.push_back(grammar_fst);
     grammar_fsts_name_map_[grammar_fst] = grammar_name;
     DestroyDecodeFst();
     return grammar_fst_index;
@@ -263,7 +263,7 @@ void LafNNet3OnlineModelWrapper::StartDecoding() {
         std::vector<fst::StdFst*> active_grammar_fsts;
         for (size_t i = 0; i < grammar_fsts_.size(); ++i)
             if (decode_fst_grammars_activity_[i])
-                active_grammar_fsts.emplace_back(grammar_fsts_[i]);
+                active_grammar_fsts.push_back(grammar_fsts_[i]);
         BuildDecodeFst();
     }
 
@@ -457,10 +457,10 @@ int32_t nnet3_laf__add_grammar_fst(void* model_vp, void* grammar_fst_cp) {
     BEGIN_INTERFACE_CATCH_HANDLER
     auto model = static_cast<LafNNet3OnlineModelWrapper*>(model_vp);
     auto fst = static_cast<StdVectorFst*>(grammar_fst_cp);
-    fst->Write("tmp.fst");
+    // fst->Write("tmp.fst");
     bool built_relabeled = true;
     model->PrepareGrammarFst(fst, !built_relabeled);
-    fst->Write("tmp2.fst");
+    // fst->Write("tmp2.fst");
     int32_t grammar_fst_index = model->AddGrammarFst(fst);
     return grammar_fst_index;
     END_INTERFACE_CATCH_HANDLER(-1)
@@ -475,7 +475,7 @@ int32_t nnet3_laf__add_grammar_fst_text(void* model_vp, char* grammar_fst_cp) {
     END_INTERFACE_CATCH_HANDLER(-1)
 }
 
-bool nnet3_laf__reload_grammar_fst(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp) {
+bool nnet3_laf__reload_grammar_fst_file(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp) {
     BEGIN_INTERFACE_CATCH_HANDLER
     auto model = static_cast<LafNNet3OnlineModelWrapper*>(model_vp);
     std::string grammar_fst_filename(grammar_fst_filename_cp);

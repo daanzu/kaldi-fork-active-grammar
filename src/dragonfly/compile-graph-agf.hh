@@ -317,6 +317,7 @@ StdVectorFst* AgfCompiler::CompileGrammar(const StdFst* grammar_fst_in, const Ag
     }
 
     // KALDI_WARN << "Compiler done 0x" << grammar_fst_in;
+    KALDI_LOG << "Returning graph with " << hclg_fst_p->NumStates() << " states";
     return hclg_fst_p;
 }
 

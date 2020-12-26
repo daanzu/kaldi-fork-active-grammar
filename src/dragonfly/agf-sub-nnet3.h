@@ -51,16 +51,20 @@ struct AgfNNet3OnlineModelConfig : public BaseNNet3OnlineModelConfig {
     int32 nonterm_phones_offset = -1;  // offset from start of phones that start of nonterms are
     int32 rules_phones_offset = -1;  // offset from start of phones that the dictation nonterms are
     int32 dictation_phones_offset = -1;  // offset from start of phones that the kaldi_rules nonterms are
+    uint64 top_fst = 0;  // actually a void* pointer to the top FST object
     std::string top_fst_filename;
     std::string dictation_fst_filename;
+    int32 max_num_rules = 9999;
 
     bool Set(const std::string& name, const nlohmann::json& value) override {
         if (BaseNNet3OnlineModelConfig::Set(name, value)) { return true; }
         if (name == "nonterm_phones_offset") { value.get_to(nonterm_phones_offset); return true; }
         if (name == "rules_phones_offset") { value.get_to(rules_phones_offset); return true; }
         if (name == "dictation_phones_offset") { value.get_to(dictation_phones_offset); return true; }
+        if (name == "top_fst") { value.get_to(top_fst); return true; }
         if (name == "top_fst_filename") { value.get_to(top_fst_filename); return true; }
         if (name == "dictation_fst_filename") { value.get_to(dictation_fst_filename); return true; }
+        if (name == "max_num_rules") { value.get_to(max_num_rules); return true; }
         return false;
     }
 
@@ -71,8 +75,10 @@ struct AgfNNet3OnlineModelConfig : public BaseNNet3OnlineModelConfig {
         ss << "\n    " << "nonterm_phones_offset: " << nonterm_phones_offset;
         ss << "\n    " << "rules_phones_offset: " << rules_phones_offset;
         ss << "\n    " << "dictation_phones_offset: " << dictation_phones_offset;
+        ss << "\n    " << "top_fst: " << top_fst;
         ss << "\n    " << "top_fst_filename: " << top_fst_filename;
         ss << "\n    " << "dictation_fst_filename: " << dictation_fst_filename;
+        ss << "\n    " << "max_num_rules: " << max_num_rules;
         return ss.str();
     }
 };
@@ -83,7 +89,10 @@ class AgfNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
         AgfNNet3OnlineModelWrapper(AgfNNet3OnlineModelConfig::Ptr config, int32 verbosity = DEFAULT_VERBOSITY);
         ~AgfNNet3OnlineModelWrapper() override;
 
+        // Does not take ownership of FSTs!
+        int32 AddGrammarFst(fst::StdVectorFst* grammar_fst, std::string grammar_name = "<unnamed>");
         int32 AddGrammarFst(std::string& grammar_fst_filename);
+        bool ReloadGrammarFst(int32 grammar_fst_index, fst::StdVectorFst* grammar_fst, std::string grammar_name = "<unnamed>");
         bool ReloadGrammarFst(int32 grammar_fst_index, std::string& grammar_fst_filename);
         bool RemoveGrammarFst(int32 grammar_fst_index);
         void SetActiveGrammars(const std::vector<bool>& grammars_activity) { grammars_activity_ = grammars_activity; };
@@ -100,8 +109,8 @@ class AgfNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
         StdConstFst *top_fst_ = nullptr;
         StdConstFst *dictation_fst_ = nullptr;
         std::vector<StdConstFst*> grammar_fsts_;
-        std::map<StdConstFst*, std::string> grammar_fsts_filename_map_;  // maps grammar_fst -> name; for debugging
-        // INVARIANT: same size: grammar_fsts_, grammar_fsts_filename_map_
+        std::map<StdFst*, std::string> grammar_fsts_name_map_;  // maps grammar_fst -> name; for debugging
+        // INVARIANT: same size: grammar_fsts_, grammar_fsts_name_map_
         std::vector<bool> grammars_activity_;  // bitfield of whether each grammar is active for current/upcoming utterance
 
         // Model objects

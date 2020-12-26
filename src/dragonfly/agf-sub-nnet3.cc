@@ -45,7 +45,12 @@ AgfNNet3OnlineModelWrapper::AgfNNet3OnlineModelWrapper(AgfNNet3OnlineModelConfig
     : BaseNNet3OnlineModelWrapper(config, verbosity), config_(config) {
     KALDI_VLOG(2) << "kNontermBigNumber, GetEncodingMultiple: " << kNontermBigNumber << ", " << GetEncodingMultiple(config_->nonterm_phones_offset);
 
-    top_fst_ = dynamic_cast<StdConstFst*>(ReadFstKaldiGeneric(config_->top_fst_filename));
+    if ((config_->top_fst != 0) == !config_->top_fst_filename.empty()) KALDI_ERR << "AgfNNet3OnlineModelWrapper requires exactly one of top_fst and top_fst_filename";
+    if (config_->top_fst != 0)
+        top_fst_ = new StdConstFst(*static_cast<StdVectorFst*>((void*)config_->top_fst));
+    if (!config_->top_fst_filename.empty())
+        top_fst_ = dynamic_cast<StdConstFst*>(ReadFstKaldiGeneric(config_->top_fst_filename));
+    KALDI_VLOG(2) << "top_fst @ 0x" << top_fst_ << " " << top_fst_->NumStates() << " states";
 
     if (!config_->dictation_fst_filename.empty())
         dictation_fst_ = ReadFstFile(config_->dictation_fst_filename);
@@ -66,12 +71,13 @@ AgfNNet3OnlineModelWrapper::~AgfNNet3OnlineModelWrapper() {
     delete rule_relabel_mapper_;
 }
 
-int32 AgfNNet3OnlineModelWrapper::AddGrammarFst(std::string& grammar_fst_filename) {
+int32 AgfNNet3OnlineModelWrapper::AddGrammarFst(fst::StdVectorFst* grammar_fst, std::string grammar_name) {
     auto grammar_fst_index = grammar_fsts_.size();
-    auto grammar_fst = ReadFstFile(grammar_fst_filename);
-    KALDI_VLOG(2) << "adding FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst_filename;
-    grammar_fsts_.emplace_back(grammar_fst);
-    grammar_fsts_filename_map_[grammar_fst] = grammar_fst_filename;
+    if (grammar_fst_index >= config_->max_num_rules) KALDI_ERR << "cannot add more than max number of rules";
+    KALDI_VLOG(2) << "adding FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst->NumStates() << " states " << grammar_name;
+    auto const_fst = new StdConstFst(*grammar_fst);
+    grammar_fsts_.push_back(const_fst);
+    grammar_fsts_name_map_[const_fst] = grammar_name;
     if (active_grammar_fst_) {
         delete active_grammar_fst_;
         active_grammar_fst_ = nullptr;
@@ -79,15 +85,44 @@ int32 AgfNNet3OnlineModelWrapper::AddGrammarFst(std::string& grammar_fst_filenam
     return grammar_fst_index;
 }
 
+int32 AgfNNet3OnlineModelWrapper::AddGrammarFst(std::string& grammar_fst_filename) {
+    auto grammar_fst_index = grammar_fsts_.size();
+    auto grammar_fst = ReadFstFile(grammar_fst_filename);
+    KALDI_VLOG(2) << "adding FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst->NumStates() << " states " << grammar_fst_filename;
+    grammar_fsts_.push_back(grammar_fst);
+    grammar_fsts_name_map_[grammar_fst] = grammar_fst_filename;
+    if (active_grammar_fst_) {
+        delete active_grammar_fst_;
+        active_grammar_fst_ = nullptr;
+    }
+    return grammar_fst_index;
+}
+
+bool AgfNNet3OnlineModelWrapper::ReloadGrammarFst(int32 grammar_fst_index, fst::StdVectorFst* grammar_fst, std::string grammar_name) {
+    auto old_grammar_fst = grammar_fsts_.at(grammar_fst_index);
+    grammar_fsts_name_map_.erase(old_grammar_fst);
+    delete old_grammar_fst;
+
+    KALDI_VLOG(2) << "reloading FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_name;
+    auto const_fst = new StdConstFst(*grammar_fst);
+    grammar_fsts_.at(grammar_fst_index) = const_fst;
+    grammar_fsts_name_map_[const_fst] = grammar_name;
+    if (active_grammar_fst_) {
+        delete active_grammar_fst_;
+        active_grammar_fst_ = nullptr;
+    }
+    return true;
+}
+
 bool AgfNNet3OnlineModelWrapper::ReloadGrammarFst(int32 grammar_fst_index, std::string& grammar_fst_filename) {
     auto old_grammar_fst = grammar_fsts_.at(grammar_fst_index);
-    grammar_fsts_filename_map_.erase(old_grammar_fst);
+    grammar_fsts_name_map_.erase(old_grammar_fst);
     delete old_grammar_fst;
 
     auto grammar_fst = ReadFstFile(grammar_fst_filename);
     KALDI_VLOG(2) << "reloading FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst_filename;
     grammar_fsts_.at(grammar_fst_index) = grammar_fst;
-    grammar_fsts_filename_map_[grammar_fst] = grammar_fst_filename;
+    grammar_fsts_name_map_[grammar_fst] = grammar_fst_filename;
     if (active_grammar_fst_) {
         delete active_grammar_fst_;
         active_grammar_fst_ = nullptr;
@@ -97,9 +132,9 @@ bool AgfNNet3OnlineModelWrapper::ReloadGrammarFst(int32 grammar_fst_index, std::
 
 bool AgfNNet3OnlineModelWrapper::RemoveGrammarFst(int32 grammar_fst_index) {
     auto grammar_fst = grammar_fsts_.at(grammar_fst_index);
-    KALDI_VLOG(2) << "removing FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fsts_filename_map_.at(grammar_fst);
+    KALDI_VLOG(2) << "removing FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fsts_name_map_.at(grammar_fst);
     grammar_fsts_.erase(grammar_fsts_.begin() + grammar_fst_index);
-    grammar_fsts_filename_map_.erase(grammar_fst);
+    grammar_fsts_name_map_.erase(grammar_fst);
     delete grammar_fst;
     if (active_grammar_fst_) {
         delete active_grammar_fst_;
@@ -314,7 +349,16 @@ bool nnet3_agf__destruct(void* model_vp) {
     END_INTERFACE_CATCH_HANDLER(false)
 }
 
-int32_t nnet3_agf__add_grammar_fst(void* model_vp, char* grammar_fst_filename_cp) {
+int32_t nnet3_agf__add_grammar_fst(void* model_vp, void* grammar_fst_cp) {
+    BEGIN_INTERFACE_CATCH_HANDLER
+    auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
+    auto fst = static_cast<StdVectorFst*>(grammar_fst_cp);
+    int32_t grammar_fst_index = model->AddGrammarFst(fst);
+    return grammar_fst_index;
+    END_INTERFACE_CATCH_HANDLER(-1)
+}
+
+int32_t nnet3_agf__add_grammar_fst_file(void* model_vp, char* grammar_fst_filename_cp) {
     BEGIN_INTERFACE_CATCH_HANDLER
     auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
     std::string grammar_fst_filename(grammar_fst_filename_cp);
@@ -323,7 +367,16 @@ int32_t nnet3_agf__add_grammar_fst(void* model_vp, char* grammar_fst_filename_cp
     END_INTERFACE_CATCH_HANDLER(-1)
 }
 
-bool nnet3_agf__reload_grammar_fst(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp) {
+bool nnet3_agf__reload_grammar_fst(void* model_vp, int32_t grammar_fst_index, void* grammar_fst_cp) {
+    BEGIN_INTERFACE_CATCH_HANDLER
+    auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
+    auto fst = static_cast<StdVectorFst*>(grammar_fst_cp);
+    bool result = model->ReloadGrammarFst(grammar_fst_index, fst);
+    return result;
+    END_INTERFACE_CATCH_HANDLER(false)
+}
+
+bool nnet3_agf__reload_grammar_fst_file(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp) {
     BEGIN_INTERFACE_CATCH_HANDLER
     auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
     std::string grammar_fst_filename(grammar_fst_filename_cp);
@@ -354,11 +407,6 @@ bool nnet3_agf__decode(void* model_vp, float samp_freq, int32_t num_samples, flo
     END_INTERFACE_CATCH_HANDLER(false)
 }
 
-// bool nnet3_agf__compile_graph_file(void* model_vp, int32_t argc, char** argv) {
-//     int result = CompileGraphAgfMain(argc, argv);
-//     return (result == 0);
-// }
-
 void* nnet3_agf__construct_compiler(char* config_str_cp) {
     // FIXME: are we thread safe here?
     BEGIN_INTERFACE_CATCH_HANDLER
@@ -386,6 +434,8 @@ void* nnet3_agf__compile_graph(void* compiler_vp, char* config_str_cp, void* gra
     auto fst = static_cast<StdFst*>(grammar_fst_cp);
     auto result = compiler->CompileGrammar(fst, &config);
     if (!return_graph) {
+        if (config.hclg_wxfilename.empty())
+            KALDI_WARN << "Compiled graph not saved to file or returned!";
         delete result;
         result = nullptr;
     }

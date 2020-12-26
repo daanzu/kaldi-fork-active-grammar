@@ -34,7 +34,7 @@ using namespace kaldi;
 using namespace fst;
 
 
-inline ConstFst<StdArc>* CastOrConvertToConstFst(Fst<StdArc>* fst) {
+inline ConstFst<StdArc>* CastOrConvertToConstFst(Fst<StdArc>* fst, bool has_ownership = true) {
     // This version currently supports ConstFst<StdArc> or VectorFst<StdArc>
     std::string real_type = fst->Type();
     KALDI_ASSERT(real_type == "vector" || real_type == "const");
@@ -44,7 +44,9 @@ inline ConstFst<StdArc>* CastOrConvertToConstFst(Fst<StdArc>* fst) {
         // As the 'fst' can't cast to ConstFst, we carete a new
         // ConstFst<StdArc> initialized by 'fst', and delete 'fst'.
         ConstFst<StdArc>* new_fst = new ConstFst<StdArc>(*fst);
-        delete fst;
+        if (has_ownership) {
+            delete fst;
+        }
         return new_fst;
     }
 }
