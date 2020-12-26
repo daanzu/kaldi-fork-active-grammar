@@ -89,10 +89,9 @@ class AgfNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
         AgfNNet3OnlineModelWrapper(AgfNNet3OnlineModelConfig::Ptr config, int32 verbosity = DEFAULT_VERBOSITY);
         ~AgfNNet3OnlineModelWrapper() override;
 
-        // Does not take ownership of FSTs!
-        int32 AddGrammarFst(fst::StdVectorFst* grammar_fst, std::string grammar_name = "<unnamed>");
+        int32 AddGrammarFst(fst::StdVectorFst* grammar_fst, std::string grammar_name = "<unnamed>");  // Does not take ownership of FST!
         int32 AddGrammarFst(std::string& grammar_fst_filename);
-        bool ReloadGrammarFst(int32 grammar_fst_index, fst::StdVectorFst* grammar_fst, std::string grammar_name = "<unnamed>");
+        bool ReloadGrammarFst(int32 grammar_fst_index, fst::StdVectorFst* grammar_fst, std::string grammar_name = "<unnamed>");  // Does not take ownership of FST!
         bool ReloadGrammarFst(int32 grammar_fst_index, std::string& grammar_fst_filename);
         bool RemoveGrammarFst(int32 grammar_fst_index);
         void SetActiveGrammars(const std::vector<bool>& grammars_activity) { grammars_activity_ = grammars_activity; };

@@ -134,7 +134,7 @@ int32 LafNNet3OnlineModelWrapper::AddGrammarFst(std::string& grammar_fst_filenam
     ExecutionTimer timer("AddGrammarFst:loading from file");
     auto grammar_fst = CastOrConvertToVectorFst(ReadFstKaldiGeneric(grammar_fst_filename));
     PrepareGrammarFst(grammar_fst, true);  // Was this file already relabeled?
-    return AddGrammarFst(CastOrConvertToConstFst(grammar_fst), grammar_fst_filename);
+    return AddGrammarFst(grammar_fst, grammar_fst_filename);
 }
 
 int32 LafNNet3OnlineModelWrapper::AddGrammarFst(std::istream& grammar_text) {
@@ -147,29 +147,28 @@ int32 LafNNet3OnlineModelWrapper::AddGrammarFst(std::istream& grammar_text) {
     if (!grammar_fst) KALDI_ERR << "could not convert grammar Fst to StdVectorFst";
     timer.step();
     PrepareGrammarFst(grammar_fst, (word_syms_maybe_relabeled != word_syms_relabeled_));
-    return AddGrammarFst(new fst::StdConstFst(*grammar_fst));
+    return AddGrammarFst(grammar_fst);
 }
 
-int32 LafNNet3OnlineModelWrapper::AddGrammarFst(fst::StdFst* grammar_fst, std::string grammar_name) {
+int32 LafNNet3OnlineModelWrapper::AddGrammarFst(fst::StdExpandedFst* grammar_fst, std::string grammar_name) {
     // ExecutionTimer timer("AddGrammarFst:loading");
     auto grammar_fst_index = grammar_fsts_.size();
     if (grammar_fst_index >= config_->max_num_rules) KALDI_ERR << "cannot add more than max number of rules";
-    KALDI_VLOG(2) << "adding FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_name;
+    KALDI_VLOG(2) << "adding FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst->NumStates() << " states " << grammar_name;
     grammar_fsts_.push_back(grammar_fst);
     grammar_fsts_name_map_[grammar_fst] = grammar_name;
     DestroyDecodeFst();
     return grammar_fst_index;
 }
 
-bool LafNNet3OnlineModelWrapper::ReloadGrammarFst(int32 grammar_fst_index, std::string& grammar_fst_filename) {
+bool LafNNet3OnlineModelWrapper::ReloadGrammarFst(int32 grammar_fst_index, fst::StdExpandedFst* grammar_fst, std::string grammar_name) {
     auto old_grammar_fst = grammar_fsts_.at(grammar_fst_index);
     grammar_fsts_name_map_.erase(old_grammar_fst);
     delete old_grammar_fst;
 
-    auto grammar_fst = ReadFstFile(grammar_fst_filename);
-    KALDI_VLOG(2) << "reloading FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst_filename;
+    KALDI_VLOG(2) << "reloading FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst->NumStates() << " states " << grammar_name;
     grammar_fsts_.at(grammar_fst_index) = grammar_fst;
-    grammar_fsts_name_map_[grammar_fst] = grammar_fst_filename;
+    grammar_fsts_name_map_[grammar_fst] = grammar_name;
     DestroyDecodeFst();
     return true;
 }
@@ -459,7 +458,7 @@ int32_t nnet3_laf__add_grammar_fst(void* model_vp, void* grammar_fst_cp) {
     auto fst = static_cast<StdVectorFst*>(grammar_fst_cp);
     // fst->Write("tmp.fst");
     bool built_relabeled = true;
-    model->PrepareGrammarFst(fst, !built_relabeled);
+    model->PrepareGrammarFst(fst, !built_relabeled);  // This mutates the fst!
     // fst->Write("tmp2.fst");
     int32_t grammar_fst_index = model->AddGrammarFst(fst);
     return grammar_fst_index;
@@ -475,11 +474,13 @@ int32_t nnet3_laf__add_grammar_fst_text(void* model_vp, char* grammar_fst_cp) {
     END_INTERFACE_CATCH_HANDLER(-1)
 }
 
-bool nnet3_laf__reload_grammar_fst_file(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp) {
+bool nnet3_laf__reload_grammar_fst(void* model_vp, int32_t grammar_fst_index, void* grammar_fst_cp) {
     BEGIN_INTERFACE_CATCH_HANDLER
     auto model = static_cast<LafNNet3OnlineModelWrapper*>(model_vp);
-    std::string grammar_fst_filename(grammar_fst_filename_cp);
-    bool result = model->ReloadGrammarFst(grammar_fst_index, grammar_fst_filename);
+    auto fst = static_cast<StdVectorFst*>(grammar_fst_cp);
+    bool built_relabeled = true;
+    model->PrepareGrammarFst(fst, !built_relabeled);  // This mutates the fst!
+    bool result = model->ReloadGrammarFst(grammar_fst_index, fst);
     return result;
     END_INTERFACE_CATCH_HANDLER(false)
 }

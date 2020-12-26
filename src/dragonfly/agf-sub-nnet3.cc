@@ -103,7 +103,7 @@ bool AgfNNet3OnlineModelWrapper::ReloadGrammarFst(int32 grammar_fst_index, fst::
     grammar_fsts_name_map_.erase(old_grammar_fst);
     delete old_grammar_fst;
 
-    KALDI_VLOG(2) << "reloading FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_name;
+    KALDI_VLOG(2) << "reloading FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst->NumStates() << " states " << grammar_name;
     auto const_fst = new StdConstFst(*grammar_fst);
     grammar_fsts_.at(grammar_fst_index) = const_fst;
     grammar_fsts_name_map_[const_fst] = grammar_name;
@@ -120,7 +120,7 @@ bool AgfNNet3OnlineModelWrapper::ReloadGrammarFst(int32 grammar_fst_index, std::
     delete old_grammar_fst;
 
     auto grammar_fst = ReadFstFile(grammar_fst_filename);
-    KALDI_VLOG(2) << "reloading FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst_filename;
+    KALDI_VLOG(2) << "reloading FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst->NumStates() << " states " << grammar_fst_filename;
     grammar_fsts_.at(grammar_fst_index) = grammar_fst;
     grammar_fsts_name_map_[grammar_fst] = grammar_fst_filename;
     if (active_grammar_fst_) {
