@@ -201,10 +201,6 @@ void LafNNet3OnlineModelWrapper::BuildDecodeFst() {
     ExecutionTimer timer("BuildDecodeFst", -1);
     auto cache_size = config_->decode_fst_cache_size;
 
-    // auto union_fst = fst::UnionFst<StdArc>(*grammar_fsts_[0], *grammar_fsts_[1]);
-    // auto decode_fst = LookaheadComposeFst(*hcl_fst_, union_fst, disambig_tids_, cache_size);
-    // auto decode_fst = LookaheadComposeFst(*hcl_fst_, *dictation_fst_, disambig_tids_, cache_size);
-
     std::vector<std::pair<int32, const StdFst *> > label_fst_pairs;
     auto rules_words_offset = word_syms_->Find("#nonterm:rule0");
     auto top_fst_nonterm = rules_words_offset + config_->max_num_rules;
@@ -216,8 +212,8 @@ void LafNNet3OnlineModelWrapper::BuildDecodeFst() {
     auto final_state = top_fst.AddState();
     top_fst.SetFinal(final_state, 0.0);
 
-    top_fst.SetFinal(start_state, 0.0);  // Allow start state to be final for no rule
-    top_fst.AddArc(0, StdArc(0, 0, 0.0, final_state));  // Allow epsilon transition for no rule
+    top_fst.SetFinal(start_state, 0.0);  // Allow start state to be final, for no rule
+    top_fst.AddArc(0, StdArc(0, 0, 0.0, final_state));  // Allow epsilon transition to final state, for no rule
     for (auto word : std::vector<std::string>{ "!SIL", "<unk>" })  // FIXME: make these configurable
         top_fst.AddArc(0, StdArc(word_syms_->Find(word), 0, 0.0, final_state));
 
