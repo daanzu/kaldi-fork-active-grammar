@@ -19,6 +19,8 @@
 
 #include "fstext/fstext-lib.h"
 
+#include "md5.h"
+
 extern "C" {
 #include "dragonfly.h"
 }
@@ -71,6 +73,29 @@ int32_t fst__add_state(void* fst_vp, float weight, bool initial) {
 bool fst__add_arc(void* fst_vp, int32_t src_state_id, int32_t dst_state_id, int32_t ilabel, int32_t olabel, float weight) {
     auto fst = static_cast<StdVectorFst*>(fst_vp);
     fst->AddArc(src_state_id, StdArc(ilabel, olabel, weight, dst_state_id));
+    return true;
+}
+
+bool fst__compute_md5(void* fst_vp, char* md5_cp, char* dependencies_seed_md5_cp) {
+    auto fst = static_cast<StdVectorFst*>(fst_vp);
+    MD5 md5;
+    md5.add(dependencies_seed_md5_cp, MD5::HashBytes * 2);
+
+    for (StateIterator<StdFst> siter(*fst); !siter.Done(); siter.Next()) {
+        auto state = siter.Value();
+        std::stringstream description;
+        description << state;
+        for (ArcIterator<StdFst> aiter(*fst, state); !aiter.Done(); aiter.Next()) {
+            auto arc = aiter.Value();
+            description << ":" << arc.nextstate << "," << arc.ilabel << "," << arc.olabel << "," << arc.weight;
+        }
+        auto str = description.str();
+        md5.add(str.c_str(), str.size() + 1);
+    }
+
+    auto digest = md5.getHash();
+    strncpy(md5_cp, digest.c_str(), MD5::HashBytes * 2 + 1);
+
     return true;
 }
 

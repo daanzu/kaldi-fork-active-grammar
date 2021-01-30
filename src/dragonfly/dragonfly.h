@@ -86,5 +86,6 @@ DRAGONFLY_API void* fst__construct();
 DRAGONFLY_API bool fst__destruct(void* fst_vp);
 DRAGONFLY_API int32_t fst__add_state(void* fst_vp, float weight, bool initial);
 DRAGONFLY_API bool fst__add_arc(void* fst_vp, int32_t src_state_id, int32_t dst_state_id, int32_t ilabel, int32_t olabel, float weight);
+DRAGONFLY_API bool fst__compute_md5(void* fst_vp, char* md5_cp, char* dependencies_seed_md5_cp);
 DRAGONFLY_API bool fst__has_eps_path(void* fst_vp, int32_t path_src_state, int32_t path_dst_state);
 DRAGONFLY_API bool fst__does_match(void* fst_vp, int32_t target_labels_len, int32_t target_labels_cp[], int32_t output_labels_cp[], int32_t* output_labels_len);

@@ -8,7 +8,7 @@ EXTRA_LDLIBS = $(subst libfst,libfstscript,$(OPENFSTLIBS))
 
 TESTFILES =
 
-OBJFILES = base-nnet3.o agf-sub-nnet3.o plain-sub-nnet3.o
+OBJFILES = base-nnet3.o agf-sub-nnet3.o plain-sub-nnet3.o fst-export.o md5.o
 
 LIBNAME = kaldi-dragonfly
 DynamicLibrary = kaldi-dragonfly
