@@ -41,7 +41,7 @@ inline ConstFst<StdArc>* CastOrConvertToConstFst(Fst<StdArc>* fst, bool has_owne
     if (real_type == "const") {
         return dynamic_cast<ConstFst<StdArc>*>(fst);
     } else {
-        // As the 'fst' can't cast to ConstFst, we carete a new
+        // As the 'fst' can't cast to ConstFst, we create a new
         // ConstFst<StdArc> initialized by 'fst', and delete 'fst'.
         ConstFst<StdArc>* new_fst = new ConstFst<StdArc>(*fst);
         if (has_ownership) {

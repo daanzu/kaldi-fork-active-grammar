@@ -71,6 +71,7 @@ DRAGONFLY_API bool nnet3_agf__destruct_compiler(void* compiler_vp);
 DRAGONFLY_API void* nnet3_agf__compile_graph(void* compiler_vp, char* config_str_cp, void* grammar_fst_cp, bool return_graph);
 DRAGONFLY_API void* nnet3_agf__compile_graph_text(void* compiler_vp, char* config_str_cp, char* grammar_fst_text_cp, bool return_graph);
 DRAGONFLY_API void* nnet3_agf__compile_graph_file(void* compiler_vp, char* config_str_cp, char* grammar_fst_filename_cp, bool return_graph);
+DRAGONFLY_API void* nnet3_agf__read_compiled_graph(char* filename_cp);
 
 DRAGONFLY_API void* nnet3_laf__construct(char* model_dir_cp, char* config_str_cp, int32_t verbosity);
 DRAGONFLY_API bool nnet3_laf__destruct(void* model_vp);
