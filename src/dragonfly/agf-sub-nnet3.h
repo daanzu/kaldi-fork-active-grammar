@@ -119,6 +119,7 @@ class AgfNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
         SingleUtteranceNnet3DecoderTpl<fst::ActiveGrammarFst>* decoder_ = nullptr;  // reinstantiated per utterance
         CombineRuleNontermMapper<CompactLatticeArc>* rule_relabel_mapper_ = nullptr;
 
+        bool InvalidateActiveGrammarFST();
         void StartDecoding() override;
         void CleanupDecoder() override;
 };

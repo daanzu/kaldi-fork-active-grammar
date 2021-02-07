@@ -77,10 +77,7 @@ int32 AgfNNet3OnlineModelWrapper::AddGrammarFst(fst::StdConstFst* grammar_fst, s
     KALDI_VLOG(2) << "adding FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst->NumStates() << " states " << grammar_name;
     grammar_fsts_.push_back(grammar_fst);
     grammar_fsts_name_map_[grammar_fst] = grammar_name;
-    if (active_grammar_fst_) {
-        delete active_grammar_fst_;
-        active_grammar_fst_ = nullptr;
-    }
+    InvalidateActiveGrammarFST();
     return grammar_fst_index;
 }
 
@@ -97,10 +94,7 @@ bool AgfNNet3OnlineModelWrapper::ReloadGrammarFst(int32 grammar_fst_index, fst::
     KALDI_VLOG(2) << "reloading FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst->NumStates() << " states " << grammar_name;
     grammar_fsts_.at(grammar_fst_index) = grammar_fst;
     grammar_fsts_name_map_[grammar_fst] = grammar_name;
-    if (active_grammar_fst_) {
-        delete active_grammar_fst_;
-        active_grammar_fst_ = nullptr;
-    }
+    InvalidateActiveGrammarFST();
     return true;
 }
 
@@ -115,11 +109,17 @@ bool AgfNNet3OnlineModelWrapper::RemoveGrammarFst(int32 grammar_fst_index) {
     grammar_fsts_.erase(grammar_fsts_.begin() + grammar_fst_index);
     grammar_fsts_name_map_.erase(grammar_fst);
     delete grammar_fst;
+    InvalidateActiveGrammarFST();
+    return true;
+}
+
+bool AgfNNet3OnlineModelWrapper::InvalidateActiveGrammarFST() {
     if (active_grammar_fst_) {
         delete active_grammar_fst_;
         active_grammar_fst_ = nullptr;
+        return true;
     }
-    return true;
+    return false;
 }
 
 void AgfNNet3OnlineModelWrapper::StartDecoding() {
@@ -351,7 +351,7 @@ bool nnet3_agf__reload_grammar_fst(void* model_vp, int32_t grammar_fst_index, vo
     BEGIN_INTERFACE_CATCH_HANDLER
     auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
     auto fst = static_cast<StdVectorFst*>(grammar_fst_cp);
-    auto const_fst = new StdConstFst(*fst);
+    auto const_fst = new StdConstFst(*fst);  // Newly-created FST, to be owned by the AgfNNet3OnlineModelWrapper, disentangled from the grammar_fst
     bool result = model->ReloadGrammarFst(grammar_fst_index, const_fst);
     return result;
     END_INTERFACE_CATCH_HANDLER(false)

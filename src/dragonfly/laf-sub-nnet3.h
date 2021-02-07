@@ -128,7 +128,7 @@ class LafNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
         CombineRuleNontermMapper<CompactLatticeArc>* rule_relabel_mapper_ = nullptr;
 
         void BuildDecodeFst();
-        void DestroyDecodeFst();
+        bool InvalidateDecodeFst();
         void StartDecoding() override;
         void CleanupDecoder() override;
 };

@@ -157,7 +157,7 @@ int32 LafNNet3OnlineModelWrapper::AddGrammarFst(fst::StdExpandedFst* grammar_fst
     KALDI_VLOG(2) << "adding FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst->NumStates() << " states " << grammar_name;
     grammar_fsts_.push_back(grammar_fst);
     grammar_fsts_name_map_[grammar_fst] = grammar_name;
-    DestroyDecodeFst();
+    InvalidateDecodeFst();
     return grammar_fst_index;
 }
 
@@ -169,7 +169,7 @@ bool LafNNet3OnlineModelWrapper::ReloadGrammarFst(int32 grammar_fst_index, fst::
     KALDI_VLOG(2) << "reloading FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst->NumStates() << " states " << grammar_name;
     grammar_fsts_.at(grammar_fst_index) = grammar_fst;
     grammar_fsts_name_map_[grammar_fst] = grammar_name;
-    DestroyDecodeFst();
+    InvalidateDecodeFst();
     return true;
 }
 
@@ -179,7 +179,7 @@ bool LafNNet3OnlineModelWrapper::RemoveGrammarFst(int32 grammar_fst_index) {
     grammar_fsts_.erase(grammar_fsts_.begin() + grammar_fst_index);
     grammar_fsts_name_map_.erase(grammar_fst);
     delete grammar_fst;
-    DestroyDecodeFst();
+    InvalidateDecodeFst();
     return true;
 }
 
@@ -197,7 +197,7 @@ LookaheadFst<Arc, I>* LookaheadComposeFst(const Fst<Arc>& ifst1, const Fst<Arc>&
 }
 
 void LafNNet3OnlineModelWrapper::BuildDecodeFst() {
-    DestroyDecodeFst();
+    InvalidateDecodeFst();
     ExecutionTimer timer("BuildDecodeFst", -1);
     auto cache_size = config_->decode_fst_cache_size;
 
@@ -239,11 +239,13 @@ void LafNNet3OnlineModelWrapper::BuildDecodeFst() {
     decode_fst_ = decode_fst;
 }
 
-void LafNNet3OnlineModelWrapper::DestroyDecodeFst() {
+bool LafNNet3OnlineModelWrapper::InvalidateDecodeFst() {
     if (decode_fst_) {
         delete decode_fst_;
         decode_fst_ = nullptr;
+        return true;
     }
+    return false;
 }
 
 void LafNNet3OnlineModelWrapper::StartDecoding() {
@@ -251,7 +253,7 @@ void LafNNet3OnlineModelWrapper::StartDecoding() {
     BaseNNet3OnlineModelWrapper::StartDecoding();
 
     if (!decode_fst_ || (decode_fst_grammars_activity_ != grammars_activity_)) {
-        DestroyDecodeFst();
+        InvalidateDecodeFst();
         KALDI_ASSERT(grammar_fsts_.size() == grammars_activity_.size());
         decode_fst_grammars_activity_ = grammars_activity_;
 
