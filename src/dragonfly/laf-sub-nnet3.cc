@@ -151,17 +151,18 @@ int32 LafNNet3OnlineModelWrapper::AddGrammarFst(std::istream& grammar_text) {
 }
 
 int32 LafNNet3OnlineModelWrapper::AddGrammarFst(fst::StdExpandedFst* grammar_fst, std::string grammar_name) {
+    InvalidateDecodeFst();
     // ExecutionTimer timer("AddGrammarFst:loading");
     auto grammar_fst_index = grammar_fsts_.size();
     if (grammar_fst_index >= config_->max_num_rules) KALDI_ERR << "cannot add more than max number of rules";
     KALDI_VLOG(2) << "adding FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst->NumStates() << " states " << grammar_name;
     grammar_fsts_.push_back(grammar_fst);
     grammar_fsts_name_map_[grammar_fst] = grammar_name;
-    InvalidateDecodeFst();
     return grammar_fst_index;
 }
 
 bool LafNNet3OnlineModelWrapper::ReloadGrammarFst(int32 grammar_fst_index, fst::StdExpandedFst* grammar_fst, std::string grammar_name) {
+    InvalidateDecodeFst();
     auto old_grammar_fst = grammar_fsts_.at(grammar_fst_index);
     grammar_fsts_name_map_.erase(old_grammar_fst);
     delete old_grammar_fst;
@@ -169,17 +170,16 @@ bool LafNNet3OnlineModelWrapper::ReloadGrammarFst(int32 grammar_fst_index, fst::
     KALDI_VLOG(2) << "reloading FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst->NumStates() << " states " << grammar_name;
     grammar_fsts_.at(grammar_fst_index) = grammar_fst;
     grammar_fsts_name_map_[grammar_fst] = grammar_name;
-    InvalidateDecodeFst();
     return true;
 }
 
 bool LafNNet3OnlineModelWrapper::RemoveGrammarFst(int32 grammar_fst_index) {
+    InvalidateDecodeFst();
     auto grammar_fst = grammar_fsts_.at(grammar_fst_index);
     KALDI_VLOG(2) << "removing FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fsts_name_map_.at(grammar_fst);
     grammar_fsts_.erase(grammar_fsts_.begin() + grammar_fst_index);
     grammar_fsts_name_map_.erase(grammar_fst);
     delete grammar_fst;
-    InvalidateDecodeFst();
     return true;
 }
 
@@ -240,6 +240,7 @@ void LafNNet3OnlineModelWrapper::BuildDecodeFst() {
 }
 
 bool LafNNet3OnlineModelWrapper::InvalidateDecodeFst() {
+    if (DecoderReady(decoder_)) KALDI_ERR << "cannot modify/invalidate GrammarFst in the middle of decoding!";
     if (decode_fst_) {
         delete decode_fst_;
         decode_fst_ = nullptr;

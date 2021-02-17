@@ -315,6 +315,7 @@ StdConstFst* AgfNNet3OnlineModelWrapper::ReadFstFile(std::string filename) {
 }
 
 int32 AgfNNet3OnlineModelWrapper::AddGrammarFst(std::string& grammar_fst_filename) {
+    if (decoder_ && !decoder_finalized_) KALDI_ERR << "cannot AddGrammarFst in the middle of decoding";
     auto grammar_fst_index = grammar_fsts_.size();
     auto grammar_fst = ReadFstFile(grammar_fst_filename);
     KALDI_VLOG(2) << "adding FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst_filename;
@@ -328,6 +329,7 @@ int32 AgfNNet3OnlineModelWrapper::AddGrammarFst(std::string& grammar_fst_filenam
 }
 
 bool AgfNNet3OnlineModelWrapper::ReloadGrammarFst(int32 grammar_fst_index, std::string& grammar_fst_filename) {
+    if (decoder_ && !decoder_finalized_) KALDI_ERR << "cannot ReloadGrammarFst in the middle of decoding";
     auto old_grammar_fst = grammar_fsts_.at(grammar_fst_index);
     grammar_fsts_filename_map_.erase(old_grammar_fst);
     delete old_grammar_fst;
@@ -344,6 +346,7 @@ bool AgfNNet3OnlineModelWrapper::ReloadGrammarFst(int32 grammar_fst_index, std::
 }
 
 bool AgfNNet3OnlineModelWrapper::RemoveGrammarFst(int32 grammar_fst_index) {
+    if (decoder_ && !decoder_finalized_) KALDI_ERR << "cannot RemoveGrammarFst in the middle of decoding";
     auto grammar_fst = grammar_fsts_.at(grammar_fst_index);
     KALDI_VLOG(2) << "removing FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fsts_filename_map_.at(grammar_fst);
     grammar_fsts_.erase(grammar_fsts_.begin() + grammar_fst_index);

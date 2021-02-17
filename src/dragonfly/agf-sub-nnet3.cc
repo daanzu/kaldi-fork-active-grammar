@@ -72,12 +72,12 @@ AgfNNet3OnlineModelWrapper::~AgfNNet3OnlineModelWrapper() {
 }
 
 int32 AgfNNet3OnlineModelWrapper::AddGrammarFst(fst::StdConstFst* grammar_fst, std::string grammar_name) {
+    InvalidateActiveGrammarFST();
     auto grammar_fst_index = grammar_fsts_.size();
     if (grammar_fst_index >= config_->max_num_rules) KALDI_ERR << "cannot add more than max number of rules";
     KALDI_VLOG(2) << "adding FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst->NumStates() << " states " << grammar_name;
     grammar_fsts_.push_back(grammar_fst);
     grammar_fsts_name_map_[grammar_fst] = grammar_name;
-    InvalidateActiveGrammarFST();
     return grammar_fst_index;
 }
 
@@ -87,6 +87,7 @@ int32 AgfNNet3OnlineModelWrapper::AddGrammarFst(std::string& grammar_fst_filenam
 }
 
 bool AgfNNet3OnlineModelWrapper::ReloadGrammarFst(int32 grammar_fst_index, fst::StdConstFst* grammar_fst, std::string grammar_name) {
+    InvalidateActiveGrammarFST();
     auto old_grammar_fst = grammar_fsts_.at(grammar_fst_index);
     grammar_fsts_name_map_.erase(old_grammar_fst);
     delete old_grammar_fst;
@@ -94,7 +95,6 @@ bool AgfNNet3OnlineModelWrapper::ReloadGrammarFst(int32 grammar_fst_index, fst::
     KALDI_VLOG(2) << "reloading FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst->NumStates() << " states " << grammar_name;
     grammar_fsts_.at(grammar_fst_index) = grammar_fst;
     grammar_fsts_name_map_[grammar_fst] = grammar_name;
-    InvalidateActiveGrammarFST();
     return true;
 }
 
@@ -104,16 +104,17 @@ bool AgfNNet3OnlineModelWrapper::ReloadGrammarFst(int32 grammar_fst_index, std::
 }
 
 bool AgfNNet3OnlineModelWrapper::RemoveGrammarFst(int32 grammar_fst_index) {
+    InvalidateActiveGrammarFST();
     auto grammar_fst = grammar_fsts_.at(grammar_fst_index);
     KALDI_VLOG(2) << "removing FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fsts_name_map_.at(grammar_fst);
     grammar_fsts_.erase(grammar_fsts_.begin() + grammar_fst_index);
     grammar_fsts_name_map_.erase(grammar_fst);
     delete grammar_fst;
-    InvalidateActiveGrammarFST();
     return true;
 }
 
 bool AgfNNet3OnlineModelWrapper::InvalidateActiveGrammarFST() {
+    if (DecoderReady(decoder_)) KALDI_ERR << "cannot modify/invalidate GrammarFst in the middle of decoding!";
     if (active_grammar_fst_) {
         delete active_grammar_fst_;
         active_grammar_fst_ = nullptr;
