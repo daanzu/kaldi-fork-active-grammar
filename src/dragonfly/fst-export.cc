@@ -170,6 +170,11 @@ bool fst__does_match(void* fst_vp, int32_t target_labels_len, int32_t target_lab
     return false;
 }
 
+void* fst__load_file(char* filename_cp) {
+    auto fst = CastOrConvertToVectorFst(ReadFstKaldiGeneric(std::string(filename_cp)));
+    return fst;
+}
+
 void* fst__compile_text(char* fst_text_cp, char* isymbols_file_cp, char* osymbols_file_cp) {
     ExecutionTimer timer("fst__compile_text:compiling");
     std::istringstream fst_text(fst_text_cp);

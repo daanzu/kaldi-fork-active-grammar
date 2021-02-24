@@ -440,8 +440,3 @@ void* nnet3_agf__compile_graph_file(void* compiler_vp, char* config_str_cp, char
     return nnet3_agf__compile_graph(compiler_vp, config_str_cp, fst, return_graph);
     END_INTERFACE_CATCH_HANDLER(nullptr)
 }
-
-void* nnet3_agf__read_compiled_graph(char* filename_cp) {
-    auto fst = CastOrConvertToVectorFst(ReadFstKaldiGeneric(std::string(filename_cp)));
-    return fst;
-}
