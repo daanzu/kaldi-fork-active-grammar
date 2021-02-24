@@ -19,6 +19,7 @@
 
 #include "fstext/fstext-lib.h"
 #include "fst/script/compile.h"
+#include "util/common-utils.h"
 
 #include "utils.h"
 #include "md5.h"
@@ -186,4 +187,25 @@ void* fst__compile_text(char* fst_text_cp, char* isymbols_file_cp, char* osymbol
     auto fst = dynamic_cast<StdVectorFst*>(fst::Convert(*fstclass->GetFst<StdArc>(), "vector"));
     if (!fst) KALDI_ERR << "could not convert Fst to StdVectorFst";
     return fst;
+}
+
+bool utils__build_L_disambig(char* lexicon_fst_text_cp, char* isymbols_file_cp, char* osymbols_file_cp, char* wdisambig_phones_file_cp, char* wdisambig_words_file_cp, char* fst_out_file_cp) {
+    auto fst = static_cast<StdVectorFst*>(fst__compile_text(lexicon_fst_text_cp, isymbols_file_cp, osymbols_file_cp));
+
+    std::vector<int32> disambig_in;
+    if (!kaldi::ReadIntegerVectorSimple(wdisambig_phones_file_cp, &disambig_in))
+      KALDI_ERR << "utils__build_L_disambig: Could not read disambiguation symbols from "
+                 << kaldi::PrintableRxfilename(wdisambig_phones_file_cp);
+    std::vector<int32> disambig_out;
+    if (!kaldi::ReadIntegerVectorSimple(wdisambig_words_file_cp, &disambig_out))
+      KALDI_ERR << "utils__build_L_disambig: Could not read disambiguation symbols from "
+                << kaldi::PrintableRxfilename(wdisambig_words_file_cp);
+    if (disambig_in.size() != disambig_out.size())
+      KALDI_ERR << "utils__build_L_disambig: mismatch in size of disambiguation symbols";
+    AddSelfLoops(fst, disambig_in, disambig_out);
+
+    ArcSort(fst, OLabelCompare<StdArc>());
+    WriteFstKaldi(*fst, fst_out_file_cp);
+    delete fst;
+    return true;
 }
