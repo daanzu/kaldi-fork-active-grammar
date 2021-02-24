@@ -464,10 +464,10 @@ int32_t nnet3_laf__add_grammar_fst(void* model_vp, void* grammar_fst_cp) {
     END_INTERFACE_CATCH_HANDLER(-1)
 }
 
-int32_t nnet3_laf__add_grammar_fst_text(void* model_vp, char* grammar_fst_cp) {
+int32_t nnet3_laf__add_grammar_fst_text(void* model_vp, char* grammar_fst_text_cp) {
     BEGIN_INTERFACE_CATCH_HANDLER
     auto model = static_cast<LafNNet3OnlineModelWrapper*>(model_vp);
-    std::istringstream iss(grammar_fst_cp);
+    std::istringstream iss(grammar_fst_text_cp);
     int32_t grammar_fst_index = model->AddGrammarFst(iss);
     return grammar_fst_index;
     END_INTERFACE_CATCH_HANDLER(-1)

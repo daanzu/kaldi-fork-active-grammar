@@ -18,7 +18,9 @@
 #pragma once
 
 #include "fstext/fstext-lib.h"
+#include "fst/script/compile.h"
 
+#include "utils.h"
 #include "md5.h"
 
 extern "C" {
@@ -166,4 +168,17 @@ bool fst__does_match(void* fst_vp, int32_t target_labels_len, int32_t target_lab
         }
     }
     return false;
+}
+
+void* fst__compile_text(char* fst_text_cp, char* isymbols_file_cp, char* osymbols_file_cp) {
+    ExecutionTimer timer("fst__compile_text:compiling");
+    std::istringstream fst_text(fst_text_cp);
+    auto isymbols = fst::SymbolTable::ReadText(isymbols_file_cp),
+        osymbols = fst::SymbolTable::ReadText(osymbols_file_cp);
+    auto fstclass = fst::script::CompileFstInternal(fst_text, "<fst__compile_text>", "vector", "standard",
+        isymbols, osymbols, nullptr, false, false, false, false, false);
+    delete isymbols, osymbols;
+    auto fst = dynamic_cast<StdVectorFst*>(fst::Convert(*fstclass->GetFst<StdArc>(), "vector"));
+    if (!fst) KALDI_ERR << "could not convert Fst to StdVectorFst";
+    return fst;
 }

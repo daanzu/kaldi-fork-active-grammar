@@ -76,7 +76,7 @@ DRAGONFLY_API void* nnet3_agf__read_compiled_graph(char* filename_cp);
 DRAGONFLY_API void* nnet3_laf__construct(char* model_dir_cp, char* config_str_cp, int32_t verbosity);
 DRAGONFLY_API bool nnet3_laf__destruct(void* model_vp);
 DRAGONFLY_API int32_t nnet3_laf__add_grammar_fst(void* model_vp, void* grammar_fst_cp);
-DRAGONFLY_API int32_t nnet3_laf__add_grammar_fst_text(void* model_vp, char* grammar_fst_cp);
+DRAGONFLY_API int32_t nnet3_laf__add_grammar_fst_text(void* model_vp, char* grammar_fst_text_cp);
 DRAGONFLY_API bool nnet3_laf__reload_grammar_fst(void* model_vp, int32_t grammar_fst_index, void* grammar_fst_cp);
 DRAGONFLY_API bool nnet3_laf__remove_grammar_fst(void* model_vp, int32_t grammar_fst_index);
 DRAGONFLY_API bool nnet3_laf__decode(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,
@@ -90,3 +90,4 @@ DRAGONFLY_API bool fst__add_arc(void* fst_vp, int32_t src_state_id, int32_t dst_
 DRAGONFLY_API bool fst__compute_md5(void* fst_vp, char* md5_cp, char* dependencies_seed_md5_cp);
 DRAGONFLY_API bool fst__has_eps_path(void* fst_vp, int32_t path_src_state, int32_t path_dst_state);
 DRAGONFLY_API bool fst__does_match(void* fst_vp, int32_t target_labels_len, int32_t target_labels_cp[], int32_t output_labels_cp[], int32_t* output_labels_len);
+DRAGONFLY_API void* fst__compile_text(char* fst_text_cp, char* isymbols_file_cp, char* osymbols_file_cp);
