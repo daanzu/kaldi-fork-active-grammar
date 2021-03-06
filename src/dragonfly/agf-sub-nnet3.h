@@ -49,8 +49,8 @@ struct AgfNNet3OnlineModelConfig : public BaseNNet3OnlineModelConfig {
     static constexpr auto Create = BaseNNet3OnlineModelConfig::Create<AgfNNet3OnlineModelConfig>;
 
     int32 nonterm_phones_offset = -1;  // offset from start of phones that start of nonterms are
-    int32 rules_phones_offset = -1;  // offset from start of phones that the dictation nonterms are
-    int32 dictation_phones_offset = -1;  // offset from start of phones that the kaldi_rules nonterms are
+    int32 rules_phones_offset = -1;  // offset from start of phones that the kaldi_rules nonterms are
+    int32 dictation_phones_offset = -1;  // offset from start of phones that the dictation nonterms are
     uint64 top_fst = 0;  // actually a void* pointer to the top FST object
     std::string top_fst_filename;
     std::string dictation_fst_filename;

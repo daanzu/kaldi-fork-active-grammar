@@ -212,8 +212,8 @@ class ActiveGrammarFst {
     }
   }
 
-  // Update activity of ifsts, with given current activity. Return whether any
-  // changed.
+  // Update activity of ifsts, with given current activity (of each ifst in
+  // order). Return whether any changed.
   bool UpdateActivity(const std::vector<bool>& activity) {
     KALDI_ASSERT(ifsts_activity_.size() == activity.size());
     KALDI_ASSERT(ifsts_activity_.size() == ifsts_.size());
@@ -222,6 +222,7 @@ class ActiveGrammarFst {
       // Only clear top_fst_'s expanded_states for nonterms/ifsts whose activity changed
       FstInstance &top_fst_instance = instances_[0];
 
+      // Cannot use range-based for loop because we need to change iteration depending.
       for (auto iter = top_fst_instance.expanded_states.begin(), end = top_fst_instance.expanded_states.end(); iter != end; ) {
         ExpandedState *expanded_state = iter->second;
         int32 i = expanded_state->dest_ifst_index;
