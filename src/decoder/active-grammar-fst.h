@@ -247,6 +247,15 @@ class ActiveGrammarFst {
     return false;
   }
 
+  // Update activity of ifsts, with given current activity (set of nonterm
+  // numbers that are active). Return whether any changed.
+  bool UpdateActivity(const std::set<int32>& activity_set) {
+    std::vector<bool> activity(ifsts_activity_.size(), false);
+    for (auto nonterm_index : activity_set)
+      activity[nonterminal_map_.at(nonterm_index)] = true;
+    return UpdateActivity(activity);
+  }
+
   inline std::string Type() const { return "active_grammar"; }
 
   ~ActiveGrammarFst();

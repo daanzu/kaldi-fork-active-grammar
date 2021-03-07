@@ -71,19 +71,19 @@ AgfNNet3OnlineModelWrapper::~AgfNNet3OnlineModelWrapper() {
     delete rule_relabel_mapper_;
 }
 
-int32 AgfNNet3OnlineModelWrapper::AddGrammarFst(fst::StdConstFst* grammar_fst, std::string grammar_name) {
+int32 AgfNNet3OnlineModelWrapper::AddGrammarFst(int32 grammar_fst_index, fst::StdConstFst* grammar_fst, std::string grammar_name) {
     InvalidateActiveGrammarFST();
-    auto grammar_fst_index = grammar_fsts_.size();
     if (grammar_fst_index >= config_->max_num_rules) KALDI_ERR << "cannot add more than max number of rules";
     KALDI_VLOG(2) << "adding FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst->NumStates() << " states " << grammar_name;
-    grammar_fsts_.push_back(grammar_fst);
+    auto ok = grammar_fsts_.insert({grammar_fst_index, grammar_fst}).second;
+    if (!ok) KALDI_ERR << "cannot add grammar to duplicate grammar_fst_index " << grammar_fst_index;
     grammar_fsts_name_map_[grammar_fst] = grammar_name;
     return grammar_fst_index;
 }
 
-int32 AgfNNet3OnlineModelWrapper::AddGrammarFst(std::string& grammar_fst_filename) {
+int32 AgfNNet3OnlineModelWrapper::AddGrammarFst(int32 grammar_fst_index, std::string& grammar_fst_filename) {
     auto grammar_fst = ReadFstFile(grammar_fst_filename);
-    return AddGrammarFst(grammar_fst, grammar_fst_filename);
+    return AddGrammarFst(grammar_fst_index, grammar_fst, grammar_fst_filename);
 }
 
 bool AgfNNet3OnlineModelWrapper::ReloadGrammarFst(int32 grammar_fst_index, fst::StdConstFst* grammar_fst, std::string grammar_name) {
@@ -107,7 +107,8 @@ bool AgfNNet3OnlineModelWrapper::RemoveGrammarFst(int32 grammar_fst_index) {
     InvalidateActiveGrammarFST();
     auto grammar_fst = grammar_fsts_.at(grammar_fst_index);
     KALDI_VLOG(2) << "removing FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fsts_name_map_.at(grammar_fst);
-    grammar_fsts_.erase(grammar_fsts_.begin() + grammar_fst_index);
+    auto erased = grammar_fsts_.erase(grammar_fst_index);
+    if (erased < 1) KALDI_ERR << "cannot find grammar_fst_index " << grammar_fst_index;
     grammar_fsts_name_map_.erase(grammar_fst);
     delete grammar_fst;
     return true;
@@ -129,8 +130,10 @@ void AgfNNet3OnlineModelWrapper::StartDecoding() {
 
     if (active_grammar_fst_ == nullptr) {
         std::vector<std::pair<int32, const StdConstFst *> > ifsts;
-        for (auto grammar_fst : grammar_fsts_) {
-            int32 nonterm_phone = config_->rules_phones_offset + ifsts.size();
+        for (auto grammar_fst_pair : grammar_fsts_) {
+            auto grammar_fst_index = grammar_fst_pair.first;
+            auto grammar_fst = grammar_fst_pair.second;
+            int32 nonterm_phone = config_->rules_phones_offset + grammar_fst_index;
             ifsts.emplace_back(std::make_pair(nonterm_phone, grammar_fst));
         }
         if (dictation_fst_ != nullptr) {
@@ -139,8 +142,9 @@ void AgfNNet3OnlineModelWrapper::StartDecoding() {
         active_grammar_fst_ = new ActiveGrammarFst(config_->nonterm_phones_offset, *top_fst_, ifsts);
     }
 
-    auto grammars_activity = grammars_activity_;
-    grammars_activity.push_back(dictation_fst_ != nullptr);  // dictation_fst_ is only enabled if present
+    std::set<int32> grammars_activity;
+    for (auto rule_number : grammars_activity_) grammars_activity.insert(rule_number + config_->rules_phones_offset);
+    if (dictation_fst_ != nullptr) grammars_activity.insert(config_->dictation_phones_offset);  // dictation_fst_ is only enabled if present
     active_grammar_fst_->UpdateActivity(grammars_activity);
 
     decoder_ = new SingleUtteranceNnet3DecoderTpl<fst::ActiveGrammarFst>(
@@ -157,13 +161,6 @@ bool AgfNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, const Vector<BaseFl
     if (!DecoderReady(decoder_))
         StartDecoding();
     return BaseNNet3OnlineModelWrapper::Decode(decoder_, samp_freq, samples, finalize, save_adaptation_state);
-}
-
-// grammars_activity is ignored once decoding has already started
-bool AgfNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, const Vector<BaseFloat>& samples, bool finalize,
-        const std::vector<bool>& grammars_activity, bool save_adaptation_state) {
-    SetActiveGrammars(std::move(grammars_activity));
-    return Decode(samp_freq, samples, finalize, save_adaptation_state);
 }
 
 void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, float* likelihood, float* am_score, float* lm_score, float* confidence, float* expected_error_rate) {
@@ -329,21 +326,21 @@ bool nnet3_agf__destruct(void* model_vp) {
     END_INTERFACE_CATCH_HANDLER(false)
 }
 
-int32_t nnet3_agf__add_grammar_fst(void* model_vp, void* grammar_fst_cp) {
+int32_t nnet3_agf__add_grammar_fst(void* model_vp, int32_t grammar_fst_index, void* grammar_fst_cp) {
     BEGIN_INTERFACE_CATCH_HANDLER
     auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
     auto fst = static_cast<StdVectorFst*>(grammar_fst_cp);
     auto const_fst = new StdConstFst(*fst);
-    int32_t grammar_fst_index = model->AddGrammarFst(const_fst);
+    grammar_fst_index = model->AddGrammarFst(grammar_fst_index, const_fst);
     return grammar_fst_index;
     END_INTERFACE_CATCH_HANDLER(-1)
 }
 
-int32_t nnet3_agf__add_grammar_fst_file(void* model_vp, char* grammar_fst_filename_cp) {
+int32_t nnet3_agf__add_grammar_fst_file(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp) {
     BEGIN_INTERFACE_CATCH_HANDLER
     auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
     std::string grammar_fst_filename(grammar_fst_filename_cp);
-    int32_t grammar_fst_index = model->AddGrammarFst(grammar_fst_filename);
+    grammar_fst_index = model->AddGrammarFst(grammar_fst_index, grammar_fst_filename);
     return grammar_fst_index;
     END_INTERFACE_CATCH_HANDLER(-1)
 }
@@ -375,15 +372,13 @@ bool nnet3_agf__remove_grammar_fst(void* model_vp, int32_t grammar_fst_index) {
     END_INTERFACE_CATCH_HANDLER(false)
 }
 
-bool nnet3_agf__decode(void* model_vp, float samp_freq, int32_t num_samples, float* samples, bool finalize,
-    bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state) {
+bool nnet3_agf__decode(void* model_vp, float samp_freq, uint32_t num_samples, float* samples, bool finalize,
+    int32_t* grammars_activity_cp, uint32_t grammars_activity_cp_size, bool save_adaptation_state) {
     BEGIN_INTERFACE_CATCH_HANDLER
     if (grammars_activity_cp_size) {
         auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
-        std::vector<bool> grammars_activity(grammars_activity_cp_size, false);
-        for (size_t i = 0; i < grammars_activity_cp_size; i++)
-            grammars_activity[i] = grammars_activity_cp[i];
-        model->SetActiveGrammars(std::move(grammars_activity));
+        std::set<int32> grammars_activity(grammars_activity_cp, grammars_activity_cp + grammars_activity_cp_size);
+        model->SetActiveGrammars(grammars_activity);
     }
     return nnet3_base__decode(model_vp, samp_freq, num_samples, samples, finalize, save_adaptation_state);
     END_INTERFACE_CATCH_HANDLER(false)

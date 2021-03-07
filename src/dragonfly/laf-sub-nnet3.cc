@@ -130,14 +130,14 @@ void LafNNet3OnlineModelWrapper::PrepareGrammarFst(fst::StdVectorFst* grammar_fs
     // }
 }
 
-int32 LafNNet3OnlineModelWrapper::AddGrammarFst(std::string& grammar_fst_filename) {
+int32 LafNNet3OnlineModelWrapper::AddGrammarFst(int32 grammar_fst_index, std::string& grammar_fst_filename) {
     ExecutionTimer timer("AddGrammarFst:loading from file");
     auto grammar_fst = CastOrConvertToVectorFst(ReadFstKaldiGeneric(grammar_fst_filename));
     PrepareGrammarFst(grammar_fst, true);  // Was this file already relabeled?
-    return AddGrammarFst(grammar_fst, grammar_fst_filename);
+    return AddGrammarFst(grammar_fst_index, grammar_fst, grammar_fst_filename);
 }
 
-int32 LafNNet3OnlineModelWrapper::AddGrammarFst(std::istream& grammar_text) {
+int32 LafNNet3OnlineModelWrapper::AddGrammarFst(int32 grammar_fst_index, std::istream& grammar_text) {
     ExecutionTimer timer("AddGrammarFst:compiling");
     auto word_syms_maybe_relabeled = (word_syms_relabeled_) ? word_syms_relabeled_ : word_syms_;  // Use composed if we have it
     auto grammar_fstclass = fst::script::CompileFstInternal(grammar_text, "<AddGrammarFst>", "vector", "standard",
@@ -147,16 +147,16 @@ int32 LafNNet3OnlineModelWrapper::AddGrammarFst(std::istream& grammar_text) {
     if (!grammar_fst) KALDI_ERR << "could not convert grammar Fst to StdVectorFst";
     timer.step();
     PrepareGrammarFst(grammar_fst, (word_syms_maybe_relabeled != word_syms_relabeled_));
-    return AddGrammarFst(grammar_fst);
+    return AddGrammarFst(grammar_fst_index, grammar_fst);
 }
 
-int32 LafNNet3OnlineModelWrapper::AddGrammarFst(fst::StdExpandedFst* grammar_fst, std::string grammar_name) {
+int32 LafNNet3OnlineModelWrapper::AddGrammarFst(int32 grammar_fst_index, fst::StdExpandedFst* grammar_fst, std::string grammar_name) {
     InvalidateDecodeFst();
     // ExecutionTimer timer("AddGrammarFst:loading");
-    auto grammar_fst_index = grammar_fsts_.size();
     if (grammar_fst_index >= config_->max_num_rules) KALDI_ERR << "cannot add more than max number of rules";
     KALDI_VLOG(2) << "adding FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst->NumStates() << " states " << grammar_name;
-    grammar_fsts_.push_back(grammar_fst);
+    auto ok = grammar_fsts_.insert({grammar_fst_index, grammar_fst}).second;
+    if (!ok) KALDI_ERR << "cannot add grammar to duplicate grammar_fst_index " << grammar_fst_index;
     grammar_fsts_name_map_[grammar_fst] = grammar_name;
     return grammar_fst_index;
 }
@@ -177,7 +177,8 @@ bool LafNNet3OnlineModelWrapper::RemoveGrammarFst(int32 grammar_fst_index) {
     InvalidateDecodeFst();
     auto grammar_fst = grammar_fsts_.at(grammar_fst_index);
     KALDI_VLOG(2) << "removing FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fsts_name_map_.at(grammar_fst);
-    grammar_fsts_.erase(grammar_fsts_.begin() + grammar_fst_index);
+    auto erased = grammar_fsts_.erase(grammar_fst_index);
+    if (erased < 1) KALDI_ERR << "cannot find grammar_fst_index " << grammar_fst_index;
     grammar_fsts_name_map_.erase(grammar_fst);
     delete grammar_fst;
     return true;
@@ -218,11 +219,9 @@ void LafNNet3OnlineModelWrapper::BuildDecodeFst() {
         top_fst.AddArc(0, StdArc(word_syms_->Find(word), 0, 0.0, final_state));
 
     if (grammar_fsts_.size() > config_->max_num_rules) KALDI_ERR << "more grammars than max number";
-    for (size_t i = 0; i < grammar_fsts_.size(); ++i) {
-        if (decode_fst_grammars_activity_[i]) {
-            top_fst.AddArc(0, StdArc(0, (rules_words_offset + i), 0.0, final_state));
-            label_fst_pairs.emplace_back((rules_words_offset + i), grammar_fsts_.at(i));
-        }
+    for (auto grammar_fst_index : decode_fst_grammars_activity_) {
+        top_fst.AddArc(0, StdArc(0, (rules_words_offset + grammar_fst_index), 0.0, final_state));
+        label_fst_pairs.emplace_back((rules_words_offset + grammar_fst_index), grammar_fsts_.at(grammar_fst_index));
     }
     if (dictation_fst_ != nullptr)
         label_fst_pairs.emplace_back(word_syms_->Find("#nonterm:dictation"), dictation_fst_);
@@ -255,13 +254,7 @@ void LafNNet3OnlineModelWrapper::StartDecoding() {
 
     if (!decode_fst_ || (decode_fst_grammars_activity_ != grammars_activity_)) {
         InvalidateDecodeFst();
-        KALDI_ASSERT(grammar_fsts_.size() == grammars_activity_.size());
         decode_fst_grammars_activity_ = grammars_activity_;
-
-        std::vector<fst::StdFst*> active_grammar_fsts;
-        for (size_t i = 0; i < grammar_fsts_.size(); ++i)
-            if (decode_fst_grammars_activity_[i])
-                active_grammar_fsts.push_back(grammar_fsts_[i]);
         BuildDecodeFst();
     }
 
@@ -279,13 +272,6 @@ bool LafNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, const Vector<BaseFl
     if (!DecoderReady(decoder_))
         StartDecoding();
     return BaseNNet3OnlineModelWrapper::Decode(decoder_, samp_freq, samples, finalize, save_adaptation_state);
-}
-
-// grammars_activity is ignored once decoding has already started
-bool LafNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, const Vector<BaseFloat>& samples, bool finalize,
-        const std::vector<bool>& grammars_activity, bool save_adaptation_state) {
-    SetActiveGrammars(std::move(grammars_activity));
-    return Decode(samp_freq, samples, finalize, save_adaptation_state);
 }
 
 void LafNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, float* likelihood, float* am_score, float* lm_score, float* confidence, float* expected_error_rate) {
@@ -451,7 +437,7 @@ bool nnet3_laf__destruct(void* model_vp) {
     END_INTERFACE_CATCH_HANDLER(false)
 }
 
-int32_t nnet3_laf__add_grammar_fst(void* model_vp, void* grammar_fst_cp) {
+int32_t nnet3_laf__add_grammar_fst(void* model_vp, int32_t grammar_fst_index, void* grammar_fst_cp) {
     BEGIN_INTERFACE_CATCH_HANDLER
     auto model = static_cast<LafNNet3OnlineModelWrapper*>(model_vp);
     auto fst = static_cast<StdVectorFst*>(grammar_fst_cp);
@@ -459,16 +445,16 @@ int32_t nnet3_laf__add_grammar_fst(void* model_vp, void* grammar_fst_cp) {
     bool built_relabeled = true;
     model->PrepareGrammarFst(fst, !built_relabeled);  // This mutates the fst!
     // fst->Write("tmp2.fst");
-    int32_t grammar_fst_index = model->AddGrammarFst(fst);
+    grammar_fst_index = model->AddGrammarFst(grammar_fst_index, fst);
     return grammar_fst_index;
     END_INTERFACE_CATCH_HANDLER(-1)
 }
 
-int32_t nnet3_laf__add_grammar_fst_text(void* model_vp, char* grammar_fst_text_cp) {
+int32_t nnet3_laf__add_grammar_fst_text(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_text_cp) {
     BEGIN_INTERFACE_CATCH_HANDLER
     auto model = static_cast<LafNNet3OnlineModelWrapper*>(model_vp);
     std::istringstream iss(grammar_fst_text_cp);
-    int32_t grammar_fst_index = model->AddGrammarFst(iss);
+    grammar_fst_index = model->AddGrammarFst(grammar_fst_index, iss);
     return grammar_fst_index;
     END_INTERFACE_CATCH_HANDLER(-1)
 }
@@ -492,15 +478,13 @@ bool nnet3_laf__remove_grammar_fst(void* model_vp, int32_t grammar_fst_index) {
     END_INTERFACE_CATCH_HANDLER(false)
 }
 
-bool nnet3_laf__decode(void* model_vp, float samp_freq, int32_t num_samples, float* samples, bool finalize,
-    bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state) {
+bool nnet3_laf__decode(void* model_vp, float samp_freq, uint32_t num_samples, float* samples, bool finalize,
+    int32_t* grammars_activity_cp, uint32_t grammars_activity_cp_size, bool save_adaptation_state) {
     BEGIN_INTERFACE_CATCH_HANDLER
     if (grammars_activity_cp_size) {
         auto model = static_cast<LafNNet3OnlineModelWrapper*>(model_vp);
-        std::vector<bool> grammars_activity(grammars_activity_cp_size, false);
-        for (size_t i = 0; i < grammars_activity_cp_size; i++)
-            grammars_activity[i] = grammars_activity_cp[i];
-        model->SetActiveGrammars(std::move(grammars_activity));
+        std::set<int32> grammars_activity(grammars_activity_cp, grammars_activity_cp + grammars_activity_cp_size);
+        model->SetActiveGrammars(grammars_activity);
     }
     return nnet3_base__decode(model_vp, samp_freq, num_samples, samples, finalize, save_adaptation_state);
     END_INTERFACE_CATCH_HANDLER(false)

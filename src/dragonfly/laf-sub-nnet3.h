@@ -93,14 +93,13 @@ class LafNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
         ~LafNNet3OnlineModelWrapper() override;
 
         void PrepareGrammarFst(fst::StdVectorFst* grammar_fst, bool relabel);
-        int32 AddGrammarFst(fst::StdExpandedFst* grammar_fst, std::string grammar_name = "<unnamed>");  // Does not take ownership of FST!
-        int32 AddGrammarFst(std::istream& grammar_text);
-        int32 AddGrammarFst(std::string& grammar_fst_filename);
+        int32 AddGrammarFst(int32 grammar_fst_index, fst::StdExpandedFst* grammar_fst, std::string grammar_name = "<unnamed>");  // Does not take ownership of FST!
+        int32 AddGrammarFst(int32 grammar_fst_index, std::istream& grammar_text);
+        int32 AddGrammarFst(int32 grammar_fst_index, std::string& grammar_fst_filename);
         bool ReloadGrammarFst(int32 grammar_fst_index, fst::StdExpandedFst* grammar_fst, std::string grammar_name = "<unnamed>");  // Does not take ownership of FST!
         bool RemoveGrammarFst(int32 grammar_fst_index);
-        void SetActiveGrammars(const std::vector<bool>& grammars_activity) { grammars_activity_ = grammars_activity; };
+        void SetActiveGrammars(std::set<int32>& grammars_activity) { if (grammars_activity_ != grammars_activity) grammars_activity_.swap(grammars_activity); };
 
-        bool Decode(BaseFloat samp_freq, const Vector<BaseFloat>& frames, bool finalize, const std::vector<bool>& grammars_activity, bool save_adaptation_state = true);
         bool Decode(BaseFloat samp_freq, const Vector<BaseFloat>& frames, bool finalize, bool save_adaptation_state = true) override;
         void GetDecodedString(std::string& decoded_string, float* likelihood, float* am_score, float* lm_score, float* confidence, float* expected_error_rate) override;
 
@@ -114,14 +113,14 @@ class LafNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
         std::vector<std::pair<StdArc::Label, StdArc::Label>> relabel_ilabels_;  // Lookahead relabel mapping (word-ids -> relabeled-word-ids)
         fst::SymbolTable *word_syms_relabeled_ = nullptr;  // Word symbol table composed with relabeling, allowing compiling directly to relabeled grammar
         StdConstFst *dictation_fst_ = nullptr;
-        std::vector<StdExpandedFst*> grammar_fsts_;
-        std::map<StdFst*, std::string> grammar_fsts_name_map_;  // maps grammar_fst -> name; for debugging
+        std::unordered_map<int32, StdExpandedFst*> grammar_fsts_;
+        std::unordered_map<StdFst*, std::string> grammar_fsts_name_map_;  // maps grammar_fst -> name; for debugging
         // INVARIANT: same size: grammar_fsts_, grammar_fsts_name_map_
-        std::vector<bool> grammars_activity_;  // bitfield of whether each grammar is active for current/upcoming utterance
+        std::set<int32> grammars_activity_;  // Grammar rule numbers that are active for current/upcoming utterance
 
         // Model objects
         StdFst* decode_fst_ = nullptr;
-        std::vector<bool> decode_fst_grammars_activity_;  // grammars_activity_ for decode_fst_ creation
+        std::set<int32> decode_fst_grammars_activity_;  // grammars_activity_ for decode_fst_ creation
 
         // Decoder objects
         SingleUtteranceNnet3DecoderTpl<fst::StdFst>* decoder_ = nullptr;  // reinstantiated per utterance

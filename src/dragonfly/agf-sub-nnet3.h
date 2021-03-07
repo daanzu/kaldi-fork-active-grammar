@@ -89,14 +89,13 @@ class AgfNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
         AgfNNet3OnlineModelWrapper(AgfNNet3OnlineModelConfig::Ptr config, int32 verbosity = DEFAULT_VERBOSITY);
         ~AgfNNet3OnlineModelWrapper() override;
 
-        int32 AddGrammarFst(fst::StdConstFst* grammar_fst, std::string grammar_name = "<unnamed>");  // Does not take ownership of FST!
-        int32 AddGrammarFst(std::string& grammar_fst_filename);
+        int32 AddGrammarFst(int32 grammar_fst_index, fst::StdConstFst* grammar_fst, std::string grammar_name = "<unnamed>");  // Does not take ownership of FST!
+        int32 AddGrammarFst(int32 grammar_fst_index, std::string& grammar_fst_filename);
         bool ReloadGrammarFst(int32 grammar_fst_index, fst::StdConstFst* grammar_fst, std::string grammar_name = "<unnamed>");  // Does not take ownership of FST!
         bool ReloadGrammarFst(int32 grammar_fst_index, std::string& grammar_fst_filename);
         bool RemoveGrammarFst(int32 grammar_fst_index);
-        void SetActiveGrammars(const std::vector<bool>& grammars_activity) { grammars_activity_ = grammars_activity; };
+        void SetActiveGrammars(std::set<int32>& grammars_activity) { if (grammars_activity_ != grammars_activity) grammars_activity_.swap(grammars_activity); };
 
-        bool Decode(BaseFloat samp_freq, const Vector<BaseFloat>& frames, bool finalize, const std::vector<bool>& grammars_activity, bool save_adaptation_state = true);
         bool Decode(BaseFloat samp_freq, const Vector<BaseFloat>& frames, bool finalize, bool save_adaptation_state = true) override;
         void GetDecodedString(std::string& decoded_string, float* likelihood, float* am_score, float* lm_score, float* confidence, float* expected_error_rate) override;
 
@@ -107,10 +106,10 @@ class AgfNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
         // Model
         StdConstFst *top_fst_ = nullptr;
         StdConstFst *dictation_fst_ = nullptr;
-        std::vector<StdConstFst*> grammar_fsts_;
-        std::map<StdFst*, std::string> grammar_fsts_name_map_;  // maps grammar_fst -> name; for debugging
+        std::unordered_map<int32, StdConstFst*> grammar_fsts_;
+        std::unordered_map<StdFst*, std::string> grammar_fsts_name_map_;  // maps grammar_fst -> name; for debugging
         // INVARIANT: same size: grammar_fsts_, grammar_fsts_name_map_
-        std::vector<bool> grammars_activity_;  // bitfield of whether each grammar is active for current/upcoming utterance
+        std::set<int32> grammars_activity_;  // Grammar rule numbers that are active for current/upcoming utterance
 
         // Model objects
         ActiveGrammarFst* active_grammar_fst_ = nullptr;
