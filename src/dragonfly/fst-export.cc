@@ -176,6 +176,19 @@ void* fst__load_file(char* filename_cp) {
     return fst;
 }
 
+bool fst__write_file(void* fst_vp, char* filename_cp) {
+    auto fst = static_cast<StdVectorFst*>(fst_vp);
+    fst->Write(std::string(filename_cp));
+    return true;
+}
+
+bool fst__write_file_const(void* fst_vp, char* filename_cp) {
+    auto fst = static_cast<StdVectorFst*>(fst_vp);
+    fst::ConstFst<StdArc> const_fst(*fst);
+    const_fst.Write(std::string(filename_cp));
+    return true;
+}
+
 void* fst__compile_text(char* fst_text_cp, char* isymbols_file_cp, char* osymbols_file_cp) {
     ExecutionTimer timer("fst__compile_text:compiling");
     std::istringstream fst_text(fst_text_cp);
