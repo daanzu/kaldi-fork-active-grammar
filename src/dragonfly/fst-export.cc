@@ -82,7 +82,7 @@ bool fst__add_arc(void* fst_vp, int32_t src_state_id, int32_t dst_state_id, int3
 bool fst__compute_md5(void* fst_vp, char* md5_cp, char* dependencies_seed_md5_cp) {
     auto fst = static_cast<StdVectorFst*>(fst_vp);
     MD5 md5;
-    md5.add(dependencies_seed_md5_cp, MD5::HashBytes * 2);
+    md5.add(dependencies_seed_md5_cp, MD5::HashBytes * 2);  // Encoded in hex text
 
     for (StateIterator<StdFst> siter(*fst); !siter.Done(); siter.Next()) {
         auto state = siter.Value();
@@ -97,7 +97,7 @@ bool fst__compute_md5(void* fst_vp, char* md5_cp, char* dependencies_seed_md5_cp
     }
 
     auto digest = md5.getHash();
-    strncpy(md5_cp, digest.c_str(), MD5::HashBytes * 2 + 1);
+    strncpy(md5_cp, digest.c_str(), MD5::HashBytes * 2 + 1);  // Encoded in hex text
 
     return true;
 }
@@ -123,9 +123,10 @@ bool fst__has_eps_path(void* fst_vp, int32_t path_src_state, int32_t path_dst_st
 }
 
 bool fst__does_match(void* fst_vp, int32_t target_labels_len, int32_t target_labels_cp[], int32_t output_labels_cp[], int32_t* output_labels_len) {
+    // NOTE: This does not support transitioning to other FSTs via nonterminals!
     auto fst = static_cast<StdVectorFst*>(fst_vp);
-    using Path = std::vector<Label>;
-    using Entry = std::tuple<StateId, Path, size_t>;
+    using Path = std::vector<Label>;  // olabels
+    using Entry = std::tuple<StateId, Path, size_t>;  // (state, path, target_label_index)
     std::deque<Entry> queue = { std::make_tuple(fst->Start(), Path(), 0) };
 
     while (!queue.empty()) {
@@ -134,9 +135,10 @@ bool fst__does_match(void* fst_vp, int32_t target_labels_len, int32_t target_lab
         size_t target_label_index;
         std::tie(state, path, target_label_index) = queue.front();
         queue.pop_front();
-
         auto target_label = (target_label_index < target_labels_len) ? target_labels_cp[target_label_index] : -1;
+
         if ((target_label == -1) && (fst->Final(state) != Weight::Zero())) {
+            // Found a path match ending at a final state, so return true with olabels path.
             for (auto i = 0; i < std::min((int32_t)path.size(), *output_labels_len); ++i) {
                 output_labels_cp[i] = path[i];
             }
@@ -149,19 +151,27 @@ bool fst__does_match(void* fst_vp, int32_t target_labels_len, int32_t target_lab
         for (ArcIterator<StdFst> aiter(*fst, state); !aiter.Done(); aiter.Next()) {
             auto arc = aiter.Value();
             if ((target_label != -1) && (arc.ilabel == target_label)) {
+                // Found a label match, so follow arc and enqueue next state.
                 Path next_path(path);
                 next_path.emplace_back(arc.olabel);
                 queue.emplace_back(std::forward_as_tuple(arc.nextstate, next_path, target_label_index+1));
             } else if (wildcard_olabels.count(arc.ilabel)) {
-                if (std::find(path.begin(), path.end(), arc.olabel) == path.end())
+                // This arc can accept anything.
+                if (std::find(path.begin(), path.end(), arc.olabel) == path.end()) {
+                    // We haven't already added this olabel to the path, so add it now.
+                    // FIXME: Is this right? shouldn't we only check for olabel at end of path?
                     path.emplace_back(arc.olabel);
+                }
                 if (target_label != -1) {
+                    // There is a label to match, so accept it and stay at this state and re-enqueue.
                     Path next_path(path);
                     next_path.emplace_back(target_label);
                     queue.emplace_back(std::forward_as_tuple(state, next_path, target_label_index+1));
                 }
+                // Follow arc without taking a label, and enqueue next state.
                 queue.emplace_back(std::forward_as_tuple(arc.nextstate, path, target_label_index));
             } else if (silent_olabels.count(arc.ilabel)) {
+                // Take an epsilon transition to the next state.
                 Path next_path(path);
                 next_path.emplace_back(arc.olabel);
                 queue.emplace_back(std::forward_as_tuple(arc.nextstate, next_path, target_label_index));
