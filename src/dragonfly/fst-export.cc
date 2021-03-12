@@ -174,6 +174,19 @@ void* fst__load_file(char* filename_cp) {
     return fst;
 }
 
+bool fst__write_file(void* fst_vp, char* filename_cp) {
+    auto fst = static_cast<StdVectorFst*>(fst_vp);
+    fst->Write(std::string(filename_cp));
+    return true;
+}
+
+bool fst__write_file_const(void* fst_vp, char* filename_cp) {
+    auto fst = static_cast<StdVectorFst*>(fst_vp);
+    fst::ConstFst<StdArc> const_fst(*fst);
+    const_fst.Write(std::string(filename_cp));
+    return true;
+}
+
 bool fst__print(void* fst_vp, char* filename_cp) {
     auto fst = static_cast<StdVectorFst*>(fst_vp);
     if (filename_cp) KALDI_WARN << "printing to file not supported";
