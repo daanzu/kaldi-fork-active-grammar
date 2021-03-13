@@ -32,7 +32,7 @@
 #include "nnet3/nnet-utils.h"
 #include "decoder/active-grammar-fst.h"
 
-#include "base-nnet3.h"
+#include "active-base-nnet3.h"
 #include "utils.h"
 #include "kaldi-utils.h"
 #include "nlohmann_json.hpp"
@@ -43,7 +43,7 @@ using namespace kaldi;
 using namespace fst;
 
 
-struct LafNNet3OnlineModelConfig : public BaseNNet3OnlineModelConfig {
+struct LafNNet3OnlineModelConfig : public ActiveBaseNNet3OnlineModelConfig {
     using Ptr = std::shared_ptr<LafNNet3OnlineModelConfig>;
 
     static constexpr auto Create = BaseNNet3OnlineModelConfig::Create<LafNNet3OnlineModelConfig>;
@@ -86,7 +86,7 @@ struct LafNNet3OnlineModelConfig : public BaseNNet3OnlineModelConfig {
     }
 };
 
-class LafNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
+class LafNNet3OnlineModelWrapper : public ActiveBaseNNet3OnlineModelWrapper {
     public:
 
         LafNNet3OnlineModelWrapper(LafNNet3OnlineModelConfig::Ptr config, int32 verbosity = DEFAULT_VERBOSITY);
@@ -98,7 +98,6 @@ class LafNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
         int32 AddGrammarFst(int32 grammar_fst_index, std::string& grammar_fst_filename);
         bool ReloadGrammarFst(int32 grammar_fst_index, fst::StdExpandedFst* grammar_fst, std::string grammar_name = "<unnamed>");  // Does not take ownership of FST!
         bool RemoveGrammarFst(int32 grammar_fst_index);
-        void SetActiveGrammars(std::set<int32>& grammars_activity) { if (grammars_activity_ != grammars_activity) grammars_activity_.swap(grammars_activity); };
 
         bool Decode(BaseFloat samp_freq, const Vector<BaseFloat>& frames, bool finalize, bool save_adaptation_state = true) override;
         void GetDecodedString(std::string& decoded_string, float* likelihood, float* am_score, float* lm_score, float* confidence, float* expected_error_rate) override;
@@ -116,7 +115,6 @@ class LafNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
         std::unordered_map<int32, StdExpandedFst*> grammar_fsts_;
         std::unordered_map<StdFst*, std::string> grammar_fsts_name_map_;  // maps grammar_fst -> name; for debugging
         // INVARIANT: same size: grammar_fsts_, grammar_fsts_name_map_
-        std::set<int32> grammars_activity_;  // Grammar rule numbers that are active for current/upcoming utterance
 
         // Model objects
         StdFst* decode_fst_ = nullptr;

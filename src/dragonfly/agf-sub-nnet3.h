@@ -32,7 +32,7 @@
 #include "nnet3/nnet-utils.h"
 #include "decoder/active-grammar-fst.h"
 
-#include "base-nnet3.h"
+#include "active-base-nnet3.h"
 #include "utils.h"
 #include "kaldi-utils.h"
 #include "nlohmann_json.hpp"
@@ -43,7 +43,7 @@ using namespace kaldi;
 using namespace fst;
 
 
-struct AgfNNet3OnlineModelConfig : public BaseNNet3OnlineModelConfig {
+struct AgfNNet3OnlineModelConfig : public ActiveBaseNNet3OnlineModelConfig {
     using Ptr = std::shared_ptr<AgfNNet3OnlineModelConfig>;
 
     static constexpr auto Create = BaseNNet3OnlineModelConfig::Create<AgfNNet3OnlineModelConfig>;
@@ -54,23 +54,21 @@ struct AgfNNet3OnlineModelConfig : public BaseNNet3OnlineModelConfig {
     uint64 top_fst = 0;  // actually a void* pointer to the top FST object
     std::string top_fst_filename;
     std::string dictation_fst_filename;
-    int32 max_num_rules = 9999;
 
     bool Set(const std::string& name, const nlohmann::json& value) override {
-        if (BaseNNet3OnlineModelConfig::Set(name, value)) { return true; }
+        if (ActiveBaseNNet3OnlineModelConfig::Set(name, value)) { return true; }
         if (name == "nonterm_phones_offset") { value.get_to(nonterm_phones_offset); return true; }
         if (name == "rules_phones_offset") { value.get_to(rules_phones_offset); return true; }
         if (name == "dictation_phones_offset") { value.get_to(dictation_phones_offset); return true; }
         if (name == "top_fst") { value.get_to(top_fst); return true; }
         if (name == "top_fst_filename") { value.get_to(top_fst_filename); return true; }
         if (name == "dictation_fst_filename") { value.get_to(dictation_fst_filename); return true; }
-        if (name == "max_num_rules") { value.get_to(max_num_rules); return true; }
         return false;
     }
 
     std::string ToString() override {
         stringstream ss;
-        ss << BaseNNet3OnlineModelConfig::ToString() << '\n';
+        ss << ActiveBaseNNet3OnlineModelConfig::ToString() << '\n';
         ss << "AgfNNet3OnlineModelConfig...";
         ss << "\n    " << "nonterm_phones_offset: " << nonterm_phones_offset;
         ss << "\n    " << "rules_phones_offset: " << rules_phones_offset;
@@ -78,12 +76,11 @@ struct AgfNNet3OnlineModelConfig : public BaseNNet3OnlineModelConfig {
         ss << "\n    " << "top_fst: " << top_fst;
         ss << "\n    " << "top_fst_filename: " << top_fst_filename;
         ss << "\n    " << "dictation_fst_filename: " << dictation_fst_filename;
-        ss << "\n    " << "max_num_rules: " << max_num_rules;
         return ss.str();
     }
 };
 
-class AgfNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
+class AgfNNet3OnlineModelWrapper : public ActiveBaseNNet3OnlineModelWrapper {
     public:
 
         AgfNNet3OnlineModelWrapper(AgfNNet3OnlineModelConfig::Ptr config, int32 verbosity = DEFAULT_VERBOSITY);
@@ -94,7 +91,6 @@ class AgfNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
         bool ReloadGrammarFst(int32 grammar_fst_index, fst::StdConstFst* grammar_fst, std::string grammar_name = "<unnamed>");  // Does not take ownership of FST!
         bool ReloadGrammarFst(int32 grammar_fst_index, std::string& grammar_fst_filename);
         bool RemoveGrammarFst(int32 grammar_fst_index);
-        void SetActiveGrammars(std::set<int32>& grammars_activity) { if (grammars_activity_ != grammars_activity) grammars_activity_.swap(grammars_activity); };
 
         bool Decode(BaseFloat samp_freq, const Vector<BaseFloat>& frames, bool finalize, bool save_adaptation_state = true) override;
         void GetDecodedString(std::string& decoded_string, float* likelihood, float* am_score, float* lm_score, float* confidence, float* expected_error_rate) override;
@@ -109,7 +105,6 @@ class AgfNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
         std::unordered_map<int32, StdConstFst*> grammar_fsts_;
         std::unordered_map<StdFst*, std::string> grammar_fsts_name_map_;  // maps grammar_fst -> name; for debugging
         // INVARIANT: same size: grammar_fsts_, grammar_fsts_name_map_
-        std::set<int32> grammars_activity_;  // Grammar rule numbers that are active for current/upcoming utterance
 
         // Model objects
         ActiveGrammarFst* active_grammar_fst_ = nullptr;

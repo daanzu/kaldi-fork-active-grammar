@@ -28,7 +28,6 @@
 #include "lat/sausages.h"
 #include "lat/word-align-lattice-lexicon.h"
 #include "nnet3/nnet-utils.h"
-#include "decoder/active-grammar-fst.h"
 #include "fst/script/compile.h"
 
 #include "laf-sub-nnet3.h"
@@ -44,7 +43,7 @@ using namespace fst;
 // static fst::FstRegisterer<StdOLabelLookAheadFst> StdOLabelLookAheadFst_registerer;
 
 LafNNet3OnlineModelWrapper::LafNNet3OnlineModelWrapper(LafNNet3OnlineModelConfig::Ptr config, int32 verbosity)
-    : BaseNNet3OnlineModelWrapper(config, verbosity), config_(config) {
+    : ActiveBaseNNet3OnlineModelWrapper(config, verbosity), config_(config) {
     hcl_fst_ = fst::StdOLabelLookAheadFst::Read(config_->hcl_fst_filename);
     if (!ReadIntegerVectorSimple(config_->disambig_tids_filename, &disambig_tids_))
         KALDI_ERR << "cannot read disambig_tids file";
@@ -89,10 +88,7 @@ LafNNet3OnlineModelWrapper::~LafNNet3OnlineModelWrapper() {
     delete word_syms_relabeled_;
     delete dictation_fst_;
     delete rule_relabel_mapper_;
-    // delete active_grammar_fst_;
 }
-
-// void LafNNet3OnlineModelWrapper::PendNonterm()
 
 void LafNNet3OnlineModelWrapper::PrepareGrammarFst(fst::StdVectorFst* grammar_fst, bool relabel) {
     ExecutionTimer timer("PrepareGrammarFst");

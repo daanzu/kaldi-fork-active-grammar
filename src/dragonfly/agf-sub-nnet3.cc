@@ -42,7 +42,7 @@ using namespace kaldi;
 using namespace fst;
 
 AgfNNet3OnlineModelWrapper::AgfNNet3OnlineModelWrapper(AgfNNet3OnlineModelConfig::Ptr config, int32 verbosity)
-    : BaseNNet3OnlineModelWrapper(config, verbosity), config_(config) {
+    : ActiveBaseNNet3OnlineModelWrapper(config, verbosity), config_(config) {
     KALDI_VLOG(2) << "kNontermBigNumber, GetEncodingMultiple: " << kNontermBigNumber << ", " << GetEncodingMultiple(config_->nonterm_phones_offset);
 
     if ((config_->top_fst != 0) == !config_->top_fst_filename.empty()) KALDI_ERR << "AgfNNet3OnlineModelWrapper requires exactly one of top_fst and top_fst_filename";
@@ -126,7 +126,7 @@ bool AgfNNet3OnlineModelWrapper::InvalidateActiveGrammarFst() {
 
 void AgfNNet3OnlineModelWrapper::StartDecoding() {
     ExecutionTimer timer("StartDecoding", 2);
-    BaseNNet3OnlineModelWrapper::StartDecoding();
+    ActiveBaseNNet3OnlineModelWrapper::StartDecoding();
 
     if (active_grammar_fst_ == nullptr) {
         std::vector<std::pair<int32, const StdConstFst *> > ifsts;
@@ -154,13 +154,13 @@ void AgfNNet3OnlineModelWrapper::StartDecoding() {
 void AgfNNet3OnlineModelWrapper::CleanupDecoder() {
     delete decoder_;
     decoder_ = nullptr;
-    BaseNNet3OnlineModelWrapper::CleanupDecoder();
+    ActiveBaseNNet3OnlineModelWrapper::CleanupDecoder();
 }
 
 bool AgfNNet3OnlineModelWrapper::Decode(BaseFloat samp_freq, const Vector<BaseFloat>& samples, bool finalize, bool save_adaptation_state) {
     if (!DecoderReady(decoder_))
         StartDecoding();
-    return BaseNNet3OnlineModelWrapper::Decode(decoder_, samp_freq, samples, finalize, save_adaptation_state);
+    return ActiveBaseNNet3OnlineModelWrapper::Decode(decoder_, samp_freq, samples, finalize, save_adaptation_state);
 }
 
 void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, float* likelihood, float* am_score, float* lm_score, float* confidence, float* expected_error_rate) {
