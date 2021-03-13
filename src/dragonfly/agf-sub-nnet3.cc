@@ -72,7 +72,7 @@ AgfNNet3OnlineModelWrapper::~AgfNNet3OnlineModelWrapper() {
 }
 
 int32 AgfNNet3OnlineModelWrapper::AddGrammarFst(int32 grammar_fst_index, fst::StdConstFst* grammar_fst, std::string grammar_name) {
-    InvalidateActiveGrammarFST();
+    InvalidateActiveGrammarFst();
     if (grammar_fst_index >= config_->max_num_rules) KALDI_ERR << "cannot add more than max number of rules";
     KALDI_VLOG(2) << "adding FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst->NumStates() << " states " << grammar_name;
     auto ok = grammar_fsts_.insert({grammar_fst_index, grammar_fst}).second;
@@ -87,7 +87,7 @@ int32 AgfNNet3OnlineModelWrapper::AddGrammarFst(int32 grammar_fst_index, std::st
 }
 
 bool AgfNNet3OnlineModelWrapper::ReloadGrammarFst(int32 grammar_fst_index, fst::StdConstFst* grammar_fst, std::string grammar_name) {
-    InvalidateActiveGrammarFST();
+    InvalidateActiveGrammarFst();
     auto old_grammar_fst = grammar_fsts_.at(grammar_fst_index);
     grammar_fsts_name_map_.erase(old_grammar_fst);
     delete old_grammar_fst;
@@ -104,7 +104,7 @@ bool AgfNNet3OnlineModelWrapper::ReloadGrammarFst(int32 grammar_fst_index, std::
 }
 
 bool AgfNNet3OnlineModelWrapper::RemoveGrammarFst(int32 grammar_fst_index) {
-    InvalidateActiveGrammarFST();
+    InvalidateActiveGrammarFst();
     auto grammar_fst = grammar_fsts_.at(grammar_fst_index);
     KALDI_VLOG(2) << "removing FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fsts_name_map_.at(grammar_fst);
     auto erased = grammar_fsts_.erase(grammar_fst_index);
@@ -114,7 +114,7 @@ bool AgfNNet3OnlineModelWrapper::RemoveGrammarFst(int32 grammar_fst_index) {
     return true;
 }
 
-bool AgfNNet3OnlineModelWrapper::InvalidateActiveGrammarFST() {
+bool AgfNNet3OnlineModelWrapper::InvalidateActiveGrammarFst() {
     if (DecoderReady(decoder_)) KALDI_ERR << "cannot modify/invalidate GrammarFst in the middle of decoding!";
     if (active_grammar_fst_) {
         delete active_grammar_fst_;
