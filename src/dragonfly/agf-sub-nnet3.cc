@@ -32,6 +32,8 @@
 
 #include "agf-sub-nnet3.h"
 #include "compile-graph-agf.hh"
+#include "active-cache.h"
+#include "active-replace-fst.h"
 #include "utils.h"
 #include "kaldi-utils.h"
 #include "nlohmann_json.hpp"
@@ -311,7 +313,42 @@ bool AgfNNet3OnlineModelWrapper::SetMimicGrammarFst(int32 grammar_fst_index, Std
     return true;
 }
 
+void TestReplace() {
+    StdVectorFst top_fst;
+    top_fst.AddState();
+    top_fst.AddState();
+    top_fst.AddState();
+    top_fst.AddState();
+    top_fst.AddState();
+    top_fst.SetStart(0);
+    top_fst.AddArc(0, StdArc(1, 1, StdArc::Weight::One(), 1));
+    top_fst.AddArc(1, StdArc(100, 100, StdArc::Weight::One(), 2));
+    top_fst.AddArc(2, StdArc(110, 110, StdArc::Weight::One(), 3));
+    top_fst.AddArc(3, StdArc(2, 2, StdArc::Weight::One(), 4));
+    top_fst.SetFinal(4, StdArc::Weight::One());
+
+    StdVectorFst child_fst;
+    child_fst.AddState();
+    child_fst.AddState();
+    child_fst.AddState();
+    child_fst.AddState();
+    child_fst.SetStart(0);
+    child_fst.AddArc(0, StdArc(10, 10, StdArc::Weight::One(), 1));
+    child_fst.AddArc(1, StdArc(11, 11, StdArc::Weight::One(), 2));
+    child_fst.SetFinal(2, StdArc::Weight::One());
+
+    std::vector<std::pair<int32, const StdFst*> > label_fst_pairs;
+    label_fst_pairs.emplace_back(100, &child_fst);
+    label_fst_pairs.emplace_back(99, &top_fst);
+
+    fst::ReplaceFstOptions<StdArc> replace_options(99, fst::REPLACE_LABEL_OUTPUT, fst::REPLACE_LABEL_OUTPUT, 110);
+    auto replace_fst = fst::ReplaceFst<StdArc>(label_fst_pairs, replace_options);
+
+    StdConstFst expanded_fst(replace_fst);
+}
+
 bool AgfNNet3OnlineModelWrapper::Mimic(std::vector<int32>& ilabels, std::vector<int32>* olabels, int32 grammar_fst_index) {
+    // TestReplace();
     std::vector<std::pair<int32, const StdFst*> > label_fst_pairs;
     auto rules_words_offset = word_syms_->Find("#nonterm:rule0");
     auto top_fst_nonterm = rules_words_offset + grammar_fst_index;
@@ -323,8 +360,17 @@ bool AgfNNet3OnlineModelWrapper::Mimic(std::vector<int32>& ilabels, std::vector<
     if (dictation_fst_ != nullptr)
         label_fst_pairs.emplace_back(word_syms_->Find("#nonterm:dictation"), dictation_fst_);
 
-    fst::ReplaceFstOptions<StdArc> replace_options(top_fst_nonterm, fst::REPLACE_LABEL_OUTPUT, fst::REPLACE_LABEL_OUTPUT, word_syms_->Find("#nonterm:end"));
-    auto replace_fst = fst::ReplaceFst<StdArc>(label_fst_pairs, replace_options);
+    // fst::ReplaceFstOptions<StdArc> replace_options(top_fst_nonterm, fst::REPLACE_LABEL_OUTPUT, fst::REPLACE_LABEL_OUTPUT, word_syms_->Find("#nonterm:end"));
+    // auto replace_fst = fst::ReplaceFst<StdArc>(label_fst_pairs, replace_options);
+
+    // fst::ReplaceFstOptions<StdArc, DefaultReplaceStateTable<StdArc>, DefaultActiveCacheStore<StdArc>> replace_options(top_fst_nonterm, fst::REPLACE_LABEL_OUTPUT, fst::REPLACE_LABEL_OUTPUT, word_syms_->Find("#nonterm:end"));
+    // auto replace_fst = fst::ReplaceFst<StdArc, DefaultReplaceStateTable<StdArc>, DefaultActiveCacheStore<StdArc>>(label_fst_pairs, replace_options);
+    // auto x = replace_fst.GetMutableImpl();
+    // fst::ReplaceFstOptions<StdArc, DefaultReplaceStateTable<StdArc>, DefaultActiveCacheStore<StdArc>> replace_options(top_fst_nonterm, fst::REPLACE_LABEL_OUTPUT, fst::REPLACE_LABEL_OUTPUT, word_syms_->Find("#nonterm:end"));
+    // auto replace_fst = fst::ActiveReplaceFst<StdArc, DefaultReplaceStateTable<StdArc>, DefaultActiveCacheStore<StdArc>>(label_fst_pairs, replace_options);
+    // auto x = replace_fst;
+    fst::ActiveReplaceFstOptions<StdArc, DefaultReplaceStateTable<StdArc>, DefaultActiveCacheStore<StdArc>> replace_options(top_fst_nonterm, fst::REPLACE_LABEL_OUTPUT, fst::REPLACE_LABEL_OUTPUT, word_syms_->Find("#nonterm:end"));
+    auto replace_fst = fst::ActiveReplaceFst<StdArc, DefaultReplaceStateTable<StdArc>, DefaultActiveCacheStore<StdArc>>(label_fst_pairs, replace_options);
 
     StdVectorFst input_fst;
     auto prev_state = input_fst.AddState();
@@ -339,6 +385,12 @@ bool AgfNNet3OnlineModelWrapper::Mimic(std::vector<int32>& ilabels, std::vector<
     auto composed_fst = fst::ComposeFst<StdArc>(input_fst, replace_fst);
     if (composed_fst.Start() == kNoStateId)
         return false;
+
+    // input_fst.Write("tmp_input.fst");
+    // StdConstFst expanded_fst(replace_fst);
+    // expanded_fst.Write("tmp_expanded.fst");
+    // replace_fst.Write("tmp_replace.fst");
+    // composed_fst.Write("tmp_composed.fst");
 
     if (olabels != nullptr) {
         StdVectorFst output_fst;
