@@ -3,8 +3,8 @@
 //
 // Functions and classes for the recursive replacement of FSTs.
 
-#ifndef FST_REPLACE_H_
-#define FST_REPLACE_H_
+#ifndef FST_ACTIVE_REPLACE_H_
+#define FST_ACTIVE_REPLACE_H_
 
 #include <set>
 #include <string>
@@ -22,6 +22,8 @@
 #include <fst/replace-util.h>
 #include <fst/state-table.h>
 #include <fst/test-properties.h>
+
+#include "active-cache.h"
 
 namespace fst {
 
@@ -302,12 +304,12 @@ class DefaultReplaceStateTable
   StackPrefixTable prefix_table_;
 };
 
-// By default ReplaceFst will copy the input label of the replace arc.
+// By default ActiveReplaceFst will copy the input label of the replace arc.
 // The call_label_type and return_label_type options specify how to manage
 // the labels of the call arc and the return arc of the replace FST
 template <class Arc, class StateTable = DefaultReplaceStateTable<Arc>,
-          class CacheStore = DefaultCacheStore<Arc>>
-struct ReplaceFstOptions : CacheImplOptions<CacheStore> {
+          class CacheStore = DefaultActiveCacheStore<Arc>>
+struct ActiveReplaceFstOptions : CacheImplOptions<CacheStore> {
   using Label = typename Arc::Label;
 
   // Index of root rule for expansion.
@@ -326,11 +328,11 @@ struct ReplaceFstOptions : CacheImplOptions<CacheStore> {
   // Pointer to optional pre-constructed state table.
   StateTable *state_table = nullptr;
 
-  explicit ReplaceFstOptions(const CacheImplOptions<CacheStore> &opts,
+  explicit ActiveReplaceFstOptions(const CacheImplOptions<CacheStore> &opts,
                              Label root = kNoLabel)
       : CacheImplOptions<CacheStore>(opts), root(root) {}
 
-  explicit ReplaceFstOptions(const CacheOptions &opts, Label root = kNoLabel)
+  explicit ActiveReplaceFstOptions(const CacheOptions &opts, Label root = kNoLabel)
       : CacheImplOptions<CacheStore>(opts), root(root) {}
 
   // FIXME(kbg): There are too many constructors here. Come up with a consistent
@@ -339,9 +341,9 @@ struct ReplaceFstOptions : CacheImplOptions<CacheStore> {
   // default-argument constructor. Also move clients off of the "backwards
   // compatibility" constructor, for good.
 
-  explicit ReplaceFstOptions(Label root) : root(root) {}
+  explicit ActiveReplaceFstOptions(Label root) : root(root) {}
 
-  explicit ReplaceFstOptions(Label root, ReplaceLabelType call_label_type,
+  explicit ActiveReplaceFstOptions(Label root, ReplaceLabelType call_label_type,
                              ReplaceLabelType return_label_type,
                              Label return_label)
       : root(root),
@@ -349,7 +351,7 @@ struct ReplaceFstOptions : CacheImplOptions<CacheStore> {
         return_label_type(return_label_type),
         return_label(return_label) {}
 
-  explicit ReplaceFstOptions(Label root, ReplaceLabelType call_label_type,
+  explicit ActiveReplaceFstOptions(Label root, ReplaceLabelType call_label_type,
                              ReplaceLabelType return_label_type,
                              Label call_output_label, Label return_label)
       : root(root),
@@ -358,14 +360,14 @@ struct ReplaceFstOptions : CacheImplOptions<CacheStore> {
         call_output_label(call_output_label),
         return_label(return_label) {}
 
-  explicit ReplaceFstOptions(const ReplaceUtilOptions &opts)
-      : ReplaceFstOptions(opts.root, opts.call_label_type,
+  explicit ActiveReplaceFstOptions(const ReplaceUtilOptions &opts)
+      : ActiveReplaceFstOptions(opts.root, opts.call_label_type,
                           opts.return_label_type, opts.return_label) {}
 
-  ReplaceFstOptions() : root(kNoLabel) {}
+  ActiveReplaceFstOptions() : root(kNoLabel) {}
 
   // For backwards compatibility.
-  ReplaceFstOptions(int64 root, bool epsilon_replace_arc)
+  ActiveReplaceFstOptions(int64 root, bool epsilon_replace_arc)
       : root(root),
         call_label_type(epsilon_replace_arc ? REPLACE_LABEL_NEITHER
                                             : REPLACE_LABEL_INPUT),
@@ -375,7 +377,7 @@ struct ReplaceFstOptions : CacheImplOptions<CacheStore> {
 
 // Forward declaration.
 template <class Arc, class StateTable, class CacheStore>
-class ReplaceFstMatcher;
+class ActiveReplaceFstMatcher;
 
 template <class Arc>
 using FstList = std::vector<std::pair<typename Arc::Label, const Fst<Arc> *>>;
@@ -451,7 +453,7 @@ namespace internal {
 // transition network represented as label/FST pairs with dynamic replacable
 // arcs.
 template <class Arc, class StateTable, class CacheStore>
-class ReplaceFstImpl
+class ActiveReplaceFstImpl
     : public CacheBaseImpl<typename CacheStore::State, CacheStore> {
  public:
   using Label = typename Arc::Label;
@@ -481,10 +483,10 @@ class ReplaceFstImpl
   using CacheImpl::SetFinal;
   using CacheImpl::SetStart;
 
-  friend class ReplaceFstMatcher<Arc, StateTable, CacheStore>;
+  friend class ActiveReplaceFstMatcher<Arc, StateTable, CacheStore>;
 
-  ReplaceFstImpl(const FstList<Arc> &fst_list,
-                 const ReplaceFstOptions<Arc, StateTable, CacheStore> &opts)
+  ActiveReplaceFstImpl(const FstList<Arc> &fst_list,
+                 const ActiveReplaceFstOptions<Arc, StateTable, CacheStore> &opts)
       : CacheImpl(opts),
         call_label_type_(opts.call_label_type),
         return_label_type_(opts.return_label_type),
@@ -492,7 +494,7 @@ class ReplaceFstImpl
         return_label_(opts.return_label),
         state_table_(opts.state_table ? opts.state_table
                                       : new StateTable(fst_list, opts.root)) {
-    SetType("replace");
+    SetType("active-replace");
     // If the label is epsilon, then all replace label options are equivalent,
     // so we set the label types to NEITHER for simplicity.
     if (call_output_label_ == 0) call_label_type_ = REPLACE_LABEL_NEITHER;
@@ -510,12 +512,12 @@ class ReplaceFstImpl
       fst_array_.emplace_back(opts.take_ownership ? fst : fst->Copy());
       if (i) {
         if (!CompatSymbols(InputSymbols(), fst->InputSymbols())) {
-          FSTERROR() << "ReplaceFstImpl: Input symbols of FST " << i
+          FSTERROR() << "ActiveReplaceFstImpl: Input symbols of FST " << i
                      << " do not match input symbols of base FST (0th FST)";
           SetProperties(kError, kError);
         }
         if (!CompatSymbols(OutputSymbols(), fst->OutputSymbols())) {
-          FSTERROR() << "ReplaceFstImpl: Output symbols of FST " << i
+          FSTERROR() << "ActiveReplaceFstImpl: Output symbols of FST " << i
                      << " do not match output symbols of base FST (0th FST)";
           SetProperties(kError, kError);
         }
@@ -523,7 +525,7 @@ class ReplaceFstImpl
     }
     const auto nonterminal = nonterminal_hash_[opts.root];
     if ((nonterminal == 0) && (fst_array_.size() > 1)) {
-      FSTERROR() << "ReplaceFstImpl: No FST corresponding to root label "
+      FSTERROR() << "ActiveReplaceFstImpl: No FST corresponding to root label "
                  << opts.root << " in the input tuple vector";
       SetProperties(kError, kError);
     }
@@ -534,11 +536,11 @@ class ReplaceFstImpl
                                        &all_non_empty_and_sorted));
     // Enables optional caching as long as sorted and all non-empty.
     always_cache_ = !all_non_empty_and_sorted;
-    VLOG(2) << "ReplaceFstImpl::ReplaceFstImpl: always_cache = "
+    VLOG(2) << "ActiveReplaceFstImpl::ActiveReplaceFstImpl: always_cache = "
             << (always_cache_ ? "true" : "false");
   }
 
-  ReplaceFstImpl(const ReplaceFstImpl &impl)
+  ActiveReplaceFstImpl(const ActiveReplaceFstImpl &impl)
       : CacheImpl(impl),
         call_label_type_(impl.call_label_type_),
         return_label_type_(impl.return_label_type_),
@@ -722,7 +724,7 @@ class ReplaceFstImpl
     if (!HasArcs(s)) Expand(s);
     CacheImpl::InitArcIterator(s, data);
     // TODO(allauzen): Set behaviour of generic iterator.
-    // Warning: ArcIterator<ReplaceFst<A>>::InitCache() relies on current
+    // Warning: ArcIterator<ActiveReplaceFst<A>>::InitCache() relies on current
     // behaviour.
   }
 
@@ -864,7 +866,7 @@ class ReplaceFstImpl
   Label GetFstId(Label nonterminal) const {
     const auto it = nonterminal_hash_.find(nonterminal);
     if (it == nonterminal_hash_.end()) {
-      FSTERROR() << "ReplaceFstImpl::GetFstId: Nonterminal not found: "
+      FSTERROR() << "ActiveReplaceFstImpl::GetFstId: Nonterminal not found: "
                  << nonterminal;
     }
     return it->second;
@@ -911,13 +913,13 @@ class ReplaceFstImpl
 }  // namespace internal
 
 //
-// ReplaceFst supports dynamic replacement of arcs in one FST with another FST.
-// This replacement is recursive. ReplaceFst can be used to support a variety of
+// ActiveReplaceFst supports dynamic replacement of arcs in one FST with another FST.
+// This replacement is recursive. ActiveReplaceFst can be used to support a variety of
 // delayed constructions such as recursive
 // transition networks, union, or closure. It is constructed with an array of
 // FST(s). One FST represents the root (or topology) machine. The root FST
 // refers to other FSTs by recursively replacing arcs labeled as non-terminals
-// with the matching non-terminal FST. Currently the ReplaceFst uses the output
+// with the matching non-terminal FST. Currently the ActiveReplaceFst uses the output
 // symbols of the arcs to determine whether the arc is a non-terminal arc or
 // not. A non-terminal can be any label that is not a non-zero terminal label in
 // the output alphabet.
@@ -927,9 +929,9 @@ class ReplaceFstImpl
 // the closure operation we need 2 FSTs. The first root FST is a single
 // self-loop arc on the start state.
 //
-// The ReplaceFst class supports an optionally caching arc iterator.
+// The ActiveReplaceFst class supports an optionally caching arc iterator.
 //
-// The ReplaceFst needs to be built such that it is known to be ilabel- or
+// The ActiveReplaceFst needs to be built such that it is known to be ilabel- or
 // olabel-sorted (see usage below).
 //
 // Observe that Matcher<Fst<A>> will use the optionally caching arc iterator
@@ -943,10 +945,10 @@ class ReplaceFstImpl
 //
 // This class attaches interface to implementation and handles reference
 // counting, delegating most methods to ImplToFst.
-template <class A, class T /* = DefaultReplaceStateTable<A> */,
-          class CacheStore /* = DefaultCacheStore<A> */>
-class ReplaceFst
-    : public ImplToFst<internal::ReplaceFstImpl<A, T, CacheStore>> {
+template <class A, class T = DefaultReplaceStateTable<A>,
+          class CacheStore = DefaultActiveCacheStore<A>>
+class ActiveReplaceFst
+    : public ImplToFst<internal::ActiveReplaceFstImpl<A, T, CacheStore>> {
  public:
   using Arc = A;
   using Label = typename Arc::Label;
@@ -956,33 +958,33 @@ class ReplaceFst
   using StateTable = T;
   using Store = CacheStore;
   using State = typename CacheStore::State;
-  using Impl = internal::ReplaceFstImpl<Arc, StateTable, CacheStore>;
+  using Impl = internal::ActiveReplaceFstImpl<Arc, StateTable, CacheStore>;
   using CacheImpl = internal::CacheBaseImpl<State, CacheStore>;
 
   using ImplToFst<Impl>::Properties;
 
-  friend class ArcIterator<ReplaceFst<Arc, StateTable, CacheStore>>;
-  friend class StateIterator<ReplaceFst<Arc, StateTable, CacheStore>>;
-  friend class ReplaceFstMatcher<Arc, StateTable, CacheStore>;
+  friend class ArcIterator<ActiveReplaceFst<Arc, StateTable, CacheStore>>;
+  friend class StateIterator<ActiveReplaceFst<Arc, StateTable, CacheStore>>;
+  friend class ActiveReplaceFstMatcher<Arc, StateTable, CacheStore>;
 
-  ReplaceFst(const std::vector<std::pair<Label, const Fst<Arc> *>> &fst_array,
+  ActiveReplaceFst(const std::vector<std::pair<Label, const Fst<Arc> *>> &fst_array,
              Label root)
       : ImplToFst<Impl>(std::make_shared<Impl>(
-            fst_array, ReplaceFstOptions<Arc, StateTable, CacheStore>(root))) {}
+            fst_array, ActiveReplaceFstOptions<Arc, StateTable, CacheStore>(root))) {}
 
-  ReplaceFst(const std::vector<std::pair<Label, const Fst<Arc> *>> &fst_array,
-             const ReplaceFstOptions<Arc, StateTable, CacheStore> &opts)
+  ActiveReplaceFst(const std::vector<std::pair<Label, const Fst<Arc> *>> &fst_array,
+             const ActiveReplaceFstOptions<Arc, StateTable, CacheStore> &opts)
       : ImplToFst<Impl>(std::make_shared<Impl>(fst_array, opts)) {}
 
   // See Fst<>::Copy() for doc.
-  ReplaceFst(const ReplaceFst<Arc, StateTable, CacheStore> &fst,
+  ActiveReplaceFst(const ActiveReplaceFst<Arc, StateTable, CacheStore> &fst,
              bool safe = false)
       : ImplToFst<Impl>(fst, safe) {}
 
-  // Get a copy of this ReplaceFst. See Fst<>::Copy() for further doc.
-  ReplaceFst<Arc, StateTable, CacheStore> *Copy(
+  // Get a copy of this ActiveReplaceFst. See Fst<>::Copy() for further doc.
+  ActiveReplaceFst<Arc, StateTable, CacheStore> *Copy(
       bool safe = false) const override {
-    return new ReplaceFst<Arc, StateTable, CacheStore>(*this, safe);
+    return new ActiveReplaceFst<Arc, StateTable, CacheStore>(*this, safe);
   }
 
   inline void InitStateIterator(StateIteratorData<Arc> *data) const override;
@@ -995,7 +997,7 @@ class ReplaceFst
     if ((GetImpl()->ArcIteratorFlags() & kArcNoCache) &&
         ((match_type == MATCH_INPUT && Properties(kILabelSorted, false)) ||
          (match_type == MATCH_OUTPUT && Properties(kOLabelSorted, false)))) {
-      return new ReplaceFstMatcher<Arc, StateTable, CacheStore>
+      return new ActiveReplaceFstMatcher<Arc, StateTable, CacheStore>
           (this, match_type);
     } else {
       VLOG(2) << "Not using replace matcher";
@@ -1013,28 +1015,33 @@ class ReplaceFst
     return *GetImpl()->GetFst(GetImpl()->GetFstId(nonterminal));
   }
 
+  void Test() {
+    auto y = GetMutableImpl()->GetCacheStore()->SetNonterminals(99,999);
+    auto x = GetMutableImpl()->GetCacheStore()->UpdateActivity();
+  }
+
  private:
   using ImplToFst<Impl>::GetImpl;
   using ImplToFst<Impl>::GetMutableImpl;
 
-  ReplaceFst &operator=(const ReplaceFst &) = delete;
+  ActiveReplaceFst &operator=(const ActiveReplaceFst &) = delete;
 };
 
-// Specialization for ReplaceFst.
+// Specialization for ActiveReplaceFst.
 template <class Arc, class StateTable, class CacheStore>
-class StateIterator<ReplaceFst<Arc, StateTable, CacheStore>>
-    : public CacheStateIterator<ReplaceFst<Arc, StateTable, CacheStore>> {
+class StateIterator<ActiveReplaceFst<Arc, StateTable, CacheStore>>
+    : public CacheStateIterator<ActiveReplaceFst<Arc, StateTable, CacheStore>> {
  public:
-  explicit StateIterator(const ReplaceFst<Arc, StateTable, CacheStore> &fst)
-      : CacheStateIterator<ReplaceFst<Arc, StateTable, CacheStore>>(
+  explicit StateIterator(const ActiveReplaceFst<Arc, StateTable, CacheStore> &fst)
+      : CacheStateIterator<ActiveReplaceFst<Arc, StateTable, CacheStore>>(
             fst, fst.GetMutableImpl()) {}
 };
 
-// Specialization for ReplaceFst, implementing optional caching. It is be used
+// Specialization for ActiveReplaceFst, implementing optional caching. It is be used
 // as follows:
 //
-//   ReplaceFst<A> replace;
-//   ArcIterator<ReplaceFst<A>> aiter(replace, s);
+//   ActiveReplaceFst<A> replace;
+//   ArcIterator<ActiveReplaceFst<A>> aiter(replace, s);
 //   // Note: ArcIterator< Fst<A>> is always a caching arc iterator.
 //   aiter.SetFlags(kArcNoCache, kArcNoCache);
 //   // Uses the arc iterator, no arc will be cached, no state will be expanded.
@@ -1050,13 +1057,13 @@ class StateIterator<ReplaceFst<Arc, StateTable, CacheStore>>
 //                   // in the replace state table.
 //   // No additional arcs have been cached at this point.
 template <class Arc, class StateTable, class CacheStore>
-class ArcIterator<ReplaceFst<Arc, StateTable, CacheStore>> {
+class ArcIterator<ActiveReplaceFst<Arc, StateTable, CacheStore>> {
  public:
   using StateId = typename Arc::StateId;
 
   using StateTuple = typename StateTable::StateTuple;
 
-  ArcIterator(const ReplaceFst<Arc, StateTable, CacheStore> &fst, StateId s)
+  ArcIterator(const ActiveReplaceFst<Arc, StateTable, CacheStore> &fst, StateId s)
       : fst_(fst),
         s_(s),
         pos_(0),
@@ -1157,7 +1164,7 @@ class ArcIterator<ReplaceFst<Arc, StateTable, CacheStore>> {
       // TODO(allauzen): Revisit this.
       if (flags_ & kArcNoCache) {
         // Should never happen.
-        FSTERROR() << "ReplaceFst: Inconsistent arc iterator flags";
+        FSTERROR() << "ActiveReplaceFst: Inconsistent arc iterator flags";
       }
       ExpandAndCache();
     }
@@ -1213,7 +1220,7 @@ class ArcIterator<ReplaceFst<Arc, StateTable, CacheStore>> {
   }
 
  private:
-  const ReplaceFst<Arc, StateTable, CacheStore> &fst_;  // Reference to the FST.
+  const ActiveReplaceFst<Arc, StateTable, CacheStore> &fst_;  // Reference to the FST.
   StateId s_;                                           // State in the FST.
   mutable StateTuple tuple_;  // Tuple corresponding to state_.
 
@@ -1236,19 +1243,19 @@ class ArcIterator<ReplaceFst<Arc, StateTable, CacheStore>> {
 };
 
 template <class Arc, class StateTable, class CacheStore>
-class ReplaceFstMatcher : public MatcherBase<Arc> {
+class ActiveReplaceFstMatcher : public MatcherBase<Arc> {
  public:
   using Label = typename Arc::Label;
   using StateId = typename Arc::StateId;
   using Weight = typename Arc::Weight;
 
-  using FST = ReplaceFst<Arc, StateTable, CacheStore>;
+  using FST = ActiveReplaceFst<Arc, StateTable, CacheStore>;
   using LocalMatcher = MultiEpsMatcher<Matcher<Fst<Arc>>>;
 
   using StateTuple = typename StateTable::StateTuple;
 
   // This makes a copy of the FST.
-  ReplaceFstMatcher(const ReplaceFst<Arc, StateTable, CacheStore> &fst,
+  ActiveReplaceFstMatcher(const ActiveReplaceFst<Arc, StateTable, CacheStore> &fst,
                     MatchType match_type)
       : owned_fst_(fst.Copy()),
         fst_(*owned_fst_),
@@ -1265,7 +1272,7 @@ class ReplaceFstMatcher : public MatcherBase<Arc> {
   }
 
   // This doesn't copy the FST.
-  ReplaceFstMatcher(const ReplaceFst<Arc, StateTable, CacheStore> *fst,
+  ActiveReplaceFstMatcher(const ActiveReplaceFst<Arc, StateTable, CacheStore> *fst,
                     MatchType match_type)
       : fst_(*fst),
         impl_(fst_.GetMutableImpl()),
@@ -1281,8 +1288,8 @@ class ReplaceFstMatcher : public MatcherBase<Arc> {
   }
 
   // This makes a copy of the FST.
-  ReplaceFstMatcher(
-      const ReplaceFstMatcher<Arc, StateTable, CacheStore> &matcher,
+  ActiveReplaceFstMatcher(
+      const ActiveReplaceFstMatcher<Arc, StateTable, CacheStore> &matcher,
       bool safe = false)
       : owned_fst_(matcher.fst_.Copy(safe)),
         fst_(*owned_fst_),
@@ -1317,9 +1324,9 @@ class ReplaceFstMatcher : public MatcherBase<Arc> {
     }
   }
 
-  ReplaceFstMatcher<Arc, StateTable, CacheStore> *Copy(
+  ActiveReplaceFstMatcher<Arc, StateTable, CacheStore> *Copy(
       bool safe = false) const override {
-    return new ReplaceFstMatcher<Arc, StateTable, CacheStore>(*this, safe);
+    return new ActiveReplaceFstMatcher<Arc, StateTable, CacheStore>(*this, safe);
   }
 
   MatchType Type(bool test) const override {
@@ -1360,7 +1367,7 @@ class ReplaceFstMatcher : public MatcherBase<Arc> {
 
   // Searches for label from previous set state. If label == 0, first
   // hallucinate an epsilon loop; otherwise use the underlying matcher to
-  // search for the label or epsilons. Note since the ReplaceFst recursion
+  // search for the label or epsilons. Note since the ActiveReplaceFst recursion
   // on non-terminal arcs causes epsilon transitions to be created we use
   // MultiEpsilonMatcher to search for possible matches of non-terminals. If the
   // component FST
@@ -1414,9 +1421,9 @@ class ReplaceFstMatcher : public MatcherBase<Arc> {
   ssize_t Priority(StateId s) final { return fst_.NumArcs(s); }
 
  private:
-  std::unique_ptr<const ReplaceFst<Arc, StateTable, CacheStore>> owned_fst_;
-  const ReplaceFst<Arc, StateTable, CacheStore> &fst_;
-  internal::ReplaceFstImpl<Arc, StateTable, CacheStore> *impl_;
+  std::unique_ptr<const ActiveReplaceFst<Arc, StateTable, CacheStore>> owned_fst_;
+  const ActiveReplaceFst<Arc, StateTable, CacheStore> &fst_;
+  internal::ActiveReplaceFstImpl<Arc, StateTable, CacheStore> *impl_;
   LocalMatcher *current_matcher_;
   std::vector<std::unique_ptr<LocalMatcher>> matcher_;
   StateId s_;             // Current state.
@@ -1429,17 +1436,17 @@ class ReplaceFstMatcher : public MatcherBase<Arc> {
   mutable Arc arc_;
   Arc loop_;
 
-  ReplaceFstMatcher &operator=(const ReplaceFstMatcher &) = delete;
+  ActiveReplaceFstMatcher &operator=(const ActiveReplaceFstMatcher &) = delete;
 };
 
 template <class Arc, class StateTable, class CacheStore>
-inline void ReplaceFst<Arc, StateTable, CacheStore>::InitStateIterator(
+inline void ActiveReplaceFst<Arc, StateTable, CacheStore>::InitStateIterator(
     StateIteratorData<Arc> *data) const {
   data->base =
-      new StateIterator<ReplaceFst<Arc, StateTable, CacheStore>>(*this);
+      new StateIterator<ActiveReplaceFst<Arc, StateTable, CacheStore>>(*this);
 }
 
-using StdReplaceFst = ReplaceFst<StdArc>;
+using StdActiveReplaceFst = ActiveReplaceFst<StdArc>;
 
 // Recursively replaces arcs in the root FSTs with other FSTs.
 // This version writes the result of replacement to an output MutableFst.
@@ -1455,38 +1462,38 @@ using StdReplaceFst = ReplaceFst<StdArc>;
 // Note that input argument is a vector of pairs. These correspond to the tuple
 // of non-terminal Label and corresponding FST.
 template <class Arc>
-void Replace(const std::vector<std::pair<typename Arc::Label, const Fst<Arc> *>>
+void ActiveReplace(const std::vector<std::pair<typename Arc::Label, const Fst<Arc> *>>
                  &ifst_array,
              MutableFst<Arc> *ofst,
-             ReplaceFstOptions<Arc> opts = ReplaceFstOptions<Arc>()) {
+             ActiveReplaceFstOptions<Arc> opts = ActiveReplaceFstOptions<Arc>()) {
   opts.gc = true;
   opts.gc_limit = 0;  // Caches only the last state for fastest copy.
-  *ofst = ReplaceFst<Arc>(ifst_array, opts);
+  *ofst = ActiveReplaceFst<Arc>(ifst_array, opts);
 }
 
 template <class Arc>
-void Replace(const std::vector<std::pair<typename Arc::Label, const Fst<Arc> *>>
+void ActiveReplace(const std::vector<std::pair<typename Arc::Label, const Fst<Arc> *>>
                  &ifst_array,
              MutableFst<Arc> *ofst, const ReplaceUtilOptions &opts) {
-  Replace(ifst_array, ofst, ReplaceFstOptions<Arc>(opts));
+  ActiveReplace(ifst_array, ofst, ActiveReplaceFstOptions<Arc>(opts));
 }
 
 // For backwards compatibility.
 template <class Arc>
-void Replace(const std::vector<std::pair<typename Arc::Label, const Fst<Arc> *>>
+void ActiveReplace(const std::vector<std::pair<typename Arc::Label, const Fst<Arc> *>>
                  &ifst_array,
              MutableFst<Arc> *ofst, typename Arc::Label root,
              bool epsilon_on_replace) {
-  Replace(ifst_array, ofst, ReplaceFstOptions<Arc>(root, epsilon_on_replace));
+  ActiveReplace(ifst_array, ofst, ActiveReplaceFstOptions<Arc>(root, epsilon_on_replace));
 }
 
 template <class Arc>
-void Replace(const std::vector<std::pair<typename Arc::Label, const Fst<Arc> *>>
+void ActiveReplace(const std::vector<std::pair<typename Arc::Label, const Fst<Arc> *>>
                  &ifst_array,
              MutableFst<Arc> *ofst, typename Arc::Label root) {
-  Replace(ifst_array, ofst, ReplaceFstOptions<Arc>(root));
+  ActiveReplace(ifst_array, ofst, ActiveReplaceFstOptions<Arc>(root));
 }
 
 }  // namespace fst
 
-#endif  // FST_REPLACE_H_
+#endif  // FST_ACTIVE_REPLACE_H_
