@@ -200,7 +200,7 @@ void LafNNet3OnlineModelWrapper::BuildDecodeFst() {
 
     std::vector<std::pair<int32, const StdFst *> > label_fst_pairs;
     auto rules_words_offset = word_syms_->Find("#nonterm:rule0");
-    auto top_fst_nonterm = rules_words_offset + config_->max_num_rules;
+    auto top_fst_nonterm = rules_words_offset + config_->max_num_rules;  // FIXME: hacky
 
     // Build top_fst
     VectorFst<StdArc> top_fst;

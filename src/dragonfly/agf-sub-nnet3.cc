@@ -69,6 +69,8 @@ AgfNNet3OnlineModelWrapper::~AgfNNet3OnlineModelWrapper() {
     delete dictation_fst_;
     delete active_grammar_fst_;
     delete rule_relabel_mapper_;
+    // FIXME: grammar_fsts_ elements memory leak
+    // FIXME: mimic_fsts_ elements memory leak
 }
 
 int32 AgfNNet3OnlineModelWrapper::AddGrammarFst(int32 grammar_fst_index, fst::StdConstFst* grammar_fst, std::string grammar_name) {
@@ -300,6 +302,60 @@ void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, f
     decoded_string = WordIdsToString(words);
 }
 
+bool AgfNNet3OnlineModelWrapper::SetMimicGrammarFst(int32 grammar_fst_index, StdConstFst* grammar_fst) {
+    auto it = mimic_fsts_.find(grammar_fst_index);
+    if (it != mimic_fsts_.end()) {
+        // delete it->second;
+    }
+    mimic_fsts_.insert(it, {grammar_fst_index, grammar_fst});
+    return true;
+}
+
+bool AgfNNet3OnlineModelWrapper::Mimic(std::vector<int32>& ilabels, std::vector<int32>* olabels, int32 grammar_fst_index) {
+    std::vector<std::pair<int32, const StdFst*> > label_fst_pairs;
+    auto rules_words_offset = word_syms_->Find("#nonterm:rule0");
+    auto top_fst_nonterm = rules_words_offset + grammar_fst_index;
+
+    if (mimic_fsts_.size() != grammar_fsts_.size())
+        KALDI_WARN << "mismatched number of mimic_fsts_ and grammar_fsts_";
+    for (auto it : mimic_fsts_)
+        label_fst_pairs.emplace_back(rules_words_offset + it.first, it.second);
+    if (dictation_fst_ != nullptr)
+        label_fst_pairs.emplace_back(word_syms_->Find("#nonterm:dictation"), dictation_fst_);
+
+    fst::ReplaceFstOptions<StdArc> replace_options(top_fst_nonterm, fst::REPLACE_LABEL_OUTPUT, fst::REPLACE_LABEL_OUTPUT, word_syms_->Find("#nonterm:end"));
+    auto replace_fst = fst::ReplaceFst<StdArc>(label_fst_pairs, replace_options);
+
+    StdVectorFst input_fst;
+    auto prev_state = input_fst.AddState();
+    input_fst.SetStart(prev_state);
+    for (auto label : ilabels) {
+        auto state = input_fst.AddState();
+        input_fst.AddArc(prev_state, StdArc(label, label, StdArc::Weight::One(), state));
+        prev_state = state;
+    }
+    input_fst.SetFinal(prev_state, StdArc::Weight::One());
+
+    auto composed_fst = fst::ComposeFst<StdArc>(input_fst, replace_fst);
+    if (composed_fst.Start() == kNoStateId)
+        return false;
+
+    if (olabels != nullptr) {
+        StdVectorFst output_fst;
+        fst::ShortestPath(composed_fst, &output_fst, 1);
+        fst::RmEpsilon(&output_fst);
+        fst::TopSort(&output_fst);
+        if (!output_fst.Properties(fst::kTopSorted, false))
+            KALDI_ERR << "should be top sorted";
+        for (StateIterator<StdFst> siter(output_fst); !siter.Done(); siter.Next()) {
+            for (ArcIterator<StdFst> aiter(output_fst, siter.Value()); !aiter.Done(); aiter.Next()) {
+                olabels->emplace_back(aiter.Value().olabel);
+            }
+        }
+    }
+    return true;
+}
+
 } // namespace dragonfly
 
 
@@ -383,6 +439,36 @@ bool nnet3_agf__decode(void* model_vp, float samp_freq, uint32_t num_samples, fl
     return nnet3_base__decode(model_vp, samp_freq, num_samples, samples, finalize, save_adaptation_state);
     END_INTERFACE_CATCH_HANDLER(false)
 }
+
+bool nnet3_agf__set_mimic_grammar_fst(void* model_vp, int32_t grammar_fst_index, void* grammar_fst_cp) {
+    BEGIN_INTERFACE_CATCH_HANDLER
+    auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
+    auto fst = static_cast<StdVectorFst*>(grammar_fst_cp);
+    auto const_fst = new StdConstFst(*fst);
+    return model->SetMimicGrammarFst(grammar_fst_index, const_fst);
+    END_INTERFACE_CATCH_HANDLER(false)
+}
+
+bool nnet3_agf__mimic(void* model_vp, int32_t target_labels_cp[], uint32_t target_labels_len, int32_t grammar_fst_index, int32_t output_labels_cp[], uint32_t* output_labels_len) {
+    BEGIN_INTERFACE_CATCH_HANDLER
+    auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
+    std::vector<int32> ilabels(target_labels_cp, target_labels_cp + target_labels_len);
+    std::vector<int32> olabels;
+    auto olabels_p = (output_labels_cp != nullptr && output_labels_len != nullptr) ? &olabels : nullptr;
+    auto result = model->Mimic(ilabels, olabels_p, grammar_fst_index);
+
+    if (olabels_p) {
+        for (auto i = 0; i < std::min((uint32_t)olabels.size(), *output_labels_len); ++i)
+            output_labels_cp[i] = olabels[i];
+        if (olabels.size() > *output_labels_len)
+            KALDI_WARN << "nnet3_agf__mimic: output_labels_len < " << olabels.size();
+        *output_labels_len = olabels.size();
+    }
+    return result;
+
+    END_INTERFACE_CATCH_HANDLER(false)
+}
+
 
 void* nnet3_agf__construct_compiler(char* config_str_cp) {
     // FIXME: are we thread safe here?
