@@ -80,9 +80,13 @@ bool fst__add_arc(void* fst_vp, int32_t src_state_id, int32_t dst_state_id, int3
 }
 
 bool fst__compute_md5(void* fst_vp, char* md5_cp, char* dependencies_seed_md5_cp) {
+    // ExecutionTimer timer("fst__compute_md5", -2);
     auto fst = static_cast<StdVectorFst*>(fst_vp);
     MD5 md5;
     md5.add(dependencies_seed_md5_cp, MD5::HashBytes * 2);  // Encoded in hex text
+
+    ArcSort(fst, ILabelCompare<StdArc>());
+    // timer.step("ilabel sorted");
 
     for (StateIterator<StdFst> siter(*fst); !siter.Done(); siter.Next()) {
         auto state = siter.Value();
