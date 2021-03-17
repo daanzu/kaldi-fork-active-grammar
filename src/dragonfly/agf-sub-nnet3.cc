@@ -318,42 +318,7 @@ bool AgfNNet3OnlineModelWrapper::SetMimicGrammarFst(int32 grammar_fst_index, Std
     return true;
 }
 
-void TestReplace() {
-    StdVectorFst top_fst;
-    top_fst.AddState();
-    top_fst.AddState();
-    top_fst.AddState();
-    top_fst.AddState();
-    top_fst.AddState();
-    top_fst.SetStart(0);
-    top_fst.AddArc(0, StdArc(1, 1, StdArc::Weight::One(), 1));
-    top_fst.AddArc(1, StdArc(100, 100, StdArc::Weight::One(), 2));
-    top_fst.AddArc(2, StdArc(110, 110, StdArc::Weight::One(), 3));
-    top_fst.AddArc(3, StdArc(2, 2, StdArc::Weight::One(), 4));
-    top_fst.SetFinal(4, StdArc::Weight::One());
-
-    StdVectorFst child_fst;
-    child_fst.AddState();
-    child_fst.AddState();
-    child_fst.AddState();
-    child_fst.AddState();
-    child_fst.SetStart(0);
-    child_fst.AddArc(0, StdArc(10, 10, StdArc::Weight::One(), 1));
-    child_fst.AddArc(1, StdArc(11, 11, StdArc::Weight::One(), 2));
-    child_fst.SetFinal(2, StdArc::Weight::One());
-
-    std::vector<std::pair<int32, const StdFst*> > label_fst_pairs;
-    label_fst_pairs.emplace_back(100, &child_fst);
-    label_fst_pairs.emplace_back(99, &top_fst);
-
-    fst::ReplaceFstOptions<StdArc> replace_options(99, fst::REPLACE_LABEL_OUTPUT, fst::REPLACE_LABEL_OUTPUT, 110);
-    auto replace_fst = fst::ReplaceFst<StdArc>(label_fst_pairs, replace_options);
-
-    StdConstFst expanded_fst(replace_fst);
-}
-
 bool AgfNNet3OnlineModelWrapper::Mimic(std::vector<int32>& ilabels, std::vector<int32>* olabels, int32 grammar_fst_index) {
-    FLAGS_v = 2;  // Set openfst logging verbosity
     std::vector<std::pair<int32, const StdFst*> > label_fst_pairs;
     auto rules_words_offset = word_syms_->Find("#nonterm:rule0");
     auto top_fst_nonterm = rules_words_offset + grammar_fst_index;
@@ -364,15 +329,10 @@ bool AgfNNet3OnlineModelWrapper::Mimic(std::vector<int32>& ilabels, std::vector<
         label_fst_pairs.emplace_back(rules_words_offset + it.first, it.second);
     if (dictation_fst_ != nullptr)
         label_fst_pairs.emplace_back(word_syms_->Find("#nonterm:dictation"), dictation_fst_);
-    // { StdVectorFst expanded_fst(*mimic_fsts_.at(grammar_fst_index)); expanded_fst.Write("tmp_grammar.fst"); }
-
-    // fst::ReplaceFstOptions<StdArc> replace_options(top_fst_nonterm, fst::REPLACE_LABEL_OUTPUT, fst::REPLACE_LABEL_OUTPUT, word_syms_->Find("#nonterm:end"));
-    // auto replace_fst = fst::ReplaceFst<StdArc>(label_fst_pairs, replace_options);
 
     fst::ActiveReplaceFstOptions<StdArc> replace_options(top_fst_nonterm, fst::REPLACE_LABEL_OUTPUT, fst::REPLACE_LABEL_OUTPUT, word_syms_->Find("#nonterm:end"));
     auto replace_fst = fst::ActiveReplaceFst<StdArc>(label_fst_pairs, replace_options);
     replace_fst.UpdateActivity(ComputeGrammarsActivityByLabel());
-    // { StdVectorFst expanded_fst(replace_fst); expanded_fst.Write("tmp_replace.fst"); }
 
     // Build linear automaton that accepts given input text.
     StdVectorFst input_fst;
@@ -386,25 +346,20 @@ bool AgfNNet3OnlineModelWrapper::Mimic(std::vector<int32>& ilabels, std::vector<
     input_fst.SetFinal(prev_state, StdArc::Weight::One());
 
     // Compose input recognizer with replace_fst that accepts the grammar, resulting in the accepted output (if any).
-    // auto composed_fst = fst::ComposeFst<StdArc>(input_fst, replace_fst);
     auto composed_fst = fst::RmEpsilonFst<StdArc>(fst::ComposeFst<StdArc>(input_fst, replace_fst));
     StdVectorFst output_fst;
     fst::ShortestPath(composed_fst, &output_fst, 1);
     if (output_fst.Start() == kNoStateId)
         return false;
-    // { StdVectorFst expanded_fst(composed_fst); expanded_fst.Write("tmp_composed.fst"); }
 
     if (olabels != nullptr) {
         // Build output text from result of composition.
         fst::TopSort(&output_fst);
         if (!output_fst.Properties(fst::kTopSorted, false))
             KALDI_ERR << "should be top sorted";
-        for (StateIterator<StdFst> siter(output_fst); !siter.Done(); siter.Next()) {
-            for (ArcIterator<StdFst> aiter(output_fst, siter.Value()); !aiter.Done(); aiter.Next()) {
+        for (StateIterator<StdFst> siter(output_fst); !siter.Done(); siter.Next())
+            for (ArcIterator<StdFst> aiter(output_fst, siter.Value()); !aiter.Done(); aiter.Next())
                 olabels->emplace_back(aiter.Value().olabel);
-            }
-        }
-        // output_fst.Write("tmp_output.fst");
     }
     return true;
 }
