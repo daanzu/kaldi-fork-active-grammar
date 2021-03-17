@@ -309,12 +309,10 @@ void AgfNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, f
     decoded_string = WordIdsToString(words);
 }
 
-bool AgfNNet3OnlineModelWrapper::SetMimicGrammarFst(int32 grammar_fst_index, StdConstFst* grammar_fst) {
-    auto it = mimic_fsts_.find(grammar_fst_index);
-    if (it != mimic_fsts_.end()) {
-        // delete it->second;
-    }
-    mimic_fsts_.insert(it, {grammar_fst_index, grammar_fst});
+bool AgfNNet3OnlineModelWrapper::SetMimicGrammarFst(int32 grammar_fst_index, StdFst* grammar_fst) {
+    mimic_fsts_.erase(grammar_fst_index);
+    auto fst = StdRmEpsilonFst(*grammar_fst);
+    mimic_fsts_.emplace(std::make_pair(grammar_fst_index, std::unique_ptr<StdConstFst>(new StdConstFst(std::forward<StdFst>(fst)))));
     return true;
 }
 
@@ -325,8 +323,8 @@ bool AgfNNet3OnlineModelWrapper::MimicGrammar(const std::vector<int32>& ilabels,
 
     if (mimic_fsts_.size() != grammar_fsts_.size())
         KALDI_WARN << "mismatched number of mimic_fsts_ and grammar_fsts_";
-    for (auto it : mimic_fsts_)
-        label_fst_pairs.emplace_back(rules_words_offset + it.first, it.second);
+    for (const auto& it : mimic_fsts_)
+        label_fst_pairs.emplace_back(rules_words_offset + it.first, it.second.get());
     if (dictation_fst_ != nullptr)
         label_fst_pairs.emplace_back(word_syms_->Find("#nonterm:dictation"), dictation_fst_);
 
@@ -371,8 +369,8 @@ bool AgfNNet3OnlineModelWrapper::Mimic(const std::vector<int32>& ilabels, std::v
 
     if (mimic_fsts_.size() != grammar_fsts_.size())
         KALDI_WARN << "mismatched number of mimic_fsts_ and grammar_fsts_";
-    for (auto& it : mimic_fsts_)
-        label_fst_pairs.emplace_back(rules_words_offset + it.first, it.second);
+    for (const auto& it : mimic_fsts_)
+        label_fst_pairs.emplace_back(rules_words_offset + it.first, it.second.get());
     if (dictation_fst_ != nullptr)
         label_fst_pairs.emplace_back(word_syms_->Find("#nonterm:dictation"), dictation_fst_);
 

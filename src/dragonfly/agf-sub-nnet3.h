@@ -92,7 +92,7 @@ class AgfNNet3OnlineModelWrapper : public ActiveBaseNNet3OnlineModelWrapper {
         bool ReloadGrammarFst(int32 grammar_fst_index, std::string& grammar_fst_filename);
         bool RemoveGrammarFst(int32 grammar_fst_index);
 
-        bool SetMimicGrammarFst(int32 grammar_fst_index, StdConstFst* grammar_fst);
+        bool SetMimicGrammarFst(int32 grammar_fst_index, StdFst* grammar_fst);
         bool MimicGrammar(const std::vector<int32>& ilabels, std::vector<int32>* olabels, int32 grammar_fst_index);
         bool Mimic(const std::vector<int32>& ilabels, std::vector<int32>* olabels);
 
@@ -107,7 +107,7 @@ class AgfNNet3OnlineModelWrapper : public ActiveBaseNNet3OnlineModelWrapper {
         StdConstFst *top_fst_ = nullptr;
         StdConstFst *dictation_fst_ = nullptr;
         std::unordered_map<int32, StdConstFst*> grammar_fsts_;
-        std::unordered_map<int32, StdConstFst*> mimic_fsts_;
+        std::unordered_map<int32, std::unique_ptr<StdConstFst>> mimic_fsts_;
         std::unordered_map<StdFst*, std::string> grammar_fsts_name_map_;  // maps grammar_fst -> name; for debugging
         // INVARIANT: same size: grammar_fsts_, grammar_fsts_name_map_
 
