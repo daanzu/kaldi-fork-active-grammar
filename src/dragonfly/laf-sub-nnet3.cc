@@ -210,12 +210,12 @@ void LafNNet3OnlineModelWrapper::BuildDecodeFst() {
     top_fst.SetFinal(final_state, 0.0);
 
     top_fst.SetFinal(start_state, 0.0);  // Allow start state to be final, for no rule
-    top_fst.AddArc(0, StdArc(0, 0, 0.0, final_state));  // Allow epsilon transition to final state, for no rule
-    for (auto word : std::vector<std::string>{ "!SIL", "<unk>" })  // FIXME: make these configurable
-        top_fst.AddArc(0, StdArc(word_syms_->Find(word), 0, 0.0, final_state));
+    top_fst.AddArc(start_state, StdArc(0, 0, 0.0, final_state));  // Allow epsilon transition to final state, for no rule
+    for (const auto& word : std::vector<std::string>{ "!SIL", "<unk>" })  // FIXME: make these configurable
+        top_fst.AddArc(start_state, StdArc(word_syms_->Find(word), 0, 0.0, final_state));
 
     if (grammar_fsts_.size() > config_->max_num_rules) KALDI_ERR << "more grammars than max number";
-    for (auto grammar_fst_index : decode_fst_grammars_activity_) {
+    for (const auto& grammar_fst_index : decode_fst_grammars_activity_) {
         top_fst.AddArc(0, StdArc(0, (rules_words_offset + grammar_fst_index), 0.0, final_state));
         label_fst_pairs.emplace_back((rules_words_offset + grammar_fst_index), grammar_fsts_.at(grammar_fst_index));
     }

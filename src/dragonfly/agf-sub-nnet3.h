@@ -122,6 +122,7 @@ class AgfNNet3OnlineModelWrapper : public ActiveBaseNNet3OnlineModelWrapper {
         std::set<int32> ComputeGrammarsActivityByLabel();
         void StartDecoding() override;
         void CleanupDecoder() override;
+        bool MimicInternal(const std::vector<int32>& ilabels, std::vector<int32>* olabels, int32 grammar_fst_index);
 };
 
 } // namespace dragonfly

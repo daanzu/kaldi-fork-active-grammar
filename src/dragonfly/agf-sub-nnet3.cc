@@ -317,9 +317,17 @@ bool AgfNNet3OnlineModelWrapper::SetMimicGrammarFst(int32 grammar_fst_index, Std
 }
 
 bool AgfNNet3OnlineModelWrapper::MimicGrammar(const std::vector<int32>& ilabels, std::vector<int32>* olabels, int32 grammar_fst_index) {
+    if (grammar_fst_index < 0) KALDI_ERR << "Invalid grammar_fst_index";
+    return MimicInternal(ilabels, olabels, grammar_fst_index);
+}
+
+bool AgfNNet3OnlineModelWrapper::Mimic(const std::vector<int32>& ilabels, std::vector<int32>* olabels) {
+    return MimicInternal(ilabels, olabels, -1);
+}
+
+bool AgfNNet3OnlineModelWrapper::MimicInternal(const std::vector<int32>& ilabels, std::vector<int32>* olabels, int32 grammar_fst_index) {
     std::vector<std::pair<int32, const StdFst*> > label_fst_pairs;
     auto rules_words_offset = word_syms_->Find("#nonterm:rule0");
-    auto top_fst_nonterm = rules_words_offset + grammar_fst_index;
 
     if (mimic_fsts_.size() != grammar_fsts_.size())
         KALDI_WARN << "mismatched number of mimic_fsts_ and grammar_fsts_";
@@ -328,7 +336,32 @@ bool AgfNNet3OnlineModelWrapper::MimicGrammar(const std::vector<int32>& ilabels,
     if (dictation_fst_ != nullptr)
         label_fst_pairs.emplace_back(word_syms_->Find("#nonterm:dictation"), dictation_fst_);
 
-    ActiveReplaceFstOptions<StdArc> replace_options(top_fst_nonterm, REPLACE_LABEL_OUTPUT, REPLACE_LABEL_OUTPUT, word_syms_->Find("#nonterm:end"));
+    int64 root_fst_nonterm;
+    StdVectorFst top_fst;  // May not be used/needed.
+    if (grammar_fst_index == -1) {
+        // Build top FST (to all FSTs) to be root FST.
+        root_fst_nonterm = word_syms_->AvailableKey();
+
+        auto start_state = top_fst.AddState();
+        top_fst.SetStart(start_state);
+        auto final_state = top_fst.AddState();
+        top_fst.SetFinal(final_state, 0.0);
+
+        if (grammar_fsts_.size() > config_->max_num_rules) KALDI_ERR << "more grammars than max number";
+        for (const auto& it : grammar_fsts_) {
+            top_fst.AddArc(start_state, StdArc(0, (rules_words_offset + it.first), 0.0, final_state));
+        }
+        ArcSort(&top_fst, StdILabelCompare());
+
+        label_fst_pairs.emplace_back(root_fst_nonterm, &top_fst);
+
+    } else {
+        // Use given grammar as root FST.
+        root_fst_nonterm = rules_words_offset + grammar_fst_index;
+    }
+
+    ActiveReplaceFstOptions<StdArc> replace_options(root_fst_nonterm, REPLACE_LABEL_OUTPUT, REPLACE_LABEL_OUTPUT, word_syms_->Find("#nonterm:end"));
+    replace_options.take_ownership = true;
     auto replace_fst = ActiveReplaceFst<StdArc>(label_fst_pairs, replace_options);
     replace_fst.UpdateActivity(ComputeGrammarsActivityByLabel());
 
@@ -354,52 +387,6 @@ bool AgfNNet3OnlineModelWrapper::MimicGrammar(const std::vector<int32>& ilabels,
         // Build output text from result of composition.
         TopSort(&output_fst);
         if (!output_fst.Properties(kTopSorted, false))
-            KALDI_ERR << "should be top sorted";
-        for (StateIterator<StdFst> siter(output_fst); !siter.Done(); siter.Next())
-            for (ArcIterator<StdFst> aiter(output_fst, siter.Value()); !aiter.Done(); aiter.Next())
-                olabels->emplace_back(aiter.Value().olabel);
-    }
-    return true;
-}
-
-bool AgfNNet3OnlineModelWrapper::Mimic(const std::vector<int32>& ilabels, std::vector<int32>* olabels) {
-    std::vector<std::pair<int32, const StdFst*> > label_fst_pairs;
-    auto rules_words_offset = word_syms_->Find("#nonterm:rule0");
-    auto top_fst_nonterm = rules_words_offset;
-
-    if (mimic_fsts_.size() != grammar_fsts_.size())
-        KALDI_WARN << "mismatched number of mimic_fsts_ and grammar_fsts_";
-    for (const auto& it : mimic_fsts_)
-        label_fst_pairs.emplace_back(rules_words_offset + it.first, it.second.get());
-    if (dictation_fst_ != nullptr)
-        label_fst_pairs.emplace_back(word_syms_->Find("#nonterm:dictation"), dictation_fst_);
-
-    fst::ActiveReplaceFstOptions<StdArc> replace_options(top_fst_nonterm, fst::REPLACE_LABEL_OUTPUT, fst::REPLACE_LABEL_OUTPUT, word_syms_->Find("#nonterm:end"));
-    auto replace_fst = fst::ActiveReplaceFst<StdArc>(label_fst_pairs, replace_options);
-    replace_fst.UpdateActivity(ComputeGrammarsActivityByLabel());
-
-    // Build linear automaton that accepts given input text.
-    StdVectorFst input_fst;
-    auto prev_state = input_fst.AddState();
-    input_fst.SetStart(prev_state);
-    for (auto label : ilabels) {
-        auto state = input_fst.AddState();
-        input_fst.AddArc(prev_state, StdArc(label, label, StdArc::Weight::One(), state));
-        prev_state = state;
-    }
-    input_fst.SetFinal(prev_state, StdArc::Weight::One());
-
-    // Compose input recognizer with replace_fst that accepts the grammar, resulting in the accepted output (if any).
-    auto composed_fst = fst::RmEpsilonFst<StdArc>(fst::ComposeFst<StdArc>(input_fst, replace_fst));
-    StdVectorFst output_fst;
-    fst::ShortestPath(composed_fst, &output_fst, 1);
-    if (output_fst.Start() == kNoStateId)
-        return false;
-
-    if (olabels != nullptr) {
-        // Build output text from result of composition.
-        fst::TopSort(&output_fst);
-        if (!output_fst.Properties(fst::kTopSorted, false))
             KALDI_ERR << "should be top sorted";
         for (StateIterator<StdFst> siter(output_fst); !siter.Done(); siter.Next())
             for (ArcIterator<StdFst> aiter(output_fst, siter.Value()); !aiter.Done(); aiter.Next())
