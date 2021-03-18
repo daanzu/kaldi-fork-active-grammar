@@ -79,7 +79,7 @@ class ActiveBaseNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
         ActiveBaseNNet3OnlineModelConfig::Ptr config_;
 
         // Model
-        std::set<int32> grammars_activity_;  // Grammar rule numbers that are active for current/upcoming utterance
+        std::set<int32> grammars_activity_;  // Grammar rule numbers (local indices) that are active for current/upcoming utterance.
 };
 
 } // namespace dragonfly

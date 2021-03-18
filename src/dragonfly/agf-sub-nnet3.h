@@ -118,6 +118,7 @@ class AgfNNet3OnlineModelWrapper : public ActiveBaseNNet3OnlineModelWrapper {
         CombineRuleNontermMapper<CompactLatticeArc>* rule_relabel_mapper_ = nullptr;
 
         bool InvalidateActiveGrammarFst();
+        std::set<int32> ComputeGrammarsActivityByLabel();
         void StartDecoding() override;
         void CleanupDecoder() override;
 };

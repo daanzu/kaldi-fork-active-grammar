@@ -128,6 +128,15 @@ bool AgfNNet3OnlineModelWrapper::InvalidateActiveGrammarFst() {
     return false;
 }
 
+std::set<int32> AgfNNet3OnlineModelWrapper::ComputeGrammarsActivityByLabel() {
+    std::set<int32> grammars_activity_by_label;  // Indexed by label.
+    for (auto rule_number : grammars_activity_)
+        grammars_activity_by_label.insert(rule_number + config_->rules_phones_offset);
+    if (dictation_fst_ != nullptr)
+        grammars_activity_by_label.insert(config_->dictation_phones_offset);  // dictation_fst_ is only enabled if present
+    return grammars_activity_by_label;
+}
+
 void AgfNNet3OnlineModelWrapper::StartDecoding() {
     ExecutionTimer timer("StartDecoding", 2);
     ActiveBaseNNet3OnlineModelWrapper::StartDecoding();
@@ -146,11 +155,7 @@ void AgfNNet3OnlineModelWrapper::StartDecoding() {
         active_grammar_fst_ = new ActiveGrammarFst(config_->nonterm_phones_offset, *top_fst_, ifsts);
     }
 
-    std::set<int32> grammars_activity;
-    for (auto rule_number : grammars_activity_) grammars_activity.insert(rule_number + config_->rules_phones_offset);
-    if (dictation_fst_ != nullptr) grammars_activity.insert(config_->dictation_phones_offset);  // dictation_fst_ is only enabled if present
-    active_grammar_fst_->UpdateActivity(grammars_activity);
-
+    active_grammar_fst_->UpdateActivity(ComputeGrammarsActivityByLabel());
     decoder_ = new SingleUtteranceNnet3DecoderTpl<fst::ActiveGrammarFst>(
         decoder_config_, trans_model_, *decodable_info_, *active_grammar_fst_, feature_pipeline_);
 }
@@ -348,7 +353,7 @@ void TestReplace() {
 }
 
 bool AgfNNet3OnlineModelWrapper::Mimic(std::vector<int32>& ilabels, std::vector<int32>* olabels, int32 grammar_fst_index) {
-    // TestReplace();
+    FLAGS_v = 2;  // Set openfst logging verbosity
     std::vector<std::pair<int32, const StdFst*> > label_fst_pairs;
     auto rules_words_offset = word_syms_->Find("#nonterm:rule0");
     auto top_fst_nonterm = rules_words_offset + grammar_fst_index;
@@ -359,19 +364,17 @@ bool AgfNNet3OnlineModelWrapper::Mimic(std::vector<int32>& ilabels, std::vector<
         label_fst_pairs.emplace_back(rules_words_offset + it.first, it.second);
     if (dictation_fst_ != nullptr)
         label_fst_pairs.emplace_back(word_syms_->Find("#nonterm:dictation"), dictation_fst_);
+    // { StdVectorFst expanded_fst(*mimic_fsts_.at(grammar_fst_index)); expanded_fst.Write("tmp_grammar.fst"); }
 
     // fst::ReplaceFstOptions<StdArc> replace_options(top_fst_nonterm, fst::REPLACE_LABEL_OUTPUT, fst::REPLACE_LABEL_OUTPUT, word_syms_->Find("#nonterm:end"));
     // auto replace_fst = fst::ReplaceFst<StdArc>(label_fst_pairs, replace_options);
 
-    // fst::ReplaceFstOptions<StdArc, DefaultReplaceStateTable<StdArc>, DefaultActiveCacheStore<StdArc>> replace_options(top_fst_nonterm, fst::REPLACE_LABEL_OUTPUT, fst::REPLACE_LABEL_OUTPUT, word_syms_->Find("#nonterm:end"));
-    // auto replace_fst = fst::ReplaceFst<StdArc, DefaultReplaceStateTable<StdArc>, DefaultActiveCacheStore<StdArc>>(label_fst_pairs, replace_options);
-    // auto x = replace_fst.GetMutableImpl();
-    // fst::ReplaceFstOptions<StdArc, DefaultReplaceStateTable<StdArc>, DefaultActiveCacheStore<StdArc>> replace_options(top_fst_nonterm, fst::REPLACE_LABEL_OUTPUT, fst::REPLACE_LABEL_OUTPUT, word_syms_->Find("#nonterm:end"));
-    // auto replace_fst = fst::ActiveReplaceFst<StdArc, DefaultReplaceStateTable<StdArc>, DefaultActiveCacheStore<StdArc>>(label_fst_pairs, replace_options);
-    // auto x = replace_fst;
-    fst::ActiveReplaceFstOptions<StdArc, DefaultReplaceStateTable<StdArc>, DefaultActiveCacheStore<StdArc>> replace_options(top_fst_nonterm, fst::REPLACE_LABEL_OUTPUT, fst::REPLACE_LABEL_OUTPUT, word_syms_->Find("#nonterm:end"));
-    auto replace_fst = fst::ActiveReplaceFst<StdArc, DefaultReplaceStateTable<StdArc>, DefaultActiveCacheStore<StdArc>>(label_fst_pairs, replace_options);
+    fst::ActiveReplaceFstOptions<StdArc> replace_options(top_fst_nonterm, fst::REPLACE_LABEL_OUTPUT, fst::REPLACE_LABEL_OUTPUT, word_syms_->Find("#nonterm:end"));
+    auto replace_fst = fst::ActiveReplaceFst<StdArc>(label_fst_pairs, replace_options);
+    replace_fst.UpdateActivity(ComputeGrammarsActivityByLabel());
+    // { StdVectorFst expanded_fst(replace_fst); expanded_fst.Write("tmp_replace.fst"); }
 
+    // Build linear automaton that accepts given input text.
     StdVectorFst input_fst;
     auto prev_state = input_fst.AddState();
     input_fst.SetStart(prev_state);
@@ -382,20 +385,17 @@ bool AgfNNet3OnlineModelWrapper::Mimic(std::vector<int32>& ilabels, std::vector<
     }
     input_fst.SetFinal(prev_state, StdArc::Weight::One());
 
-    auto composed_fst = fst::ComposeFst<StdArc>(input_fst, replace_fst);
-    if (composed_fst.Start() == kNoStateId)
+    // Compose input recognizer with replace_fst that accepts the grammar, resulting in the accepted output (if any).
+    // auto composed_fst = fst::ComposeFst<StdArc>(input_fst, replace_fst);
+    auto composed_fst = fst::RmEpsilonFst<StdArc>(fst::ComposeFst<StdArc>(input_fst, replace_fst));
+    StdVectorFst output_fst;
+    fst::ShortestPath(composed_fst, &output_fst, 1);
+    if (output_fst.Start() == kNoStateId)
         return false;
-
-    // input_fst.Write("tmp_input.fst");
-    // StdConstFst expanded_fst(replace_fst);
-    // expanded_fst.Write("tmp_expanded.fst");
-    // replace_fst.Write("tmp_replace.fst");
-    // composed_fst.Write("tmp_composed.fst");
+    // { StdVectorFst expanded_fst(composed_fst); expanded_fst.Write("tmp_composed.fst"); }
 
     if (olabels != nullptr) {
-        StdVectorFst output_fst;
-        fst::ShortestPath(composed_fst, &output_fst, 1);
-        fst::RmEpsilon(&output_fst);
+        // Build output text from result of composition.
         fst::TopSort(&output_fst);
         if (!output_fst.Properties(fst::kTopSorted, false))
             KALDI_ERR << "should be top sorted";
@@ -404,6 +404,7 @@ bool AgfNNet3OnlineModelWrapper::Mimic(std::vector<int32>& ilabels, std::vector<
                 olabels->emplace_back(aiter.Value().olabel);
             }
         }
+        // output_fst.Write("tmp_output.fst");
     }
     return true;
 }

@@ -20,8 +20,8 @@ class ActiveCacheStore {
   // Required constructors/assignment operators.
   explicit ActiveCacheStore(const CacheOptions &opts)
       : store_(opts),
-        nonterminal_min_(0),
-        nonterminal_max_(0) {
+        nonterminal_min_(-1),
+        nonterminal_max_(-1) {
     VLOG(1) << "ActiveCacheStore Ctor: object = " << this;
   }
 
@@ -80,33 +80,36 @@ class ActiveCacheStore {
     store_.Delete();
   }
 
-  // Removes from the cache store (not referenced-counted and not the current)
-  // states that have not been accessed since the last GC until at most
-  // cache_fraction * cache_limit_ bytes are cached. If that fails to free
-  // enough, attempts to uncaching recently visited states as well. If still
-  // unable to free enough memory, then widens cache_limit_.
-  void UpdateActivity(const State *current) {
-    VLOG(1) << "ActiveCacheStore: Enter GC: object = " << "(" << this << ")\n";
+  void GCNonterminalStates() {
+    VLOG(1) << "ActiveCacheStore: Enter GCNonterminalStates: object = " << "(" << this << ")";
     store_.Reset();
+    uint32 num_deleted = 0;
     while (!store_.Done()) {
       auto *state = store_.GetMutableState(store_.Value());
-      if (state != current && state->RefCount() == 0 && (state->Flags() & kCacheActiveDeparture)) {
-        store_.Delete();
+      if (state->Flags() & kCacheActiveDeparture) {
+        if (state->RefCount() == 0) {
+          // FIXME: we could be smarter about this and only delete states where the activity changed.
+          store_.Delete();
+          num_deleted++;
+        } else {
+          KALDI_WARN << "Nonterminal state not free to GC! " << state;
+        }
       } else {
         store_.Next();
       }
     }
-    VLOG(1) << "ActiveCacheStore: Exit GC: object = " << "(" << this << ")\n";
+    VLOG(1) << "ActiveCacheStore: Exit GCNonterminalStates: object = " << "(" << this << "), num_deleted = " << num_deleted;
   }
 
+  // Must be called BEFORE creating any states with outgoing nonterminal arcs!
   void SetNonterminals(Label min, Label max) {
     nonterminal_min_ = min; nonterminal_max_ = max;
   }
 
  private:
   CacheStore store_;       // Underlying store.
-  Label nonterminal_min_;
-  Label nonterminal_max_;
+  Label nonterminal_min_;  // Defines the range of labels where all are non-terminals.
+  Label nonterminal_max_;  // Defines the range of labels where all are non-terminals.
 };
 
 template <class Arc>

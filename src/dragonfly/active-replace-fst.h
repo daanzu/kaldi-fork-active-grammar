@@ -102,6 +102,9 @@ struct ActiveReplaceFstOptions : CacheImplOptions<CacheStore> {
 template <class Arc, class StateTable, class CacheStore>
 class ActiveReplaceFstMatcher;
 
+template <class Arc, class StateTable, class CacheStore>
+class ActiveReplaceFst;
+
 template <class Arc>
 using FstList = std::vector<std::pair<typename Arc::Label, const Fst<Arc> *>>;
 
@@ -141,6 +144,7 @@ class ActiveReplaceFstImpl
   using CacheImpl::SetFinal;
   using CacheImpl::SetStart;
 
+  friend class ActiveReplaceFst<Arc, StateTable, CacheStore>;
   friend class ActiveReplaceFstMatcher<Arc, StateTable, CacheStore>;
 
   ActiveReplaceFstImpl(const FstList<Arc> &fst_list,
@@ -181,6 +185,10 @@ class ActiveReplaceFstImpl
         }
       }
     }
+
+    if (!nonterminal_set_.empty()) CacheImpl::GetCacheStore()->SetNonterminals(*nonterminal_set_.cbegin(), *nonterminal_set_.crbegin());
+    fst_activity_.assign(fst_array_.size(), false);
+
     const auto nonterminal = nonterminal_hash_[opts.root];
     if ((nonterminal == 0) && (fst_array_.size() > 1)) {
       FSTERROR() << "ActiveReplaceFstImpl: No FST corresponding to root label "
@@ -208,6 +216,7 @@ class ActiveReplaceFstImpl
         state_table_(new StateTable(*(impl.state_table_))),
         nonterminal_set_(impl.nonterminal_set_),
         nonterminal_hash_(impl.nonterminal_hash_),
+        fst_activity_(impl.fst_activity_),
         root_(impl.root_) {
     SetType("replace");
     SetProperties(impl.Properties(), kCopyProperties);
@@ -218,6 +227,7 @@ class ActiveReplaceFstImpl
     for (Label i = 1; i < impl.fst_array_.size(); ++i) {
       fst_array_.emplace_back(impl.fst_array_[i]->Copy(true));
     }
+    if (!nonterminal_set_.empty()) CacheImpl::GetCacheStore()->SetNonterminals(*nonterminal_set_.cbegin(), *nonterminal_set_.crbegin());
   }
 
   // Computes the dependency graph of the replace class and returns
@@ -281,7 +291,8 @@ class ActiveReplaceFstImpl
         label > *nonterminal_set_.rbegin()) {
       return false;
     } else {
-      return nonterminal_hash_.count(label);
+      return true;  // ActiveReplaceFst!
+      // return nonterminal_hash_.count(label);
     }
     // TODO(allauzen): be smarter and take advantage of all_dense or
     // all_negative. Also use this in ComputeArc. This would require changes to
@@ -473,17 +484,22 @@ class ActiveReplaceFstImpl
       // Checks for non-terminal.
       const auto it = nonterminal_hash_.find(arc.olabel);
       if (it != nonterminal_hash_.end()) {  // Recurses into non-terminal.
-        const auto nonterminal = it->second;
+        // FIXME: this side of the above branch path should be guaranteed for ActiveReplaceFst!
+        const auto nt_fst_id = it->second;
+        // Drop arcs to inactive FSTs.
+        if (!fst_activity_[nt_fst_id]) {
+          return false;
+        }
         const auto nt_prefix =
             PushPrefix(state_table_->GetStackPrefix(tuple.prefix_id),
                        tuple.fst_id, arc.nextstate);
         // If the start state is valid, replace; othewise, the arc is implicitly
         // deleted.
-        const auto nt_start = fst_array_[nonterminal]->Start();
+        const auto nt_start = fst_array_[nt_fst_id]->Start();
         if (nt_start != kNoStateId) {
           const auto nt_nextstate = flags & kArcNextStateValue
                                         ? state_table_->FindState(StateTuple(
-                                              nt_prefix, nonterminal, nt_start))
+                                              nt_prefix, nt_fst_id, nt_start))
                                         : kNoStateId;
           const auto ilabel =
               (EpsilonOnInput(call_label_type_)) ? 0 : arc.ilabel;
@@ -496,7 +512,9 @@ class ActiveReplaceFstImpl
         } else {
           return false;
         }
-      } else {
+      } else {  // Not a non-terminal after all: expands local FST, just as above.
+        // This should never happen in ActiveReplaceFst!
+        LOG(WARNING) << "Encountered non-terminal not found in ActiveReplaceFst fst_array_!";
         const auto nextstate =
             flags & kArcNextStateValue
                 ? state_table_->FindState(
@@ -554,6 +572,8 @@ class ActiveReplaceFstImpl
   // Runtime options
   ReplaceLabelType call_label_type_;    // How to label call arc.
   ReplaceLabelType return_label_type_;  // How to label return arc.
+  // constexpr ReplaceLabelType call_label_type_ = REPLACE_LABEL_OUTPUT;    // How to label call arc.
+  // constexpr ReplaceLabelType return_label_type_ = REPLACE_LABEL_OUTPUT;  // How to label return arc.
   int64 call_output_label_;  // Specifies output label to put on call arc
   int64 return_label_;       // Specifies label to put on return arc.
   bool always_cache_;        // Disable optional caching of arc iterator?
@@ -563,9 +583,12 @@ class ActiveReplaceFstImpl
 
   // Replace components.
   std::set<Label> nonterminal_set_;
-  NonTerminalHash nonterminal_hash_;
+  NonTerminalHash nonterminal_hash_;  // Maps non-terminal Label to fst_id (index into fst_array_).
   std::vector<std::unique_ptr<const Fst<Arc>>> fst_array_;
   Label root_;
+
+  // Active components.
+  std::vector<bool> fst_activity_;  // Parallel to fst_array_.
 };
 
 }  // namespace internal
@@ -673,9 +696,13 @@ class ActiveReplaceFst
     return *GetImpl()->GetFst(GetImpl()->GetFstId(nonterminal));
   }
 
-  void Test() {
-    auto y = GetMutableImpl()->GetCacheStore()->SetNonterminals(99,999);
-    auto x = GetMutableImpl()->GetCacheStore()->UpdateActivity();
+  void UpdateActivity(const std::set<int32>& activity_set) {
+    auto* impl = GetMutableImpl();
+    impl->GetCacheStore()->GCNonterminalStates();
+    auto& activity = impl->fst_activity_;
+    activity.assign(activity.size(), false);
+    for (auto nonterm_index : activity_set)
+      activity[impl->GetFstId(nonterm_index)] = true;
   }
 
  private:
