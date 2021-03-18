@@ -318,7 +318,7 @@ bool AgfNNet3OnlineModelWrapper::SetMimicGrammarFst(int32 grammar_fst_index, Std
     return true;
 }
 
-bool AgfNNet3OnlineModelWrapper::Mimic(std::vector<int32>& ilabels, std::vector<int32>* olabels, int32 grammar_fst_index) {
+bool AgfNNet3OnlineModelWrapper::MimicGrammar(const std::vector<int32>& ilabels, std::vector<int32>* olabels, int32 grammar_fst_index) {
     std::vector<std::pair<int32, const StdFst*> > label_fst_pairs;
     auto rules_words_offset = word_syms_->Find("#nonterm:rule0");
     auto top_fst_nonterm = rules_words_offset + grammar_fst_index;
@@ -326,6 +326,52 @@ bool AgfNNet3OnlineModelWrapper::Mimic(std::vector<int32>& ilabels, std::vector<
     if (mimic_fsts_.size() != grammar_fsts_.size())
         KALDI_WARN << "mismatched number of mimic_fsts_ and grammar_fsts_";
     for (auto it : mimic_fsts_)
+        label_fst_pairs.emplace_back(rules_words_offset + it.first, it.second);
+    if (dictation_fst_ != nullptr)
+        label_fst_pairs.emplace_back(word_syms_->Find("#nonterm:dictation"), dictation_fst_);
+
+    ActiveReplaceFstOptions<StdArc> replace_options(top_fst_nonterm, REPLACE_LABEL_OUTPUT, REPLACE_LABEL_OUTPUT, word_syms_->Find("#nonterm:end"));
+    auto replace_fst = ActiveReplaceFst<StdArc>(label_fst_pairs, replace_options);
+    replace_fst.UpdateActivity(ComputeGrammarsActivityByLabel());
+
+    // Build linear automaton that accepts given input text.
+    StdVectorFst input_fst;
+    auto prev_state = input_fst.AddState();
+    input_fst.SetStart(prev_state);
+    for (auto label : ilabels) {
+        auto state = input_fst.AddState();
+        input_fst.AddArc(prev_state, StdArc(label, label, StdArc::Weight::One(), state));
+        prev_state = state;
+    }
+    input_fst.SetFinal(prev_state, StdArc::Weight::One());
+
+    // Compose input recognizer with replace_fst that accepts the grammar, resulting in the accepted output (if any).
+    auto composed_fst = StdRmEpsilonFst(StdComposeFst(input_fst, replace_fst));
+    StdVectorFst output_fst;
+    ShortestPath(composed_fst, &output_fst, 1);
+    if (output_fst.Start() == kNoStateId)
+        return false;
+
+    if (olabels != nullptr) {
+        // Build output text from result of composition.
+        TopSort(&output_fst);
+        if (!output_fst.Properties(kTopSorted, false))
+            KALDI_ERR << "should be top sorted";
+        for (StateIterator<StdFst> siter(output_fst); !siter.Done(); siter.Next())
+            for (ArcIterator<StdFst> aiter(output_fst, siter.Value()); !aiter.Done(); aiter.Next())
+                olabels->emplace_back(aiter.Value().olabel);
+    }
+    return true;
+}
+
+bool AgfNNet3OnlineModelWrapper::Mimic(const std::vector<int32>& ilabels, std::vector<int32>* olabels) {
+    std::vector<std::pair<int32, const StdFst*> > label_fst_pairs;
+    auto rules_words_offset = word_syms_->Find("#nonterm:rule0");
+    auto top_fst_nonterm = rules_words_offset;
+
+    if (mimic_fsts_.size() != grammar_fsts_.size())
+        KALDI_WARN << "mismatched number of mimic_fsts_ and grammar_fsts_";
+    for (auto& it : mimic_fsts_)
         label_fst_pairs.emplace_back(rules_words_offset + it.first, it.second);
     if (dictation_fst_ != nullptr)
         label_fst_pairs.emplace_back(word_syms_->Find("#nonterm:dictation"), dictation_fst_);
@@ -457,13 +503,13 @@ bool nnet3_agf__set_mimic_grammar_fst(void* model_vp, int32_t grammar_fst_index,
     END_INTERFACE_CATCH_HANDLER(false)
 }
 
-bool nnet3_agf__mimic(void* model_vp, int32_t target_labels_cp[], uint32_t target_labels_len, int32_t grammar_fst_index, int32_t output_labels_cp[], uint32_t* output_labels_len) {
+bool nnet3_agf__mimic_grammar(void* model_vp, int32_t target_labels_cp[], uint32_t target_labels_len, int32_t grammar_fst_index, int32_t output_labels_cp[], uint32_t* output_labels_len) {
     BEGIN_INTERFACE_CATCH_HANDLER
     auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
     std::vector<int32> ilabels(target_labels_cp, target_labels_cp + target_labels_len);
     std::vector<int32> olabels;
     auto olabels_p = (output_labels_cp != nullptr && output_labels_len != nullptr) ? &olabels : nullptr;
-    auto result = model->Mimic(ilabels, olabels_p, grammar_fst_index);
+    auto result = model->MimicGrammar(ilabels, olabels_p, grammar_fst_index);
 
     if (olabels_p) {
         for (auto i = 0; i < std::min((uint32_t)olabels.size(), *output_labels_len); ++i)
