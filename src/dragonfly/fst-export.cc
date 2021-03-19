@@ -15,8 +15,6 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-#pragma once
-
 #include "fstext/fstext-lib.h"
 #include "fst/script/compile.h"
 #include "util/common-utils.h"
@@ -183,7 +181,8 @@ void* fst__compile_text(char* fst_text_cp, char* isymbols_file_cp, char* osymbol
         osymbols = fst::SymbolTable::ReadText(osymbols_file_cp);
     auto fstclass = fst::script::CompileFstInternal(fst_text, "<fst__compile_text>", "vector", "standard",
         isymbols, osymbols, nullptr, false, false, false, false, false);
-    delete isymbols, osymbols;
+    delete isymbols;
+    delete osymbols;
     auto fst = dynamic_cast<StdVectorFst*>(fst::Convert(*fstclass->GetFst<StdArc>(), "vector"));
     if (!fst) KALDI_ERR << "could not convert Fst to StdVectorFst";
     return fst;
