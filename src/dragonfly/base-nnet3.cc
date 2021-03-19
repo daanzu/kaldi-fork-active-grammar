@@ -567,21 +567,23 @@ bool nnet3_base__decode(void* model_vp, float samp_freq, int32_t num_samples, fl
     END_INTERFACE_CATCH_HANDLER(false)
 }
 
-bool nnet3_base__get_output(void* model_vp, char* output, int32_t output_max_length,
+bool nnet3_base__get_output(void* model_vp, char* output_cp, int32_t output_max_length,
         float* likelihood_p, float* am_score_p, float* lm_score_p, float* confidence_p, float* expected_error_rate_p) {
     BEGIN_INTERFACE_CATCH_HANDLER
     auto model = static_cast<BaseNNet3OnlineModelWrapper*>(model_vp);
     if (output_max_length < 1) return false;
-    std::string decoded_string;
-    model->GetDecodedString(decoded_string, likelihood_p, am_score_p, lm_score_p, confidence_p, expected_error_rate_p);
+    std::string output;
+    model->GetDecodedString(output, likelihood_p, am_score_p, lm_score_p, confidence_p, expected_error_rate_p);
 
     // KALDI_LOG << "sleeping";
     // std::this_thread::sleep_for(std::chrono::milliseconds(25));
     // KALDI_LOG << "slept";
 
-    const char* cstr = decoded_string.c_str();
-    strncpy(output, cstr, output_max_length);
-    output[output_max_length - 1] = 0;
+    const char* cstr = output.c_str();
+    strncpy(output_cp, cstr, output_max_length);
+    output_cp[output_max_length - 1] = 0;
+    if (output.size() >= output_max_length)
+        KALDI_WARN << "nnet3_base__get_output: output_max_length-1 < " << output.size();
     return true;
     END_INTERFACE_CATCH_HANDLER(false)
 }

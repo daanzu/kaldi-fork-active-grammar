@@ -313,7 +313,14 @@ bool AgfNNet3OnlineModelWrapper::SetMimicGrammarFst(int32 grammar_fst_index, Std
     return true;
 }
 
-bool AgfNNet3OnlineModelWrapper::MimicInternal(const std::vector<int32>& ilabels, std::vector<int32>* olabels, int32 grammar_fst_index) {
+bool AgfNNet3OnlineModelWrapper::MimicInternal(const std::string& input, std::string* output_p, int32 grammar_fst_index) {
+    // Split input text up into labels.
+    std::istringstream iss(input);
+    std::vector<std::string> input_words(std::istream_iterator<std::string>{iss}, std::istream_iterator<std::string>());
+    std::vector<int32> input_labels;
+    for (const auto& word : input_words)
+        input_labels.emplace_back(word_syms_->Find(word));
+
     std::vector<std::pair<int32, const StdFst*> > label_fst_pairs;
     auto rules_words_offset = word_syms_->Find("#nonterm:rule0");
     auto dictation_words_offset = word_syms_->Find("#nonterm:dictation");
@@ -367,7 +374,7 @@ bool AgfNNet3OnlineModelWrapper::MimicInternal(const std::vector<int32>& ilabels
     StdVectorFst input_fst;
     auto prev_state = input_fst.AddState();
     input_fst.SetStart(prev_state);
-    for (auto label : ilabels) {
+    for (auto label : input_labels) {
         auto state = input_fst.AddState();
         input_fst.AddArc(prev_state, StdArc(label, label, StdArc::Weight::One(), state));
         prev_state = state;
@@ -381,14 +388,16 @@ bool AgfNNet3OnlineModelWrapper::MimicInternal(const std::vector<int32>& ilabels
     if (output_fst.Start() == kNoStateId)
         return false;
 
-    if (olabels != nullptr) {
+    if (output_p != nullptr) {
         // Build output text from result of composition.
         TopSort(&output_fst);
         if (!output_fst.Properties(kTopSorted, false))
             KALDI_ERR << "should be top sorted";
+        std::vector<int32> output_labels;
         for (StateIterator<StdFst> siter(output_fst); !siter.Done(); siter.Next())
             for (ArcIterator<StdFst> aiter(output_fst, siter.Value()); !aiter.Done(); aiter.Next())
-                olabels->emplace_back(aiter.Value().olabel);
+                output_labels.emplace_back(aiter.Value().olabel);
+        *output_p = WordIdsToString(output_labels);
     }
     return true;
 }
@@ -486,8 +495,8 @@ bool nnet3_agf__set_mimic_grammar_fst(void* model_vp, int32_t grammar_fst_index,
     END_INTERFACE_CATCH_HANDLER(false)
 }
 
-bool nnet3_agf__mimic(void* model_vp, int32_t target_labels_cp[], uint32_t target_labels_len,
-    int32_t* grammars_activity_cp, uint32_t grammars_activity_cp_size, int32_t grammar_fst_index, int32_t output_labels_cp[], uint32_t* output_labels_len) {
+bool nnet3_agf__mimic(void* model_vp, const char* input_cp, int32_t* grammars_activity_cp, uint32_t grammars_activity_cp_size,
+    int32_t grammar_fst_index, char* output_cp, int32_t output_max_length) {
     BEGIN_INTERFACE_CATCH_HANDLER
     auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
     if (grammars_activity_cp) {
@@ -495,20 +504,18 @@ bool nnet3_agf__mimic(void* model_vp, int32_t target_labels_cp[], uint32_t targe
         model->SetActiveGrammars(grammars_activity);
     }
 
-    std::vector<int32> ilabels(target_labels_cp, target_labels_cp + target_labels_len);
-    std::vector<int32> olabels;
-    auto olabels_p = (output_labels_cp != nullptr && output_labels_len != nullptr) ? &olabels : nullptr;
-    auto result = (grammar_fst_index == -1) ? model->Mimic(ilabels, olabels_p) : model->MimicGrammar(ilabels, olabels_p, grammar_fst_index);
+    std::string input(input_cp);
+    std::string output;
+    auto output_p = (output_cp != nullptr) ? &output : nullptr;
+    auto result = (grammar_fst_index == -1) ? model->Mimic(input, output_p) : model->MimicGrammar(input, output_p, grammar_fst_index);
 
-    if (olabels_p) {
-        for (auto i = 0; i < std::min((uint32_t)olabels.size(), *output_labels_len); ++i)
-            output_labels_cp[i] = olabels[i];
-        if (olabels.size() > *output_labels_len)
-            KALDI_WARN << "nnet3_agf__mimic: output_labels_len < " << olabels.size();
-        *output_labels_len = olabels.size();
+    if (output_p) {
+        strncpy(output_cp, output.c_str(), output_max_length);
+        output_cp[output_max_length - 1] = 0;
+        if (output.size() >= output_max_length)
+            KALDI_WARN << "nnet3_agf__mimic: output_max_length-1 < " << output.size();
     }
     return result;
-
     END_INTERFACE_CATCH_HANDLER(false)
 }
 
