@@ -93,8 +93,11 @@ class AgfNNet3OnlineModelWrapper : public ActiveBaseNNet3OnlineModelWrapper {
         bool RemoveGrammarFst(int32 grammar_fst_index);
 
         bool SetMimicGrammarFst(int32 grammar_fst_index, StdFst* grammar_fst);
-        bool MimicGrammar(const std::vector<int32>& ilabels, std::vector<int32>* olabels, int32 grammar_fst_index);
-        bool Mimic(const std::vector<int32>& ilabels, std::vector<int32>* olabels);
+        bool Mimic(const std::vector<int32>& ilabels, std::vector<int32>* olabels) { return MimicInternal(ilabels, olabels, -1); }
+        bool MimicGrammar(const std::vector<int32>& ilabels, std::vector<int32>* olabels, int32 grammar_fst_index) {
+            if (grammar_fst_index < 0) KALDI_ERR << "Invalid grammar_fst_index";
+            return MimicInternal(ilabels, olabels, grammar_fst_index);
+        }
 
         bool Decode(BaseFloat samp_freq, const Vector<BaseFloat>& frames, bool finalize, bool save_adaptation_state = true) override;
         void GetDecodedString(std::string& decoded_string, float* likelihood, float* am_score, float* lm_score, float* confidence, float* expected_error_rate) override;
@@ -119,7 +122,6 @@ class AgfNNet3OnlineModelWrapper : public ActiveBaseNNet3OnlineModelWrapper {
         CombineRuleNontermMapper<CompactLatticeArc>* rule_relabel_mapper_ = nullptr;
 
         bool InvalidateActiveGrammarFst();
-        std::set<int32> ComputeGrammarsActivityByLabel();
         void StartDecoding() override;
         void CleanupDecoder() override;
         bool MimicInternal(const std::vector<int32>& ilabels, std::vector<int32>* olabels, int32 grammar_fst_index);
