@@ -470,7 +470,7 @@ bool nnet3_agf__remove_grammar_fst(void* model_vp, int32_t grammar_fst_index) {
 bool nnet3_agf__decode(void* model_vp, float samp_freq, uint32_t num_samples, float* samples, bool finalize,
     int32_t* grammars_activity_cp, uint32_t grammars_activity_cp_size, bool save_adaptation_state) {
     BEGIN_INTERFACE_CATCH_HANDLER
-    if (grammars_activity_cp_size) {
+    if (grammars_activity_cp) {
         auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
         std::set<int32> grammars_activity(grammars_activity_cp, grammars_activity_cp + grammars_activity_cp_size);
         model->SetActiveGrammars(grammars_activity);
