@@ -86,7 +86,8 @@ bool ActiveBaseNNet3OnlineModelWrapper::MimicInternal(const std::string& input, 
         auto final_state = top_fst.AddState();
         top_fst.SetFinal(final_state, 0.0);
         for (const auto& it : mimic_fsts_)
-            top_fst.AddArc(start_state, StdArc(0, (rules_words_offset + it.first), 0.0, final_state));
+            if (it.first < config_->max_num_exported_rules)  // Only include exported rules.
+                top_fst.AddArc(start_state, StdArc(0, (rules_words_offset + it.first), 0.0, final_state));
 
         ArcSort(&top_fst, StdILabelCompare());
         label_fst_pairs.emplace_back(root_fst_nonterm, &top_fst);

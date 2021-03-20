@@ -47,12 +47,14 @@ struct ActiveBaseNNet3OnlineModelConfig : public BaseNNet3OnlineModelConfig {
     static constexpr auto Create = BaseNNet3OnlineModelConfig::Create<ActiveBaseNNet3OnlineModelConfig>;
 
     std::string dictation_fst_filename;
-    int32 max_num_rules = 9999;
+    int32 max_num_rules = 10000;
+    int32 max_num_exported_rules = 1000;
 
     bool Set(const std::string& name, const nlohmann::json& value) override {
         if (BaseNNet3OnlineModelConfig::Set(name, value)) { return true; }
         if (name == "dictation_fst_filename") { value.get_to(dictation_fst_filename); return true; }
         if (name == "max_num_rules") { value.get_to(max_num_rules); return true; }
+        if (name == "max_num_exported_rules") { value.get_to(max_num_exported_rules); return true; }
         return false;
     }
 
@@ -62,6 +64,7 @@ struct ActiveBaseNNet3OnlineModelConfig : public BaseNNet3OnlineModelConfig {
         ss << "ActiveBaseNNet3OnlineModelConfig...";
         ss << "\n    " << "dictation_fst_filename: " << dictation_fst_filename;
         ss << "\n    " << "max_num_rules: " << max_num_rules;
+        ss << "\n    " << "max_num_exported_rules: " << max_num_exported_rules;
         return ss.str();
     }
 };
