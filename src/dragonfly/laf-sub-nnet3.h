@@ -52,9 +52,7 @@ struct LafNNet3OnlineModelConfig : public ActiveBaseNNet3OnlineModelConfig {
     std::string disambig_tids_filename = "disambig_tids.int";
     std::string relabel_ilabels_filename;
     std::string word_syms_relabeled_filename;
-    std::string dictation_fst_filename;
     int32 rules_words_offset = 1000000;
-    int32 max_num_rules = 9999;
     size_t decode_fst_cache_size = 1ULL << 30;  // Note: this is used independently for 3 separate Fsts! FIXME: should we adjust this based on size of grammars + dictation fsts?
 
     bool Set(const std::string& name, const nlohmann::json& value) override {
@@ -63,9 +61,7 @@ struct LafNNet3OnlineModelConfig : public ActiveBaseNNet3OnlineModelConfig {
         if (name == "disambig_tids_filename") { value.get_to(disambig_tids_filename); return true; }
         if (name == "relabel_ilabels_filename") { value.get_to(relabel_ilabels_filename); return true; }
         if (name == "word_syms_relabeled_filename") { value.get_to(word_syms_relabeled_filename); return true; }
-        if (name == "dictation_fst_filename") { value.get_to(dictation_fst_filename); return true; }
         if (name == "rules_words_offset") { value.get_to(rules_words_offset); return true; }
-        if (name == "max_num_rules") { value.get_to(max_num_rules); return true; }
         if (name == "decode_fst_cache_size") { value.get_to(decode_fst_cache_size); return true; }
         return false;
     }
@@ -78,9 +74,7 @@ struct LafNNet3OnlineModelConfig : public ActiveBaseNNet3OnlineModelConfig {
         ss << "\n    " << "disambig_tids_filename: " << disambig_tids_filename;
         ss << "\n    " << "relabel_ilabels_filename: " << relabel_ilabels_filename;
         ss << "\n    " << "word_syms_relabeled_filename: " << word_syms_relabeled_filename;
-        ss << "\n    " << "dictation_fst_filename: " << dictation_fst_filename;
         ss << "\n    " << "rules_words_offset: " << rules_words_offset;
-        ss << "\n    " << "max_num_rules: " << max_num_rules;
         ss << "\n    " << "decode_fst_cache_size: " << decode_fst_cache_size;
         return ss.str();
     }

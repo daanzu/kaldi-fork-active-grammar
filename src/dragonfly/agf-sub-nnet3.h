@@ -53,7 +53,6 @@ struct AgfNNet3OnlineModelConfig : public ActiveBaseNNet3OnlineModelConfig {
     int32 dictation_phones_offset = -1;  // offset from start of phones that the dictation nonterms are
     uint64 top_fst = 0;  // actually a void* pointer to the top FST object
     std::string top_fst_filename;
-    std::string dictation_fst_filename;
 
     bool Set(const std::string& name, const nlohmann::json& value) override {
         if (ActiveBaseNNet3OnlineModelConfig::Set(name, value)) { return true; }
@@ -62,7 +61,6 @@ struct AgfNNet3OnlineModelConfig : public ActiveBaseNNet3OnlineModelConfig {
         if (name == "dictation_phones_offset") { value.get_to(dictation_phones_offset); return true; }
         if (name == "top_fst") { value.get_to(top_fst); return true; }
         if (name == "top_fst_filename") { value.get_to(top_fst_filename); return true; }
-        if (name == "dictation_fst_filename") { value.get_to(dictation_fst_filename); return true; }
         return false;
     }
 
@@ -75,7 +73,6 @@ struct AgfNNet3OnlineModelConfig : public ActiveBaseNNet3OnlineModelConfig {
         ss << "\n    " << "dictation_phones_offset: " << dictation_phones_offset;
         ss << "\n    " << "top_fst: " << top_fst;
         ss << "\n    " << "top_fst_filename: " << top_fst_filename;
-        ss << "\n    " << "dictation_fst_filename: " << dictation_fst_filename;
         return ss.str();
     }
 };
