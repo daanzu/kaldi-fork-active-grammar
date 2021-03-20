@@ -31,7 +31,8 @@
 #include "fst/script/compile.h"
 
 #include "active-base-nnet3.h"
-#include "nlohmann_json.hpp"
+#include "active-cache.h"
+#include "active-replace-fst.h"
 
 namespace dragonfly {
 
@@ -45,6 +46,99 @@ ActiveBaseNNet3OnlineModelWrapper::ActiveBaseNNet3OnlineModelWrapper(ActiveBaseN
 ActiveBaseNNet3OnlineModelWrapper::~ActiveBaseNNet3OnlineModelWrapper() {
 }
 
+bool ActiveBaseNNet3OnlineModelWrapper::SetMimicGrammarFst(int32 grammar_fst_index, StdFst* grammar_fst) {
+    mimic_fsts_.erase(grammar_fst_index);
+    auto fst = StdRmEpsilonFst(*grammar_fst);
+    mimic_fsts_.emplace(std::make_pair(grammar_fst_index, std::unique_ptr<StdConstFst>(new StdConstFst(std::forward<StdFst>(fst)))));
+    if (mimic_fsts_.size() > config_->max_num_rules) KALDI_ERR << "more grammars than max number";
+    return true;
+}
+
+bool ActiveBaseNNet3OnlineModelWrapper::MimicInternal(const std::string& input, std::string* output_p, int32 grammar_fst_index) {
+    // Split input text up into labels.
+    std::istringstream iss(input);
+    std::vector<std::string> input_words(std::istream_iterator<std::string>{iss}, std::istream_iterator<std::string>());
+    std::vector<int32> input_labels;
+    for (const auto& word : input_words)
+        input_labels.emplace_back(word_syms_->Find(word));
+
+    std::vector<std::pair<int32, const StdFst*> > label_fst_pairs;
+    auto rules_words_offset = word_syms_->Find("#nonterm:rule0");
+    auto dictation_words_offset = word_syms_->Find("#nonterm:dictation");
+
+    // Set up mimic FSTs.
+    // if (mimic_fsts_.size() != grammar_fsts_.size())
+    //     KALDI_WARN << "mismatched number of mimic_fsts_ and grammar_fsts_";
+    for (const auto& it : mimic_fsts_)
+        label_fst_pairs.emplace_back(rules_words_offset + it.first, it.second.get());
+    if (mimic_dictation_fst_)
+        label_fst_pairs.emplace_back(dictation_words_offset, mimic_dictation_fst_.get());
+
+    // Set up root FST.
+    int64 root_fst_nonterm;
+    StdVectorFst top_fst;  // May not be used/needed.
+    if (grammar_fst_index == -1) {
+        // Build top FST (to all FSTs) to be root FST.
+        root_fst_nonterm = word_syms_->AvailableKey();
+
+        auto start_state = top_fst.AddState();
+        top_fst.SetStart(start_state);
+        auto final_state = top_fst.AddState();
+        top_fst.SetFinal(final_state, 0.0);
+        for (const auto& it : mimic_fsts_)
+            top_fst.AddArc(start_state, StdArc(0, (rules_words_offset + it.first), 0.0, final_state));
+
+        ArcSort(&top_fst, StdILabelCompare());
+        label_fst_pairs.emplace_back(root_fst_nonterm, &top_fst);
+
+    } else {
+        // Use given grammar as root FST.
+        root_fst_nonterm = rules_words_offset + grammar_fst_index;
+    }
+
+    // Set up replace_fst.
+    ActiveReplaceFstOptions<StdArc> replace_options(root_fst_nonterm, REPLACE_LABEL_OUTPUT, REPLACE_LABEL_OUTPUT, word_syms_->Find("#nonterm:end"));
+    // replace_options.take_ownership = true;  // true means FSTs are destructed upon ActiveReplaceFst destruction; default false means they are instead copied initially.
+    auto replace_fst = ActiveReplaceFst<StdArc>(label_fst_pairs, replace_options);
+
+    std::set<int32> grammars_activity_by_label;  // Indexed by non-terminal label.
+    for (auto rule_number : grammars_activity_)
+        grammars_activity_by_label.insert(rule_number + rules_words_offset);
+    if (mimic_dictation_fst_)
+        grammars_activity_by_label.insert(dictation_words_offset);  // dictation_fst_ is only enabled if present
+    replace_fst.UpdateActivity(grammars_activity_by_label);
+
+    // Build linear automaton that accepts given input text.
+    StdVectorFst input_fst;
+    auto prev_state = input_fst.AddState();
+    input_fst.SetStart(prev_state);
+    for (auto label : input_labels) {
+        auto state = input_fst.AddState();
+        input_fst.AddArc(prev_state, StdArc(label, label, StdArc::Weight::One(), state));
+        prev_state = state;
+    }
+    input_fst.SetFinal(prev_state, StdArc::Weight::One());
+
+    // Compose input recognizer with replace_fst that accepts the grammar, resulting in the accepted output (if any).
+    auto composed_fst = StdRmEpsilonFst(StdComposeFst(input_fst, replace_fst));
+    StdVectorFst output_fst;
+    ShortestPath(composed_fst, &output_fst, 1);
+    if (output_fst.Start() == kNoStateId)
+        return false;
+
+    if (output_p != nullptr) {
+        // Build output text from result of composition.
+        TopSort(&output_fst);
+        if (!output_fst.Properties(kTopSorted, false)) KALDI_ERR << "should be top sorted";
+        std::vector<int32> output_labels;
+        for (StateIterator<StdFst> siter(output_fst); !siter.Done(); siter.Next())
+            for (ArcIterator<StdFst> aiter(output_fst, siter.Value()); !aiter.Done(); aiter.Next())
+                output_labels.emplace_back(aiter.Value().olabel);
+        *output_p = WordIdsToString(output_labels);
+    }
+    return true;
+}
+
 } // namespace dragonfly
 
 
@@ -53,3 +147,36 @@ extern "C" {
 }
 
 using namespace dragonfly;
+
+bool nnet3_active_base__set_mimic_grammar_fst(void* model_vp, int32_t grammar_fst_index, void* grammar_fst_cp) {
+    BEGIN_INTERFACE_CATCH_HANDLER
+    auto model = static_cast<ActiveBaseNNet3OnlineModelWrapper*>(model_vp);
+    auto fst = static_cast<StdVectorFst*>(grammar_fst_cp);
+    auto const_fst = new StdConstFst(*fst);
+    return model->SetMimicGrammarFst(grammar_fst_index, const_fst);
+    END_INTERFACE_CATCH_HANDLER(false)
+}
+
+bool nnet3_active_base__mimic(void* model_vp, const char* input_cp, int32_t* grammars_activity_cp, uint32_t grammars_activity_cp_size,
+    int32_t grammar_fst_index, char* output_cp, int32_t output_max_length) {
+    BEGIN_INTERFACE_CATCH_HANDLER
+    auto model = static_cast<ActiveBaseNNet3OnlineModelWrapper*>(model_vp);
+    if (grammars_activity_cp) {
+        std::set<int32> grammars_activity(grammars_activity_cp, grammars_activity_cp + grammars_activity_cp_size);
+        model->SetActiveGrammars(grammars_activity);
+    }
+
+    std::string input(input_cp);
+    std::string output;
+    auto output_p = (output_cp != nullptr) ? &output : nullptr;
+    auto result = (grammar_fst_index == -1) ? model->Mimic(input, output_p) : model->MimicGrammar(input, output_p, grammar_fst_index);
+
+    if (output_p) {
+        strncpy(output_cp, output.c_str(), output_max_length);
+        output_cp[output_max_length - 1] = 0;
+        if (output.size() >= output_max_length)
+            KALDI_WARN << "nnet3_active_base__mimic: output_max_length-1 < " << output.size();
+    }
+    return result;
+    END_INTERFACE_CATCH_HANDLER(false)
+}

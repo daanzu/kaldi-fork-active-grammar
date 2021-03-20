@@ -74,12 +74,23 @@ class ActiveBaseNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
 
         void SetActiveGrammars(std::set<int32>& grammars_activity) { if (grammars_activity_ != grammars_activity) grammars_activity_.swap(grammars_activity); };
 
+        bool SetMimicGrammarFst(int32 grammar_fst_index, StdFst* grammar_fst);
+        bool Mimic(const std::string& input, std::string* output_p) { return MimicInternal(input, output_p, -1); }
+        bool MimicGrammar(const std::string& input, std::string* output_p, int32 grammar_fst_index) {
+            if (grammar_fst_index < 0) KALDI_ERR << "Invalid grammar_fst_index";
+            return MimicInternal(input, output_p, grammar_fst_index);
+        }
+
     protected:
 
         ActiveBaseNNet3OnlineModelConfig::Ptr config_;
 
-        // Model
         std::set<int32> grammars_activity_;  // Grammar rule numbers (local indices) that are active for current/upcoming utterance.
+
+        std::unordered_map<int32, std::shared_ptr<StdConstFst>> mimic_fsts_;
+        std::shared_ptr<StdConstFst> mimic_dictation_fst_;
+
+        bool MimicInternal(const std::string& input, std::string* output_p, int32 grammar_fst_index);
 };
 
 } // namespace dragonfly

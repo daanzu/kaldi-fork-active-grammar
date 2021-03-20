@@ -57,6 +57,10 @@ DRAGONFLY_API void* nnet3_plain__construct(char* model_dir_cp, char* config_str_
 DRAGONFLY_API bool nnet3_plain__destruct(void* model_vp);
 DRAGONFLY_API bool nnet3_plain__decode(void* model_vp, float samp_freq, int32_t num_samples, float* samples, bool finalize, bool save_adaptation_state);
 
+DRAGONFLY_API bool nnet3_active_base__set_mimic_grammar_fst(void* model_vp, int32_t grammar_fst_index, void* grammar_fst_cp);
+DRAGONFLY_API bool nnet3_active_base__mimic(void* model_vp, const char* input_cp, int32_t* grammars_activity_cp, uint32_t grammars_activity_cp_size,
+    int32_t grammar_fst_index, char* output_cp, int32_t output_max_length);
+
 DRAGONFLY_API void* nnet3_agf__construct(char* model_dir_cp, char* config_str_cp, int32_t verbosity);
 DRAGONFLY_API bool nnet3_agf__destruct(void* model_vp);
 DRAGONFLY_API int32_t nnet3_agf__add_grammar_fst(void* model_vp, int32_t grammar_fst_index, void* grammar_fst_cp);
@@ -66,9 +70,6 @@ DRAGONFLY_API bool nnet3_agf__reload_grammar_fst_file(void* model_vp, int32_t gr
 DRAGONFLY_API bool nnet3_agf__remove_grammar_fst(void* model_vp, int32_t grammar_fst_index);
 DRAGONFLY_API bool nnet3_agf__decode(void* model_vp, float samp_freq, uint32_t num_frames, float* frames, bool finalize,
     int32_t* grammars_activity_cp, uint32_t grammars_activity_cp_size, bool save_adaptation_state);
-DRAGONFLY_API bool nnet3_agf__set_mimic_grammar_fst(void* model_vp, int32_t grammar_fst_index, void* grammar_fst_cp);
-DRAGONFLY_API bool nnet3_agf__mimic(void* model_vp, const char* input_cp, int32_t* grammars_activity_cp, uint32_t grammars_activity_cp_size,
-    int32_t grammar_fst_index, char* output_cp, int32_t output_max_length);
 
 DRAGONFLY_API void* nnet3_agf__construct_compiler(char* config_str_cp);
 DRAGONFLY_API bool nnet3_agf__destruct_compiler(void* compiler_vp);
