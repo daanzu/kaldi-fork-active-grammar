@@ -77,7 +77,8 @@ class ActiveBaseNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
 
         void SetActiveGrammars(std::set<int32>& grammars_activity) { if (grammars_activity_ != grammars_activity) grammars_activity_.swap(grammars_activity); };
 
-        bool SetMimicGrammarFst(int32 grammar_fst_index, StdFst* grammar_fst);
+        bool SetMimicGrammarFst(int32 grammar_fst_index, StdFst* grammar_fst);  // Doesn't take ownership!
+        bool SetMimicDictationFst(StdFst* grammar_fst);  // Takes ownership!
         bool Mimic(const std::string& input, std::string* output_p) { return MimicInternal(input, output_p, -1); }
         bool MimicGrammar(const std::string& input, std::string* output_p, int32 grammar_fst_index) {
             if (grammar_fst_index < 0) KALDI_ERR << "Invalid grammar_fst_index";

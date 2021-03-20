@@ -54,6 +54,12 @@ bool ActiveBaseNNet3OnlineModelWrapper::SetMimicGrammarFst(int32 grammar_fst_ind
     return true;
 }
 
+bool ActiveBaseNNet3OnlineModelWrapper::SetMimicDictationFst(StdFst* grammar_fst) {
+    ExecutionTimer timer("SetMimicDictationFst", 1);
+    mimic_dictation_fst_.reset(CastOrConvertToConstFst(grammar_fst));
+    return true;
+}
+
 bool ActiveBaseNNet3OnlineModelWrapper::MimicInternal(const std::string& input, std::string* output_p, int32 grammar_fst_index) {
     // Split input text up into labels.
     std::istringstream iss(input);
@@ -152,9 +158,16 @@ using namespace dragonfly;
 bool nnet3_active_base__set_mimic_grammar_fst(void* model_vp, int32_t grammar_fst_index, void* grammar_fst_cp) {
     BEGIN_INTERFACE_CATCH_HANDLER
     auto model = static_cast<ActiveBaseNNet3OnlineModelWrapper*>(model_vp);
-    auto fst = static_cast<StdVectorFst*>(grammar_fst_cp);
-    auto const_fst = new StdConstFst(*fst);
-    return model->SetMimicGrammarFst(grammar_fst_index, const_fst);
+    auto fst = static_cast<StdFst*>(grammar_fst_cp);
+    return model->SetMimicGrammarFst(grammar_fst_index, fst);
+    END_INTERFACE_CATCH_HANDLER(false)
+}
+
+bool nnet3_active_base__set_mimic_dictation_fst_file(void* model_vp, const char* grammar_fst_filename_cp) {
+    BEGIN_INTERFACE_CATCH_HANDLER
+    auto model = static_cast<ActiveBaseNNet3OnlineModelWrapper*>(model_vp);
+    auto fst = ReadFstKaldiGeneric(grammar_fst_filename_cp);
+    return model->SetMimicDictationFst(fst);
     END_INTERFACE_CATCH_HANDLER(false)
 }
 
