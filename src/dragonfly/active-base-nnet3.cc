@@ -47,8 +47,11 @@ ActiveBaseNNet3OnlineModelWrapper::~ActiveBaseNNet3OnlineModelWrapper() {
 }
 
 bool ActiveBaseNNet3OnlineModelWrapper::SetMimicGrammarFst(int32 grammar_fst_index, StdFst* grammar_fst) {
+    ExecutionTimer timer("SetMimicGrammarFst", 1);
     mimic_fsts_.erase(grammar_fst_index);
-    auto fst = StdRmEpsilonFst(*grammar_fst);
+    static const std::vector<std::pair<StdArc::Label, StdArc::Label>> ilabels{ { word_syms_->Find(config_->eps_disambig_sym), 0 } };
+    static const std::vector<std::pair<StdArc::Label, StdArc::Label>> olabels;  // Always empty, because only relabeling ilabels
+    auto fst = StdRmEpsilonFst(StdRelabelFst(*grammar_fst, ilabels, olabels));
     mimic_fsts_.emplace(std::make_pair(grammar_fst_index, std::unique_ptr<StdConstFst>(new StdConstFst(std::forward<StdFst>(fst)))));
     if (mimic_fsts_.size() > config_->max_num_rules) KALDI_ERR << "more grammars than max number";
     return true;
