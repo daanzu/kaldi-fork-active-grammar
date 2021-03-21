@@ -1,4 +1,4 @@
-// NNet3 AGF
+// NNet3 LAF
 
 // Copyright   2019  David Zurow
 
@@ -33,6 +33,7 @@
 #include "decoder/active-grammar-fst.h"
 
 #include "active-base-nnet3.h"
+#include "active-replace-fst.h"
 #include "utils.h"
 #include "kaldi-utils.h"
 #include "nlohmann_json.hpp"
@@ -56,7 +57,7 @@ struct LafNNet3OnlineModelConfig : public ActiveBaseNNet3OnlineModelConfig {
     size_t decode_fst_cache_size = 1ULL << 30;  // Note: this is used independently for 3 separate Fsts! FIXME: should we adjust this based on size of grammars + dictation fsts?
 
     bool Set(const std::string& name, const nlohmann::json& value) override {
-        if (BaseNNet3OnlineModelConfig::Set(name, value)) { return true; }
+        if (ActiveBaseNNet3OnlineModelConfig::Set(name, value)) { return true; }
         if (name == "hcl_fst_filename") { value.get_to(hcl_fst_filename); return true; }
         if (name == "disambig_tids_filename") { value.get_to(disambig_tids_filename); return true; }
         if (name == "relabel_ilabels_filename") { value.get_to(relabel_ilabels_filename); return true; }
@@ -68,7 +69,7 @@ struct LafNNet3OnlineModelConfig : public ActiveBaseNNet3OnlineModelConfig {
 
     std::string ToString() override {
         stringstream ss;
-        ss << BaseNNet3OnlineModelConfig::ToString() << '\n';
+        ss << ActiveBaseNNet3OnlineModelConfig::ToString() << '\n';
         ss << "LafNNet3OnlineModelConfig...";
         ss << "\n    " << "hcl_fst_filename: " << hcl_fst_filename;
         ss << "\n    " << "disambig_tids_filename: " << disambig_tids_filename;
@@ -111,6 +112,7 @@ class LafNNet3OnlineModelWrapper : public ActiveBaseNNet3OnlineModelWrapper {
         // INVARIANT: same size: grammar_fsts_, grammar_fsts_name_map_
 
         // Model objects
+        std::unique_ptr<ActiveReplaceFst<StdArc>> replace_fst_;
         StdFst* decode_fst_ = nullptr;
 
         // Decoder objects
@@ -118,6 +120,7 @@ class LafNNet3OnlineModelWrapper : public ActiveBaseNNet3OnlineModelWrapper {
         CombineRuleNontermMapper<CompactLatticeArc>* rule_relabel_mapper_ = nullptr;
 
         void BuildDecodeFst();
+        void BuildDecodeFstNaive();
         bool InvalidateDecodeFst();
         void StartDecoding() override;
         void CleanupDecoder() override;

@@ -31,7 +31,6 @@
 #include "fst/script/compile.h"
 
 #include "active-base-nnet3.h"
-#include "active-cache.h"
 #include "active-replace-fst.h"
 
 namespace dragonfly {

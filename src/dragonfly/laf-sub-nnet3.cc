@@ -1,4 +1,4 @@
-// NNet3 AGF
+// NNet3 LAF
 
 // Copyright   2019  David Zurow
 
@@ -204,6 +204,53 @@ void LafNNet3OnlineModelWrapper::BuildDecodeFst() {
 
     std::vector<std::pair<int32, const StdFst*> > label_fst_pairs;
     auto rules_words_offset = word_syms_->Find("#nonterm:rule0");
+    auto dictation_words_offset = word_syms_->Find("#nonterm:dictation");
+    auto root_fst_nonterm = word_syms_->AvailableKey();
+
+    // Set up grammar FSTs.
+    for (const auto& it : grammar_fsts_)
+        label_fst_pairs.emplace_back(rules_words_offset + it.first, it.second);
+    if (dictation_fst_)
+        label_fst_pairs.emplace_back(dictation_words_offset, dictation_fst_);
+    timer.step("setup grammars");
+
+    // Set up root FST: top FST (to all FSTs).
+    StdVectorFst top_fst;
+
+    auto start_state = top_fst.AddState();
+    top_fst.SetStart(start_state);
+    auto final_state = top_fst.AddState();
+    top_fst.SetFinal(final_state, 0.0);
+
+    top_fst.SetFinal(start_state, 0.0);  // Allow start state to be final, for no rule
+    top_fst.AddArc(start_state, StdArc(0, 0, 0.0, final_state));  // Allow epsilon transition to final state, for no rule
+    for (const auto& word : std::vector<std::string>{ "!SIL", "<unk>" })  // FIXME: make these configurable
+        top_fst.AddArc(start_state, StdArc(word_syms_->Find(word), 0, 0.0, final_state));
+
+    for (const auto& it : grammar_fsts_)
+        if (it.first < config_->max_num_exported_rules)  // Only include exported rules.
+            top_fst.AddArc(start_state, StdArc(0, (rules_words_offset + it.first), 0.0, final_state));
+
+    ArcSort(&top_fst, StdILabelCompare());
+    label_fst_pairs.emplace_back(root_fst_nonterm, &top_fst);
+    timer.step("setup root");
+
+    // Set up replace_fst.
+    ActiveReplaceFstOptions<StdArc> replace_options(root_fst_nonterm, REPLACE_LABEL_OUTPUT, REPLACE_LABEL_OUTPUT, word_syms_->Find("#nonterm:end"));
+    // replace_options.take_ownership = true;  // true means FSTs are destructed upon ActiveReplaceFst destruction; default false means they are instead copied initially.
+    replace_fst_.reset(new ActiveReplaceFst<StdArc>(label_fst_pairs, replace_options));
+    timer.step("setup replace_fst");
+    decode_fst_ = LookaheadComposeFst(*hcl_fst_, *replace_fst_, disambig_tids_, 1ULL<<25);
+    timer.step("setup decode_fst");
+}
+
+void LafNNet3OnlineModelWrapper::BuildDecodeFstNaive() {
+    InvalidateDecodeFst();
+    ExecutionTimer timer("BuildDecodeFst", -1);
+    auto cache_size = config_->decode_fst_cache_size;
+
+    std::vector<std::pair<int32, const StdFst*> > label_fst_pairs;
+    auto rules_words_offset = word_syms_->Find("#nonterm:rule0");
     auto top_fst_nonterm = word_syms_->AvailableKey();
 
     // Build top_fst
@@ -243,6 +290,7 @@ bool LafNNet3OnlineModelWrapper::InvalidateDecodeFst() {
     if (decode_fst_) {
         delete decode_fst_;
         decode_fst_ = nullptr;
+        replace_fst_.reset();
         return true;
     }
     return false;
@@ -252,9 +300,26 @@ void LafNNet3OnlineModelWrapper::StartDecoding() {
     ExecutionTimer timer("StartDecoding", 2);
     BaseNNet3OnlineModelWrapper::StartDecoding();
 
-    if (!decode_fst_ || grammars_activity_changed_) {
+    if (!decode_fst_) {
         InvalidateDecodeFst();
-        BuildDecodeFst();
+        // BuildDecodeFst();
+        grammars_activity_changed_ = true;
+    }
+
+    if (grammars_activity_changed_) {
+        if (replace_fst_) {
+            auto rules_words_offset = word_syms_->Find("#nonterm:rule0");
+            auto dictation_words_offset = word_syms_->Find("#nonterm:dictation");
+            std::set<int32> grammars_activity_by_label;  // Indexed by non-terminal label.
+            for (const auto& rule_number : grammars_activity_)
+                grammars_activity_by_label.insert(rule_number + rules_words_offset);
+            if (dictation_fst_)
+                grammars_activity_by_label.insert(dictation_words_offset);  // dictation_fst_ is only enabled if present
+            replace_fst_->UpdateActivity(grammars_activity_by_label);
+        } else {
+            InvalidateDecodeFst();
+            BuildDecodeFstNaive();
+        }
         grammars_activity_changed_ = false;
     }
 
