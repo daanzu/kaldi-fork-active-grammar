@@ -265,14 +265,15 @@ void LafNNet3OnlineModelWrapper::BuildDecodeFstNaive() {
     for (const auto& word : std::vector<std::string>{ "!SIL", "<unk>" })  // FIXME: make these configurable
         top_fst.AddArc(start_state, StdArc(word_syms_->Find(word), 0, 0.0, final_state));
 
-    if (grammar_fsts_.size() > config_->max_num_exported_rules) KALDI_ERR << "more grammars than max number";
-    for (const auto& grammar_fst_index : grammars_activity_) {
+    if (grammars_activity_.size() > config_->max_num_exported_rules) KALDI_ERR << "more grammars than max number";
+    for (const auto& grammar_fst_index : grammars_activity_)
         top_fst.AddArc(start_state, StdArc(0, (rules_words_offset + grammar_fst_index), 0.0, final_state));
-        label_fst_pairs.emplace_back((rules_words_offset + grammar_fst_index), grammar_fsts_.at(grammar_fst_index));
-    }
+    if (grammar_fsts_.size() > config_->max_num_rules) KALDI_ERR << "more grammars than max number";
+    for (const auto& it : grammar_fsts_)
+        label_fst_pairs.emplace_back((rules_words_offset + it.first), it.second);
     if (dictation_fst_ != nullptr)
         label_fst_pairs.emplace_back(word_syms_->Find("#nonterm:dictation"), dictation_fst_);
-    // top_fst.AddArc(start_state, StdArc(0, word_syms_->Find("#nonterm:dictation"), 0.0, final_state));
+
     ArcSort(&top_fst, StdILabelCompare());
     label_fst_pairs.emplace_back(top_fst_nonterm, new StdConstFst(top_fst));
     timer.step("top_fst");
