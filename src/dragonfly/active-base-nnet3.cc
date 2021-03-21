@@ -59,7 +59,11 @@ bool ActiveBaseNNet3OnlineModelWrapper::SetMimicGrammarFst(int32 grammar_fst_ind
 
 bool ActiveBaseNNet3OnlineModelWrapper::SetMimicDictationFst(StdFst* grammar_fst) {
     ExecutionTimer timer("SetMimicDictationFst", 1);
-    mimic_dictation_fst_.reset(CastOrConvertToConstFst(grammar_fst));
+    // mimic_dictation_fst_.reset(CastOrConvertToConstFst(grammar_fst));
+    static const std::vector<std::pair<StdArc::Label, StdArc::Label>> ilabels{ { word_syms_->Find(config_->eps_disambig_sym), 0 } };
+    static const std::vector<std::pair<StdArc::Label, StdArc::Label>> olabels;  // Always empty, because only relabeling ilabels.
+    auto fst = StdRelabelFst(*grammar_fst, ilabels, olabels);
+    mimic_dictation_fst_.reset(new StdConstFst(fst));
     return true;
 }
 
