@@ -50,9 +50,9 @@ bool ActiveBaseNNet3OnlineModelWrapper::SetMimicGrammarFst(int32 grammar_fst_ind
     ExecutionTimer timer("SetMimicGrammarFst", 1);
     mimic_fsts_.erase(grammar_fst_index);
     static const std::vector<std::pair<StdArc::Label, StdArc::Label>> ilabels{ { word_syms_->Find(config_->eps_disambig_sym), 0 } };
-    static const std::vector<std::pair<StdArc::Label, StdArc::Label>> olabels;  // Always empty, because only relabeling ilabels
-    auto fst = StdRmEpsilonFst(StdRelabelFst(*grammar_fst, ilabels, olabels));
+    static const std::vector<std::pair<StdArc::Label, StdArc::Label>> olabels{ { word_syms_->Find("#nonterm:end"), 0 } };
     mimic_fsts_.emplace(std::make_pair(grammar_fst_index, std::unique_ptr<StdConstFst>(new StdConstFst(std::forward<StdFst>(fst)))));
+    { StdVectorFst expanded_fst(*mimic_fsts_.at(grammar_fst_index)); expanded_fst.Write("tmp_mimic.fst"); }
     if (mimic_fsts_.size() > config_->max_num_rules) KALDI_ERR << "more grammars than max number";
     return true;
 }
@@ -117,6 +117,7 @@ bool ActiveBaseNNet3OnlineModelWrapper::MimicInternal(const std::string& input, 
     if (mimic_dictation_fst_)
         grammars_activity_by_label.insert(dictation_words_offset);  // dictation_fst_ is only enabled if present
     replace_fst.UpdateActivity(grammars_activity_by_label);
+    // { StdVectorFst expanded_fst(replace_fst); expanded_fst.Write("tmp_replace.fst"); }
 
     // Build linear automaton that accepts given input text.
     StdVectorFst input_fst;
@@ -131,6 +132,7 @@ bool ActiveBaseNNet3OnlineModelWrapper::MimicInternal(const std::string& input, 
 
     // Compose input recognizer with replace_fst that accepts the grammar, resulting in the accepted output (if any).
     auto composed_fst = StdRmEpsilonFst(StdComposeFst(input_fst, replace_fst));
+    // { StdVectorFst expanded_fst(composed_fst); expanded_fst.Write("tmp_composed.fst"); }
     StdVectorFst output_fst;
     ShortestPath(composed_fst, &output_fst, 1);
     if (output_fst.Start() == kNoStateId)

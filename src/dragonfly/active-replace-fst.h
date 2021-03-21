@@ -415,6 +415,7 @@ class ActiveReplaceFstImpl
     SetArcs(s);
   }
 
+  // Dead code
   void Expand(StateId s, const StateTuple &tuple,
               const ArcIteratorData<Arc> &data) {
     if (tuple.fst_state == kNoStateId) {  // Local FST is empty.
