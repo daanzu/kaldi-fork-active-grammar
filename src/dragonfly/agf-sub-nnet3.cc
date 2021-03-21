@@ -134,7 +134,7 @@ void AgfNNet3OnlineModelWrapper::StartDecoding() {
     ExecutionTimer timer("StartDecoding", 2);
     ActiveBaseNNet3OnlineModelWrapper::StartDecoding();
 
-    if (active_grammar_fst_ == nullptr) {
+    if (!active_grammar_fst_) {
         std::vector<std::pair<int32, const StdConstFst *> > ifsts;
         for (auto grammar_fst_pair : grammar_fsts_) {
             auto grammar_fst_index = grammar_fst_pair.first;
@@ -142,18 +142,22 @@ void AgfNNet3OnlineModelWrapper::StartDecoding() {
             int32 nonterm_phone = config_->rules_phones_offset + grammar_fst_index;
             ifsts.emplace_back(std::make_pair(nonterm_phone, grammar_fst));
         }
-        if (dictation_fst_ != nullptr) {
+        if (dictation_fst_) {
             ifsts.emplace_back(std::make_pair(config_->dictation_phones_offset, dictation_fst_));
         }
         active_grammar_fst_ = new ActiveGrammarFst(config_->nonterm_phones_offset, *top_fst_, ifsts);
+        grammars_activity_changed_ = true;
     }
 
-    std::set<int32> grammars_activity_by_label;  // Indexed by non-terminal label.
-    for (auto rule_number : grammars_activity_)
-        grammars_activity_by_label.insert(rule_number + config_->rules_phones_offset);
-    if (dictation_fst_ != nullptr)
-        grammars_activity_by_label.insert(config_->dictation_phones_offset);  // dictation_fst_ is only enabled if present
-    active_grammar_fst_->UpdateActivity(grammars_activity_by_label);
+    if (grammars_activity_changed_) {
+        std::set<int32> grammars_activity_by_label;  // Indexed by non-terminal label.
+        for (const auto& rule_number : grammars_activity_)
+            grammars_activity_by_label.insert(rule_number + config_->rules_phones_offset);
+        if (dictation_fst_)
+            grammars_activity_by_label.insert(config_->dictation_phones_offset);  // dictation_fst_ is only enabled if present
+        active_grammar_fst_->UpdateActivity(grammars_activity_by_label);
+        grammars_activity_changed_ = false;
+    }
 
     decoder_ = new SingleUtteranceNnet3DecoderTpl<fst::ActiveGrammarFst>(
         decoder_config_, trans_model_, *decodable_info_, *active_grammar_fst_, feature_pipeline_);

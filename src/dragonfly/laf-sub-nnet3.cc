@@ -219,7 +219,7 @@ void LafNNet3OnlineModelWrapper::BuildDecodeFst() {
         top_fst.AddArc(start_state, StdArc(word_syms_->Find(word), 0, 0.0, final_state));
 
     if (grammar_fsts_.size() > config_->max_num_exported_rules) KALDI_ERR << "more grammars than max number";
-    for (const auto& grammar_fst_index : decode_fst_grammars_activity_) {
+    for (const auto& grammar_fst_index : grammars_activity_) {
         top_fst.AddArc(start_state, StdArc(0, (rules_words_offset + grammar_fst_index), 0.0, final_state));
         label_fst_pairs.emplace_back((rules_words_offset + grammar_fst_index), grammar_fsts_.at(grammar_fst_index));
     }
@@ -252,10 +252,10 @@ void LafNNet3OnlineModelWrapper::StartDecoding() {
     ExecutionTimer timer("StartDecoding", 2);
     BaseNNet3OnlineModelWrapper::StartDecoding();
 
-    if (!decode_fst_ || (decode_fst_grammars_activity_ != grammars_activity_)) {
+    if (!decode_fst_ || grammars_activity_changed_) {
         InvalidateDecodeFst();
-        decode_fst_grammars_activity_ = grammars_activity_;
         BuildDecodeFst();
+        grammars_activity_changed_ = false;
     }
 
     decoder_ = new SingleUtteranceNnet3DecoderTpl<fst::StdFst>(

@@ -112,7 +112,6 @@ class LafNNet3OnlineModelWrapper : public ActiveBaseNNet3OnlineModelWrapper {
 
         // Model objects
         StdFst* decode_fst_ = nullptr;
-        std::set<int32> decode_fst_grammars_activity_;  // grammars_activity_ for decode_fst_ creation
 
         // Decoder objects
         SingleUtteranceNnet3DecoderTpl<fst::StdFst>* decoder_ = nullptr;  // reinstantiated per utterance

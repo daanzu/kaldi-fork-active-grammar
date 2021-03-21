@@ -78,7 +78,14 @@ class ActiveBaseNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
         ActiveBaseNNet3OnlineModelWrapper(ActiveBaseNNet3OnlineModelConfig::Ptr config, int32 verbosity = DEFAULT_VERBOSITY);
         ~ActiveBaseNNet3OnlineModelWrapper() override;
 
-        void SetActiveGrammars(std::set<int32>& grammars_activity) { if (grammars_activity_ != grammars_activity) grammars_activity_.swap(grammars_activity); };
+        bool SetActiveGrammars(std::set<int32>& grammars_activity) {
+            if (grammars_activity_ != grammars_activity) {
+                grammars_activity_.swap(grammars_activity);
+                grammars_activity_changed_ = true;
+                return true;
+            }
+            return false;
+        };
 
         bool SetMimicGrammarFst(int32 grammar_fst_index, StdFst* grammar_fst);  // Doesn't take ownership!
         bool SetMimicDictationFst(StdFst* grammar_fst);  // Takes ownership!
@@ -93,6 +100,7 @@ class ActiveBaseNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
         ActiveBaseNNet3OnlineModelConfig::Ptr config_;
 
         std::set<int32> grammars_activity_;  // Grammar rule numbers (local indices) that are active for current/upcoming utterance.
+        bool grammars_activity_changed_ = true;  // Whether grammars_activity has changed since the last decoder update.
 
         std::unordered_map<int32, std::shared_ptr<StdFst>> mimic_fsts_;
         std::shared_ptr<StdFst> mimic_dictation_fst_;
