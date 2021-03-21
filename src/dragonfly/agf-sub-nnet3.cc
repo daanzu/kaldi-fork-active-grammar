@@ -80,6 +80,7 @@ int32 AgfNNet3OnlineModelWrapper::AddGrammarFst(int32 grammar_fst_index, fst::St
     auto ok = grammar_fsts_.insert({grammar_fst_index, grammar_fst}).second;
     if (!ok) KALDI_ERR << "cannot add grammar to duplicate grammar_fst_index " << grammar_fst_index;
     grammar_fsts_name_map_[grammar_fst] = grammar_name;
+    mimic_fsts_.erase(grammar_fst_index);
     return grammar_fst_index;
 }
 
@@ -97,6 +98,8 @@ bool AgfNNet3OnlineModelWrapper::ReloadGrammarFst(int32 grammar_fst_index, fst::
     KALDI_VLOG(2) << "reloading FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst->NumStates() << " states " << grammar_name;
     grammar_fsts_.at(grammar_fst_index) = grammar_fst;
     grammar_fsts_name_map_[grammar_fst] = grammar_name;
+
+    mimic_fsts_.erase(grammar_fst_index);
     return true;
 }
 
@@ -113,6 +116,7 @@ bool AgfNNet3OnlineModelWrapper::RemoveGrammarFst(int32 grammar_fst_index) {
     if (erased < 1) KALDI_ERR << "cannot find grammar_fst_index " << grammar_fst_index;
     grammar_fsts_name_map_.erase(grammar_fst);
     delete grammar_fst;
+    mimic_fsts_.erase(grammar_fst_index);
     return true;
 }
 
