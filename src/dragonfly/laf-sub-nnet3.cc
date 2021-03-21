@@ -202,9 +202,9 @@ void LafNNet3OnlineModelWrapper::BuildDecodeFst() {
     ExecutionTimer timer("BuildDecodeFst", -1);
     auto cache_size = config_->decode_fst_cache_size;
 
-    std::vector<std::pair<int32, const StdFst *> > label_fst_pairs;
+    std::vector<std::pair<int32, const StdFst*> > label_fst_pairs;
     auto rules_words_offset = word_syms_->Find("#nonterm:rule0");
-    auto top_fst_nonterm = rules_words_offset + config_->max_num_rules;  // FIXME: hacky
+    auto top_fst_nonterm = word_syms_->AvailableKey();
 
     // Build top_fst
     VectorFst<StdArc> top_fst;
@@ -218,21 +218,21 @@ void LafNNet3OnlineModelWrapper::BuildDecodeFst() {
     for (const auto& word : std::vector<std::string>{ "!SIL", "<unk>" })  // FIXME: make these configurable
         top_fst.AddArc(start_state, StdArc(word_syms_->Find(word), 0, 0.0, final_state));
 
-    if (grammar_fsts_.size() > config_->max_num_rules) KALDI_ERR << "more grammars than max number";
+    if (grammar_fsts_.size() > config_->max_num_exported_rules) KALDI_ERR << "more grammars than max number";
     for (const auto& grammar_fst_index : decode_fst_grammars_activity_) {
-        top_fst.AddArc(0, StdArc(0, (rules_words_offset + grammar_fst_index), 0.0, final_state));
+        top_fst.AddArc(start_state, StdArc(0, (rules_words_offset + grammar_fst_index), 0.0, final_state));
         label_fst_pairs.emplace_back((rules_words_offset + grammar_fst_index), grammar_fsts_.at(grammar_fst_index));
     }
     if (dictation_fst_ != nullptr)
         label_fst_pairs.emplace_back(word_syms_->Find("#nonterm:dictation"), dictation_fst_);
-    // top_fst.AddArc(0, StdArc(0, word_syms_->Find("#nonterm:dictation"), 0.0, final_state));
-    fst::ArcSort(&top_fst, fst::StdILabelCompare());
-    label_fst_pairs.emplace_back(top_fst_nonterm, new fst::StdConstFst(top_fst));
+    // top_fst.AddArc(start_state, StdArc(0, word_syms_->Find("#nonterm:dictation"), 0.0, final_state));
+    ArcSort(&top_fst, StdILabelCompare());
+    label_fst_pairs.emplace_back(top_fst_nonterm, new StdConstFst(top_fst));
     timer.step("top_fst");
 
-    fst::ReplaceFstOptions<StdArc> replace_options(top_fst_nonterm, fst::REPLACE_LABEL_OUTPUT, fst::REPLACE_LABEL_OUTPUT, word_syms_->Find("#nonterm:end"));
+    ReplaceFstOptions<StdArc> replace_options(top_fst_nonterm, REPLACE_LABEL_OUTPUT, REPLACE_LABEL_OUTPUT, word_syms_->Find("#nonterm:end"));
     replace_options.gc_limit = cache_size;  // ReplaceFst needs the most cache space of the 3 delayed Fsts?
-    auto replace_fst = fst::ReplaceFst<StdArc>(label_fst_pairs, replace_options);
+    auto replace_fst = ReplaceFst<StdArc>(label_fst_pairs, replace_options);
     timer.step("replace_fst");
     auto decode_fst = LookaheadComposeFst(*hcl_fst_, replace_fst, disambig_tids_, 1ULL<<25);
     decode_fst_ = decode_fst;
