@@ -94,8 +94,8 @@ class ActiveBaseNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
 
         std::set<int32> grammars_activity_;  // Grammar rule numbers (local indices) that are active for current/upcoming utterance.
 
-        std::unordered_map<int32, std::shared_ptr<StdConstFst>> mimic_fsts_;
-        std::shared_ptr<StdConstFst> mimic_dictation_fst_;
+        std::unordered_map<int32, std::shared_ptr<StdFst>> mimic_fsts_;
+        std::shared_ptr<StdFst> mimic_dictation_fst_;
 
         bool MimicInternal(const std::string& input, std::string* output_p, int32 grammar_fst_index);
 };

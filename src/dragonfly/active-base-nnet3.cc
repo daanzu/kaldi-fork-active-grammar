@@ -52,8 +52,8 @@ bool ActiveBaseNNet3OnlineModelWrapper::SetMimicGrammarFst(int32 grammar_fst_ind
     static const std::vector<std::pair<StdArc::Label, StdArc::Label>> ilabels{ { word_syms_->Find(config_->eps_disambig_sym), 0 } };
     static const std::vector<std::pair<StdArc::Label, StdArc::Label>> olabels{ { word_syms_->Find("#nonterm:end"), 0 } };
     auto fst = StdRelabelFst(*grammar_fst, ilabels, olabels);
-    mimic_fsts_.emplace(std::make_pair(grammar_fst_index, std::unique_ptr<StdConstFst>(new StdConstFst(std::forward<StdFst>(fst)))));
-    { StdVectorFst expanded_fst(*mimic_fsts_.at(grammar_fst_index)); expanded_fst.Write("tmp_mimic.fst"); }
+    mimic_fsts_.emplace(std::make_pair(grammar_fst_index, std::unique_ptr<StdFst>(new StdConstFst(std::forward<StdFst>(fst)))));
+    // { StdVectorFst expanded_fst(*mimic_fsts_.at(grammar_fst_index)); expanded_fst.Write("tmp_mimic.fst"); }
     if (mimic_fsts_.size() > config_->max_num_rules) KALDI_ERR << "more grammars than max number";
     return true;
 }
@@ -64,18 +64,23 @@ bool ActiveBaseNNet3OnlineModelWrapper::SetMimicDictationFst(StdFst* grammar_fst
     // static const std::vector<std::pair<StdArc::Label, StdArc::Label>> ilabels{ { word_syms_->Find(config_->eps_disambig_sym), 0 } };
     // static const std::vector<std::pair<StdArc::Label, StdArc::Label>> olabels;  // Always empty, because only relabeling ilabels.
     // auto fst = StdRelabelFst(*grammar_fst, ilabels, olabels);
-    auto fst = StdProjectFst(*grammar_fst, PROJECT_OUTPUT);  // Faster than relabeling.
-    mimic_dictation_fst_.reset(new StdConstFst(fst));
+    // auto fst = StdProjectFst(*grammar_fst, PROJECT_OUTPUT);  // Faster than relabeling.
+    // mimic_dictation_fst_.reset(new StdConstFst(fst));
+    auto fst = new StdProjectFst(*grammar_fst, PROJECT_OUTPUT);  // Faster than relabeling.
+    mimic_dictation_fst_.reset(fst);
     return true;
 }
 
 bool ActiveBaseNNet3OnlineModelWrapper::MimicInternal(const std::string& input, std::string* output_p, int32 grammar_fst_index) {
+    ExecutionTimer timer("MimicInternal", 2);
+
     // Split input text up into labels.
     std::istringstream iss(input);
     std::vector<std::string> input_words(std::istream_iterator<std::string>{iss}, std::istream_iterator<std::string>());  // Split string by spaces.
     std::vector<int32> input_labels;
     for (const auto& word : input_words)
         input_labels.emplace_back(word_syms_->Find(word));
+    timer.step("split input");
 
     std::vector<std::pair<int32, const StdFst*> > label_fst_pairs;
     auto rules_words_offset = word_syms_->Find("#nonterm:rule0");
@@ -88,6 +93,7 @@ bool ActiveBaseNNet3OnlineModelWrapper::MimicInternal(const std::string& input, 
         label_fst_pairs.emplace_back(rules_words_offset + it.first, it.second.get());
     if (mimic_dictation_fst_)
         label_fst_pairs.emplace_back(dictation_words_offset, mimic_dictation_fst_.get());
+    timer.step("setup mimic");
 
     // Set up root FST.
     int64 root_fst_nonterm;
@@ -111,11 +117,13 @@ bool ActiveBaseNNet3OnlineModelWrapper::MimicInternal(const std::string& input, 
         // Use given grammar as root FST.
         root_fst_nonterm = rules_words_offset + grammar_fst_index;
     }
+    timer.step("setup root");
 
     // Set up replace_fst.
     ActiveReplaceFstOptions<StdArc> replace_options(root_fst_nonterm, REPLACE_LABEL_OUTPUT, REPLACE_LABEL_OUTPUT, word_syms_->Find("#nonterm:end"));
     // replace_options.take_ownership = true;  // true means FSTs are destructed upon ActiveReplaceFst destruction; default false means they are instead copied initially.
     auto replace_fst = ActiveReplaceFst<StdArc>(label_fst_pairs, replace_options);
+    timer.step("setup replace_fst");
 
     std::set<int32> grammars_activity_by_label;  // Indexed by non-terminal label.
     for (auto rule_number : grammars_activity_)
@@ -123,6 +131,7 @@ bool ActiveBaseNNet3OnlineModelWrapper::MimicInternal(const std::string& input, 
     if (mimic_dictation_fst_)
         grammars_activity_by_label.insert(dictation_words_offset);  // dictation_fst_ is only enabled if present
     replace_fst.UpdateActivity(grammars_activity_by_label);
+    timer.step("setup activity");
     // { StdVectorFst expanded_fst(replace_fst); expanded_fst.Write("tmp_replace.fst"); }
 
     // Build linear automaton that accepts given input text.
@@ -135,13 +144,18 @@ bool ActiveBaseNNet3OnlineModelWrapper::MimicInternal(const std::string& input, 
         prev_state = state;
     }
     input_fst.SetFinal(prev_state, StdArc::Weight::One());
+    timer.step("build input_fst");
 
     // Compose input recognizer with replace_fst that accepts the grammar, resulting in the accepted output (if any).
     auto composed_fst = StdComposeFst(input_fst, replace_fst);
+    // static const std::vector<std::pair<StdArc::Label, StdArc::Label>> relabel_ilabels{ { word_syms_->Find(config_->eps_disambig_sym), 0 } };
+    // static const std::vector<std::pair<StdArc::Label, StdArc::Label>> relabel_olabels;  // Always empty, because only relabeling ilabels.
+    // auto composed_fst = StdComposeFst(input_fst, StdRelabelFst(replace_fst, relabel_ilabels, relabel_olabels));
     // { StdVectorFst expanded_fst(composed_fst); expanded_fst.Write("tmp_composed.fst"); }
     StdVectorFst output_fst;
     ShortestPath(composed_fst, &output_fst, 1);
     RmEpsilon(&output_fst);
+    timer.step("build output_fst");
     if (output_fst.Start() == kNoStateId)
         return false;
 
@@ -154,6 +168,7 @@ bool ActiveBaseNNet3OnlineModelWrapper::MimicInternal(const std::string& input, 
             for (ArcIterator<StdFst> aiter(output_fst, siter.Value()); !aiter.Done(); aiter.Next())
                 output_labels.emplace_back(aiter.Value().olabel);
         *output_p = WordIdsToString(output_labels);
+        timer.step("build output words");
     }
     return true;
 }
