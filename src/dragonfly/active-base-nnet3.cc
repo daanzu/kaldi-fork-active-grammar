@@ -51,6 +51,7 @@ bool ActiveBaseNNet3OnlineModelWrapper::SetMimicGrammarFst(int32 grammar_fst_ind
     mimic_fsts_.erase(grammar_fst_index);
     static const std::vector<std::pair<StdArc::Label, StdArc::Label>> ilabels{ { word_syms_->Find(config_->eps_disambig_sym), 0 } };
     static const std::vector<std::pair<StdArc::Label, StdArc::Label>> olabels{ { word_syms_->Find("#nonterm:end"), 0 } };
+    auto fst = StdRelabelFst(*grammar_fst, ilabels, olabels);
     mimic_fsts_.emplace(std::make_pair(grammar_fst_index, std::unique_ptr<StdConstFst>(new StdConstFst(std::forward<StdFst>(fst)))));
     { StdVectorFst expanded_fst(*mimic_fsts_.at(grammar_fst_index)); expanded_fst.Write("tmp_mimic.fst"); }
     if (mimic_fsts_.size() > config_->max_num_rules) KALDI_ERR << "more grammars than max number";
@@ -70,7 +71,7 @@ bool ActiveBaseNNet3OnlineModelWrapper::SetMimicDictationFst(StdFst* grammar_fst
 bool ActiveBaseNNet3OnlineModelWrapper::MimicInternal(const std::string& input, std::string* output_p, int32 grammar_fst_index) {
     // Split input text up into labels.
     std::istringstream iss(input);
-    std::vector<std::string> input_words(std::istream_iterator<std::string>{iss}, std::istream_iterator<std::string>());
+    std::vector<std::string> input_words(std::istream_iterator<std::string>{iss}, std::istream_iterator<std::string>());  // Split string by spaces.
     std::vector<int32> input_labels;
     for (const auto& word : input_words)
         input_labels.emplace_back(word_syms_->Find(word));
@@ -135,10 +136,11 @@ bool ActiveBaseNNet3OnlineModelWrapper::MimicInternal(const std::string& input, 
     input_fst.SetFinal(prev_state, StdArc::Weight::One());
 
     // Compose input recognizer with replace_fst that accepts the grammar, resulting in the accepted output (if any).
-    auto composed_fst = StdRmEpsilonFst(StdComposeFst(input_fst, replace_fst));
+    auto composed_fst = StdComposeFst(input_fst, replace_fst);
     // { StdVectorFst expanded_fst(composed_fst); expanded_fst.Write("tmp_composed.fst"); }
     StdVectorFst output_fst;
     ShortestPath(composed_fst, &output_fst, 1);
+    RmEpsilon(&output_fst);
     if (output_fst.Start() == kNoStateId)
         return false;
 
