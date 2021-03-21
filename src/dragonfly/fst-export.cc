@@ -77,7 +77,7 @@ bool fst__add_arc(void* fst_vp, int32_t src_state_id, int32_t dst_state_id, int3
     return true;
 }
 
-bool fst__compute_md5(void* fst_vp, char* md5_cp, char* dependencies_seed_md5_cp) {
+bool fst__compute_md5(void* fst_vp, char* md5_cp, const char* dependencies_seed_md5_cp) {
     // ExecutionTimer timer("fst__compute_md5", -2);
     auto fst = static_cast<StdVectorFst*>(fst_vp);
     MD5 md5;
@@ -86,16 +86,22 @@ bool fst__compute_md5(void* fst_vp, char* md5_cp, char* dependencies_seed_md5_cp
     ArcSort(fst, ILabelCompare<StdArc>());
     // timer.step("ilabel sorted");
 
-    for (StateIterator<StdFst> siter(*fst); !siter.Done(); siter.Next()) {
-        auto state = siter.Value();
-        std::stringstream description;
-        description << state;
-        for (ArcIterator<StdFst> aiter(*fst, state); !aiter.Done(); aiter.Next()) {
-            auto arc = aiter.Value();
-            description << ":" << arc.nextstate << "," << arc.ilabel << "," << arc.olabel << "," << arc.weight;
+    static uint32_t ffff = UINT32_MAX;
+    const auto nstates = fst->NumStates();
+    md5.add(&nstates, sizeof(nstates));
+    for (StateIterator<StdVectorFst> siter(*fst); !siter.Done(); siter.Next()) {
+        const auto state = siter.Value();
+        md5.add(&state, sizeof(state));
+        const auto narcs = fst->NumArcs(state);
+        md5.add(&narcs, sizeof(narcs));
+        for (ArcIterator<StdVectorFst> aiter(*fst, state); !aiter.Done(); aiter.Next()) {
+            const auto& arc = aiter.Value();
+            md5.add(&ffff, sizeof(ffff));
+            md5.add(&arc.nextstate, sizeof(arc.nextstate));
+            md5.add(&arc.ilabel, sizeof(arc.ilabel));
+            md5.add(&arc.olabel, sizeof(arc.olabel));
+            md5.add(&arc.weight, sizeof(arc.weight));
         }
-        auto str = description.str();
-        md5.add(str.c_str(), str.size() + 1);
     }
 
     auto digest = md5.getHash();
