@@ -34,6 +34,8 @@
 #include "utils.h"
 #include "kaldi-utils.h"
 #include "nlohmann_json.hpp"
+#include "active-arcmap-fst.h"
+#include "active-compose-fst.h"
 
 namespace dragonfly {
 
@@ -186,6 +188,24 @@ bool LafNNet3OnlineModelWrapper::RemoveGrammarFst(int32 grammar_fst_index) {
 
 // Adapted from src/fstext/fstext-utils-inl.h
 template <class Arc, class I>
+using ActiveLookaheadFst = ActiveArcMapFst<Arc, Arc, RemoveSomeInputSymbolsMapper<Arc, I> >;
+template <class Arc, class I>
+ActiveLookaheadFst<Arc, I>* ActiveLookaheadComposeFst(const Fst<Arc>& ifst1, const Fst<Arc>& ifst2, const std::vector<I>& to_remove, size_t cache_size) {
+    fst::CacheOptions cache_opts_0(false, 0);  // FirstCacheStore
+    fst::CacheOptions cache_opts(true, cache_size);
+    // fst::ArcMapFstOptions arcmap_opts(cache_opts);  // TODO: should we set this, or leave the default of no caching?
+    // fst::ArcMapFstOptions arcmap_opts(fst::CacheOptions(true, 1<<19));  // TODO: should we set this, or leave the default of no caching?
+    fst::ArcMapFstOptions arcmap_opts(fst::CacheOptions(false, 0));  // TODO: should we set this, or leave the default of no caching?
+    RemoveSomeInputSymbolsMapper<Arc, I> mapper(to_remove);
+    auto compose_fst = ActiveComposeFst<Arc>(ifst1, ifst2, cache_opts_0);
+    compose_fst.SetNonterminals(1000000, 10000000);
+    auto decode_fst = new ActiveLookaheadFst<Arc, I>(compose_fst, mapper, arcmap_opts);  // Copies compose_fst.
+    decode_fst->SetNonterminals(1000000, 10000000);
+    return decode_fst;
+}
+
+// Adapted from src/fstext/fstext-utils-inl.h
+template <class Arc, class I>
 LookaheadFst<Arc, I>* LookaheadComposeFst(const Fst<Arc>& ifst1, const Fst<Arc>& ifst2, const std::vector<I>& to_remove, size_t cache_size) {
     fst::CacheOptions cache_opts_0(false, 0);  // FirstCacheStore
     fst::CacheOptions cache_opts(true, cache_size);
@@ -194,6 +214,7 @@ LookaheadFst<Arc, I>* LookaheadComposeFst(const Fst<Arc>& ifst1, const Fst<Arc>&
     fst::ArcMapFstOptions arcmap_opts(fst::CacheOptions(false, 0));  // TODO: should we set this, or leave the default of no caching?
     RemoveSomeInputSymbolsMapper<Arc, I> mapper(to_remove);
     auto compose_fst = ComposeFst<Arc>(ifst1, ifst2, cache_opts_0);
+    // using LookaheadFst = ArcMapFst<Arc, Arc, RemoveSomeInputSymbolsMapper<Arc, I> >;
     return new LookaheadFst<Arc, I>(compose_fst, mapper, arcmap_opts);
 }
 
@@ -240,7 +261,7 @@ void LafNNet3OnlineModelWrapper::BuildDecodeFst() {
     // replace_options.take_ownership = true;  // true means FSTs are destructed upon ActiveReplaceFst destruction; default false means they are instead copied initially.
     replace_fst_.reset(new ActiveReplaceFst<StdArc>(label_fst_pairs, replace_options));
     timer.step("setup replace_fst");
-    decode_fst_ = LookaheadComposeFst(*hcl_fst_, *replace_fst_, disambig_tids_, 1ULL<<25);
+    decode_fst_ = ActiveLookaheadComposeFst(*hcl_fst_, *replace_fst_, disambig_tids_, 1ULL<<25);
     timer.step("setup decode_fst");
 }
 
@@ -302,7 +323,6 @@ void LafNNet3OnlineModelWrapper::StartDecoding() {
     BaseNNet3OnlineModelWrapper::StartDecoding();
 
     if (!decode_fst_) {
-        InvalidateDecodeFst();
         // BuildDecodeFst();
         grammars_activity_changed_ = true;
     }
@@ -318,7 +338,6 @@ void LafNNet3OnlineModelWrapper::StartDecoding() {
                 grammars_activity_by_label.insert(dictation_words_offset);  // dictation_fst_ is only enabled if present
             replace_fst_->UpdateActivity(grammars_activity_by_label);
         } else {
-            InvalidateDecodeFst();
             BuildDecodeFstNaive();
         }
         grammars_activity_changed_ = false;
