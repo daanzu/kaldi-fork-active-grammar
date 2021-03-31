@@ -152,6 +152,11 @@ bool ActiveBaseNNet3OnlineModelWrapper::MimicInternal(const std::string& input, 
     // auto composed_fst = StdComposeFst(input_fst, StdRelabelFst(replace_fst, relabel_ilabels, relabel_olabels));
     // { StdVectorFst expanded_fst(composed_fst); expanded_fst.Write("tmp_composed.fst"); }
     StdVectorFst output_fst;
+    if (GetVerboseLevel() >= 7) {
+        ShortestPath(composed_fst, &output_fst, 8);
+        RmEpsilon(&output_fst);
+        { StdVectorFst expanded_fst(output_fst); expanded_fst.Write("tmp_output.fst"); }
+    }
     ShortestPath(composed_fst, &output_fst, 1);
     RmEpsilon(&output_fst);
     timer.step("build output_fst");

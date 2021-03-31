@@ -156,7 +156,6 @@ int32 LafNNet3OnlineModelWrapper::AddGrammarFst(int32 grammar_fst_index, fst::St
     auto ok = grammar_fsts_.insert({grammar_fst_index, grammar_fst}).second;
     if (!ok) KALDI_ERR << "cannot add grammar to duplicate grammar_fst_index " << grammar_fst_index;
     grammar_fsts_name_map_[grammar_fst] = grammar_name;
-    mimic_fsts_.erase(grammar_fst_index);
     return grammar_fst_index;
 }
 
@@ -170,7 +169,6 @@ bool LafNNet3OnlineModelWrapper::ReloadGrammarFst(int32 grammar_fst_index, fst::
     grammar_fsts_.at(grammar_fst_index) = grammar_fst;
     grammar_fsts_name_map_[grammar_fst] = grammar_name;
 
-    mimic_fsts_.erase(grammar_fst_index);
     return true;
 }
 
