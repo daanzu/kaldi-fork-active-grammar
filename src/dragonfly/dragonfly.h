@@ -66,7 +66,7 @@ DRAGONFLY_API void* nnet3_agf__construct(char* model_dir_cp, char* config_str_cp
 DRAGONFLY_API bool nnet3_agf__destruct(void* model_vp);
 DRAGONFLY_API int32_t nnet3_agf__add_grammar_fst(void* model_vp, int32_t grammar_fst_index, void* grammar_fst_cp);
 DRAGONFLY_API int32_t nnet3_agf__add_grammar_fst_file(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp);
-DRAGONFLY_API bool nnet3_agf__reload_grammar_fst_(void* model_vp, int32_t grammar_fst_index, void* grammar_fst_cp);
+DRAGONFLY_API bool nnet3_agf__reload_grammar_fst(void* model_vp, int32_t grammar_fst_index, void* grammar_fst_cp);
 DRAGONFLY_API bool nnet3_agf__reload_grammar_fst_file(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp);
 DRAGONFLY_API bool nnet3_agf__remove_grammar_fst(void* model_vp, int32_t grammar_fst_index);
 DRAGONFLY_API bool nnet3_agf__decode(void* model_vp, float samp_freq, uint32_t num_frames, float* frames, bool finalize,
@@ -95,9 +95,11 @@ DRAGONFLY_API bool fst__destruct(void* fst_vp);
 DRAGONFLY_API int32_t fst__add_state(void* fst_vp, float weight, bool initial);
 DRAGONFLY_API bool fst__add_arc(void* fst_vp, int32_t src_state_id, int32_t dst_state_id, int32_t ilabel, int32_t olabel, float weight);
 DRAGONFLY_API bool fst__compute_md5(void* fst_vp, char* md5_cp, const char* dependencies_seed_md5_cp);
+DRAGONFLY_API bool fst__has_path(void* fst_vp);
 DRAGONFLY_API bool fst__has_eps_path(void* fst_vp, int32_t path_src_state, int32_t path_dst_state);
 DRAGONFLY_API bool fst__does_match(void* fst_vp, int32_t target_labels_len, int32_t target_labels_cp[], int32_t output_labels_cp[], int32_t* output_labels_len);
 DRAGONFLY_API void* fst__load_file(char* filename_cp);
 DRAGONFLY_API bool fst__write_file(void* fst_vp, char* filename_cp);
 DRAGONFLY_API bool fst__write_file_const(void* fst_vp, char* filename_cp);
+DRAGONFLY_API bool fst__print(void* fst_vp, char* filename_cp);
 DRAGONFLY_API void* fst__compile_text(char* fst_text_cp, char* isymbols_file_cp, char* osymbols_file_cp);

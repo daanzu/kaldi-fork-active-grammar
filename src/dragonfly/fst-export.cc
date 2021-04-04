@@ -110,6 +110,16 @@ bool fst__compute_md5(void* fst_vp, char* md5_cp, const char* dependencies_seed_
     return true;
 }
 
+bool fst__has_path(void* fst_vp) {
+    auto fst = static_cast<StdVectorFst*>(fst_vp);
+    StdVectorFst output_fst;
+    ShortestPath(*fst, &output_fst, 1);
+    RmEpsilon(&output_fst);  // Remove any trash that don't form a path?
+    if (output_fst.Start() == kNoStateId)
+        return false;
+    return true;
+}
+
 bool fst__has_eps_path(void* fst_vp, int32_t path_src_state, int32_t path_dst_state) {
     auto fst = static_cast<StdVectorFst*>(fst_vp);
     std::deque<StateId> state_queue = { path_src_state };
@@ -206,6 +216,15 @@ bool fst__write_file_const(void* fst_vp, char* filename_cp) {
     const_fst.Write(std::string(filename_cp));
     return true;
 }
+
+bool fst__print(void* fst_vp, char* filename_cp) {
+    auto fst = static_cast<StdVectorFst*>(fst_vp);
+    if (filename_cp) KALDI_WARN << "printing to file not supported";
+    fst::FstPrinter<StdArc> fstprinter(*fst, nullptr, nullptr, nullptr, false, false, " ");
+    fstprinter.Print(&cout, "fst__print");
+    return true;
+}
+
 
 void* fst__compile_text(char* fst_text_cp, char* isymbols_file_cp, char* osymbols_file_cp) {
     ExecutionTimer timer("fst__compile_text:compiling");

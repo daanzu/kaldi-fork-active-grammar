@@ -57,10 +57,10 @@ using namespace fst;
 struct BaseNNet3OnlineModelConfig {
     using Ptr = std::shared_ptr<BaseNNet3OnlineModelConfig>;
 
-    BaseFloat beam = 14.0;  // normally 7.0
-    int32 max_active = 14000;  // normally 7000
-    int32 min_active = 200;
-    BaseFloat lattice_beam = 8.0;
+    BaseFloat beam = 14.0;  // Kaldi recipe is 7.0; see LatticeFasterDecoderConfig.
+    int32 max_active = 14000;  // Kaldi recipe is 7000; see LatticeFasterDecoderConfig.
+    int32 min_active = 200;  // Kaldi recipe is ???; see LatticeFasterDecoderConfig.
+    BaseFloat lattice_beam = 6.0;  // Kaldi recipe is 4.0?; see LatticeFasterDecoderConfig.
     BaseFloat acoustic_scale = 1.0;
     BaseFloat lm_weight = 7.0;  // 10.0 would be "neutral", with no scaling
     BaseFloat silence_weight = 1.0;  // default (1.0) means silence weighting disabled
