@@ -92,4 +92,5 @@ DRAGONFLY_API bool fst__compute_md5(void* fst_vp, char* md5_cp, char* dependenci
 DRAGONFLY_API bool fst__has_eps_path(void* fst_vp, int32_t path_src_state, int32_t path_dst_state);
 DRAGONFLY_API bool fst__does_match(void* fst_vp, int32_t target_labels_len, int32_t target_labels_cp[], int32_t output_labels_cp[], int32_t* output_labels_len);
 DRAGONFLY_API void* fst__load_file(char* filename_cp);
+DRAGONFLY_API bool fst__print(void* fst_vp, char* filename_cp);
 DRAGONFLY_API void* fst__compile_text(char* fst_text_cp, char* isymbols_file_cp, char* osymbols_file_cp);

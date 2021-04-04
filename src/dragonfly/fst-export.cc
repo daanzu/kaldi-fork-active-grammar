@@ -174,6 +174,14 @@ void* fst__load_file(char* filename_cp) {
     return fst;
 }
 
+bool fst__print(void* fst_vp, char* filename_cp) {
+    auto fst = static_cast<StdVectorFst*>(fst_vp);
+    if (filename_cp) KALDI_WARN << "printing to file not supported";
+    fst::FstPrinter<StdArc> fstprinter(*fst, nullptr, nullptr, nullptr, false, false, " ");
+    fstprinter.Print(&cout, "fst__print");
+    return true;
+}
+
 void* fst__compile_text(char* fst_text_cp, char* isymbols_file_cp, char* osymbols_file_cp) {
     ExecutionTimer timer("fst__compile_text:compiling");
     std::istringstream fst_text(fst_text_cp);
