@@ -279,7 +279,7 @@ StdVectorFst* AgfCompiler::CompileGrammar(const StdFst* grammar_fst_in, const Ag
     clg_fst.DeleteStates();
     delete h_fst;
 
-    KALDI_ASSERT(hclg_fst.Start() != fst::kNoStateId);
+    if (hclg_fst.Start() == fst::kNoStateId) KALDI_ERR << "Compiling empty HCLG graph!";
 
     KALDI_VLOG(1) << "Preparing HCLG fst...";
     // Epsilon-removal and determinization combined. This will fail if not determinizable.
