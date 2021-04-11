@@ -51,6 +51,16 @@ inline ConstFst<StdArc>* CastOrConvertToConstFst(Fst<StdArc>* fst, bool has_owne
     }
 }
 
+
+#define DebugWriteFst( fst ) DebugWriteFstFunc( fst, "tmp_" #fst ".fst" )
+#define DebugWriteFstRaw( fst ) DebugWriteFstFunc( fst, "tmp_" #fst ".fst", false )
+
+inline void DebugWriteFstFunc(const StdFst* fst, const std::string& filename, bool rmeps = true) {
+    StdVectorFst expanded_fst(*fst);
+    if (rmeps) RmEpsilon(&expanded_fst);
+    expanded_fst.Write(filename);
+}
+
 inline void WriteLattice(const CompactLattice clat_in, std::string name = "lattice") {
     auto clat = clat_in;
     RemoveAlignmentsFromCompactLattice(&clat);

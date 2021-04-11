@@ -260,9 +260,6 @@ void LafNNet3OnlineModelWrapper::BuildDecodeFst() {
     timer.step("setup replace_fst");
 
     BuildActiveLookaheadComposeFst(*hcl_fst_, *active_replace_fst_, disambig_tids_, 1ULL<<25);
-    // auto active_compose_fst = dynamic_cast<ActiveComposeFst<StdArc>*>(active_decode_fst_->GetFst());
-    // auto got_fst = active_decode_fst_->GetFst();
-    // auto active_compose_fst = dynamic_cast<ActiveComposeFst<StdArc>*>(active_decode_fst_->GetFst());
     auto active_compose_fst = static_cast<ActiveComposeFst<StdArc>*>(active_decode_fst_->GetFstUnsafe());
     active_compose_fst->SetNonterminals(rules_words_offset, rules_words_offset + config_->max_num_rules);
     active_decode_fst_->SetNonterminals(rules_words_offset, rules_words_offset + config_->max_num_rules);
@@ -342,13 +339,11 @@ void LafNNet3OnlineModelWrapper::StartDecoding() {
             if (dictation_fst_)
                 grammars_activity_by_label.insert(dictation_words_offset);  // dictation_fst_ is only enabled if present
 
-            active_replace_fst_->UpdateActivity(grammars_activity_by_label);
-            // auto active_compose_fst = dynamic_cast<ActiveComposeFst<StdArc>*>(active_decode_fst_->GetFst());
-            // auto got_fst = active_decode_fst_->GetFst();
-            // auto active_compose_fst = dynamic_cast<ActiveComposeFst<StdArc>*>(active_decode_fst_->GetFst());
-            auto active_compose_fst = static_cast<ActiveComposeFst<StdArc>*>(active_decode_fst_->GetFst());
-            active_compose_fst->UpdateActivity(grammars_activity_by_label);
-            active_decode_fst_->UpdateActivity(grammars_activity_by_label);
+            auto active_compose_fst = static_cast<ActiveComposeFst<StdArc>*>(active_decode_fst_->GetFstUnsafe());
+            auto active_replace_fst = static_cast<ActiveReplaceFst<StdArc>*>(&active_compose_fst->GetFst2Unsafe());
+            active_replace_fst->UpdateActivity(grammars_activity_by_label);
+            active_compose_fst->UpdateActivity();
+            active_decode_fst_->UpdateActivity();
         } else {
             BuildDecodeFstNaive();
         }

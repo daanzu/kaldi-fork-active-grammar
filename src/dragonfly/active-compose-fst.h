@@ -17,6 +17,9 @@ class ActiveComposeFst : public ComposeFst<A, CacheStore> {
   using Base = ComposeFst<A, CacheStore>;
   using Base::Base;
 
+  Fst<A>& GetFst1Unsafe() { return const_cast<Fst<A>&>(static_cast<ImplSpecialized*>(GetMutableImpl())->GetFst1()); }
+  Fst<A>& GetFst2Unsafe() { return const_cast<Fst<A>&>(static_cast<ImplSpecialized*>(GetMutableImpl())->GetFst2()); }
+
   void SetNonterminals(Label min, Label max) { GetMutableImpl()->GetCacheStore()->SetNonterminals(min, max); }
 
   void UpdateActivity() {
@@ -27,6 +30,11 @@ class ActiveComposeFst : public ComposeFst<A, CacheStore> {
  protected:
   using Impl = internal::ComposeFstImplBase<A, CacheStore>;
   using ImplToFst<Impl>::GetMutableImpl;
+
+  // Assumption! See ComposeFst::CreateBase().
+  // using M = typename DefaultLookAhead<Arc, MATCH_OUTPUT>::FstMatcher;
+  using Filter = typename DefaultLookAhead<Arc, MATCH_OUTPUT>::ComposeFilter;
+  using ImplSpecialized = internal::ComposeFstImpl<CacheStore, Filter, GenericComposeStateTable<Arc, typename Filter::FilterState>>;
 };
 
 }
