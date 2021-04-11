@@ -404,15 +404,23 @@ class ActiveReplaceFstImpl
       SetArcs(s);
       return;
     }
+
     ArcIterator<Fst<Arc>> aiter(*fst_array_[tuple.fst_id], tuple.fst_state);
     Arc arc;
     // Creates a final arc when needed.
     if (ComputeFinalArc(tuple, &arc)) PushArc(s, std::move(arc));
+    bool any_nonterminal = false;
     // Expands all arcs leaving the state.
     for (; !aiter.Done(); aiter.Next()) {
-      if (ComputeArc(tuple, aiter.Value(), &arc)) PushArc(s, std::move(arc));
+      bool is_nonterminal;
+      if (ComputeArc(tuple, aiter.Value(), &arc, &is_nonterminal)) PushArc(s, std::move(arc));
+      any_nonterminal = any_nonterminal || is_nonterminal;
     }
     SetArcs(s);
+
+    auto cache_store = CacheImpl::GetCacheStore();
+    auto *state = cache_store->GetMutableState(s);
+    cache_store->SetStateActiveVolatility(state, any_nonterminal);
   }
 
   // Dead code
@@ -467,7 +475,11 @@ class ActiveReplaceFstImpl
   // Returns false if the underlying arc corresponds to no arc in the resulting
   // FST.
   bool ComputeArc(const StateTuple &tuple, const Arc &arc, Arc *arcp,
+                  bool *is_nonterminal = nullptr,
                   uint32 flags = kArcValueFlags) {
+    if (is_nonterminal) {
+      *is_nonterminal = false;
+    }
     if (!EpsilonOnInput(call_label_type_) &&
         (flags == (flags & (kArcILabelValue | kArcWeightValue)))) {
       *arcp = arc;
@@ -486,6 +498,9 @@ class ActiveReplaceFstImpl
       const auto it = nonterminal_hash_.find(arc.olabel);
       if (it != nonterminal_hash_.end()) {  // Recurses into non-terminal.
         // FIXME: this side of the above branch path should be guaranteed for ActiveReplaceFst!
+        if (is_nonterminal) {
+          *is_nonterminal = true;
+        }
         const auto nt_fst_id = it->second;
         // Drop arcs to inactive FSTs.
         if (!fst_activity_[nt_fst_id]) {
@@ -585,8 +600,8 @@ class ActiveReplaceFstImpl
   // Replace components.
   std::set<Label> nonterminal_set_;
   NonTerminalHash nonterminal_hash_;  // Maps non-terminal Label to fst_id (index into fst_array_).
-  std::vector<std::unique_ptr<const Fst<Arc>>> fst_array_;
-  Label root_;
+  std::vector<std::unique_ptr<const Fst<Arc>>> fst_array_;  // Index-0 is always nullptr.
+  Label root_;  // Index into fst_array_ of root.
 
   // Active components.
   std::vector<bool> fst_activity_;  // Parallel to fst_array_.
@@ -697,11 +712,13 @@ class ActiveReplaceFst
     return *GetImpl()->GetFst(GetImpl()->GetFstId(nonterminal));
   }
 
+  // Active specialization!!!
   void UpdateActivity(const std::set<int32>& activity_set) {
     auto* impl = GetMutableImpl();
     impl->GetCacheStore()->GCNonterminalStates();
     auto& activity = impl->fst_activity_;
     activity.assign(activity.size(), false);
+    // activity[impl->root_] = true;  // Root is always active. Does this matter? I don't think so.
     for (auto nonterm_index : activity_set)
       activity[impl->GetFstId(nonterm_index)] = true;
   }
@@ -862,7 +879,7 @@ class ArcIterator<ActiveReplaceFst<Arc, StateTable, CacheStore>> {
         return arc;
       } else {
         // Otherwise, compute the corresponding arc on-the-fly.
-        fst_.GetMutableImpl()->ComputeArc(tuple_, arc, &arc_,
+        fst_.GetMutableImpl()->ComputeArc(tuple_, arc, &arc_, nullptr,
                                           flags_ & kArcValueFlags);
         return arc_;
       }

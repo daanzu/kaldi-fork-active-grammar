@@ -5,8 +5,8 @@
 
 namespace fst {
 
-constexpr uint32 kCacheActiveChecked = 0x0010;  // Has been checked for departure.
-constexpr uint32 kCacheActiveDeparture = 0x0020;  // Is a departure state.
+constexpr uint32 kCacheActiveChecked = 0x0010;  // Has been checked for volatility.
+constexpr uint32 kCacheActiveVolatile = 0x0020;  // Is a active-volatile state.
 
 // This class implements
 template <class CacheStore>
@@ -29,20 +29,11 @@ class ActiveCacheStore {
   const State *GetState(StateId s) const { return store_.GetState(s); }
 
   // Creates state if state is not stored
-  State *GetMutableState(StateId s) {
-    auto state = store_.GetMutableState(s);
-    if (!(state->Flags() & kCacheActiveChecked)) {
-      state->SetFlags(kCacheActiveChecked, kCacheActiveChecked);
-      auto narcs = state->NumArcs();
-      auto arcs = state->Arcs();
-      for (auto arc = arcs; arc < (arcs + narcs); ++arc) {
-        if (nonterminal_min_ <= arc->olabel && arc->olabel <= nonterminal_max_) {
-          state->SetFlags(kCacheActiveDeparture, kCacheActiveDeparture);
-          break;
-        }
-      }
-    }
-    return state;
+  State *GetMutableState(StateId s) { return store_.GetMutableState(s); }
+
+  void SetStateActiveVolatility(State *state, bool activeVolatile) {
+    state->SetFlags(kCacheActiveChecked, kCacheActiveChecked);
+    state->SetFlags((activeVolatile ? kCacheActiveVolatile : 0), kCacheActiveVolatile);
   }
 
   // Similar to State::AddArc() but updates cache store book-keeping.
@@ -86,7 +77,7 @@ class ActiveCacheStore {
     uint32 num_deleted = 0;
     while (!store_.Done()) {
       auto *state = store_.GetMutableState(store_.Value());
-      if (state->Flags() & kCacheActiveDeparture) {
+      if (state->Flags() & kCacheActiveVolatile) {
         if (state->RefCount() == 0) {
           // FIXME: we could be smarter about this and only delete states where the activity changed.
           store_.Delete();
