@@ -37,6 +37,8 @@
 #include "utils.h"
 #include "kaldi-utils.h"
 #include "nlohmann_json.hpp"
+#include "active-arcmap-fst.h"
+#include "active-compose-fst.h"
 
 namespace dragonfly {
 
@@ -81,6 +83,9 @@ struct LafNNet3OnlineModelConfig : public ActiveBaseNNet3OnlineModelConfig {
     }
 };
 
+template <class Arc, class Label>
+using ActiveLookaheadFst = ActiveArcMapFst<Arc, Arc, RemoveSomeInputSymbolsMapper<Arc, Label> >;
+
 class LafNNet3OnlineModelWrapper : public ActiveBaseNNet3OnlineModelWrapper {
     public:
 
@@ -112,12 +117,17 @@ class LafNNet3OnlineModelWrapper : public ActiveBaseNNet3OnlineModelWrapper {
         // INVARIANT: same size: grammar_fsts_, grammar_fsts_name_map_
 
         // Model objects
-        std::unique_ptr<ActiveReplaceFst<StdArc>> replace_fst_;
+        std::unique_ptr<ActiveReplaceFst<StdArc>> active_replace_fst_;
+        std::unique_ptr<ActiveComposeFst<StdArc>> active_compose_fst_;
+        std::unique_ptr<ActiveLookaheadFst<StdArc, StdArc::Label>> active_decode_fst_;
         StdFst* decode_fst_ = nullptr;
 
         // Decoder objects
         SingleUtteranceNnet3DecoderTpl<fst::StdFst>* decoder_ = nullptr;  // reinstantiated per utterance
         CombineRuleNontermMapper<CompactLatticeArc>* rule_relabel_mapper_ = nullptr;
+
+        template <class Arc, class Label>
+        void BuildActiveLookaheadComposeFst(const Fst<Arc>& ifst1, const Fst<Arc>& ifst2, const std::vector<Label>& to_remove, size_t cache_size);
 
         void BuildDecodeFst();
         void BuildDecodeFstNaive();

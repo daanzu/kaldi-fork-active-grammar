@@ -19,7 +19,7 @@ class ActiveComposeFst : public ComposeFst<A, CacheStore> {
 
   void SetNonterminals(Label min, Label max) { GetMutableImpl()->GetCacheStore()->SetNonterminals(min, max); }
 
-  void UpdateActivity(const std::set<int32>& activity_set) {
+  void UpdateActivity() {
     auto* impl = GetMutableImpl();
     impl->GetCacheStore()->GCNonterminalStates();
   }

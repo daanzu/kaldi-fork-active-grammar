@@ -34,8 +34,6 @@
 #include "utils.h"
 #include "kaldi-utils.h"
 #include "nlohmann_json.hpp"
-#include "active-arcmap-fst.h"
-#include "active-compose-fst.h"
 
 namespace dragonfly {
 
@@ -185,35 +183,36 @@ bool LafNNet3OnlineModelWrapper::RemoveGrammarFst(int32 grammar_fst_index) {
 }
 
 // Adapted from src/fstext/fstext-utils-inl.h
-template <class Arc, class I>
-using ActiveLookaheadFst = ActiveArcMapFst<Arc, Arc, RemoveSomeInputSymbolsMapper<Arc, I> >;
-template <class Arc, class I>
-ActiveLookaheadFst<Arc, I>* ActiveLookaheadComposeFst(const Fst<Arc>& ifst1, const Fst<Arc>& ifst2, const std::vector<I>& to_remove, size_t cache_size) {
+template <class Arc, class Label>
+void LafNNet3OnlineModelWrapper::BuildActiveLookaheadComposeFst(const Fst<Arc>& ifst1, const Fst<Arc>& ifst2, const std::vector<Label>& to_remove, size_t cache_size) {
     fst::CacheOptions cache_opts_0(false, 0);  // FirstCacheStore
     fst::CacheOptions cache_opts(true, cache_size);
     // fst::ArcMapFstOptions arcmap_opts(cache_opts);  // TODO: should we set this, or leave the default of no caching?
     // fst::ArcMapFstOptions arcmap_opts(fst::CacheOptions(true, 1<<19));  // TODO: should we set this, or leave the default of no caching?
     fst::ArcMapFstOptions arcmap_opts(fst::CacheOptions(false, 0));  // TODO: should we set this, or leave the default of no caching?
-    RemoveSomeInputSymbolsMapper<Arc, I> mapper(to_remove);
+    RemoveSomeInputSymbolsMapper<Arc, Label> mapper(to_remove);
     auto compose_fst = ActiveComposeFst<Arc>(ifst1, ifst2, cache_opts_0);
-    compose_fst.SetNonterminals(1000000, 10000000);
-    auto decode_fst = new ActiveLookaheadFst<Arc, I>(compose_fst, mapper, arcmap_opts);  // Copies compose_fst.
-    decode_fst->SetNonterminals(1000000, 10000000);
-    return decode_fst;
+    // compose_fst.SetNonterminals(1000000, 10000000);
+    // auto fst = compose_fst->Copy();
+    // active_compose_fst_.reset(&compose_fst);
+    auto decode_fst = new ActiveLookaheadFst<Arc, Label>(compose_fst, mapper, arcmap_opts);  // Copies compose_fst.
+    // decode_fst->SetNonterminals(1000000, 10000000);
+    // active_compose_fst_.reset(compose_fst);
+    active_decode_fst_.reset(decode_fst);
 }
 
 // Adapted from src/fstext/fstext-utils-inl.h
-template <class Arc, class I>
-LookaheadFst<Arc, I>* LookaheadComposeFst(const Fst<Arc>& ifst1, const Fst<Arc>& ifst2, const std::vector<I>& to_remove, size_t cache_size) {
+template <class Arc, class Label>
+LookaheadFst<Arc, Label>* LookaheadComposeFst(const Fst<Arc>& ifst1, const Fst<Arc>& ifst2, const std::vector<Label>& to_remove, size_t cache_size) {
     fst::CacheOptions cache_opts_0(false, 0);  // FirstCacheStore
     fst::CacheOptions cache_opts(true, cache_size);
     // fst::ArcMapFstOptions arcmap_opts(cache_opts);  // TODO: should we set this, or leave the default of no caching?
     // fst::ArcMapFstOptions arcmap_opts(fst::CacheOptions(true, 1<<19));  // TODO: should we set this, or leave the default of no caching?
     fst::ArcMapFstOptions arcmap_opts(fst::CacheOptions(false, 0));  // TODO: should we set this, or leave the default of no caching?
-    RemoveSomeInputSymbolsMapper<Arc, I> mapper(to_remove);
+    RemoveSomeInputSymbolsMapper<Arc, Label> mapper(to_remove);
     auto compose_fst = ComposeFst<Arc>(ifst1, ifst2, cache_opts_0);
-    // using LookaheadFst = ArcMapFst<Arc, Arc, RemoveSomeInputSymbolsMapper<Arc, I> >;
-    return new LookaheadFst<Arc, I>(compose_fst, mapper, arcmap_opts);
+    // using LookaheadFst = ArcMapFst<Arc, Arc, RemoveSomeInputSymbolsMapper<Arc, Label> >;
+    return new LookaheadFst<Arc, Label>(compose_fst, mapper, arcmap_opts);
 }
 
 void LafNNet3OnlineModelWrapper::BuildDecodeFst() {
@@ -255,17 +254,25 @@ void LafNNet3OnlineModelWrapper::BuildDecodeFst() {
     timer.step("setup root");
 
     // Set up replace_fst.
-    ActiveReplaceFstOptions<StdArc> replace_options(root_fst_nonterm, REPLACE_LABEL_OUTPUT, REPLACE_LABEL_OUTPUT, word_syms_->Find("#nonterm:end"));
-    // replace_options.take_ownership = true;  // true means FSTs are destructed upon ActiveReplaceFst destruction; default false means they are instead copied initially.
-    replace_fst_.reset(new ActiveReplaceFst<StdArc>(label_fst_pairs, replace_options));
+    ActiveReplaceFstOptions<StdArc> active_replace_options(root_fst_nonterm, REPLACE_LABEL_OUTPUT, REPLACE_LABEL_OUTPUT, word_syms_->Find("#nonterm:end"));
+    // active_replace_options.take_ownership = true;  // true means FSTs are destructed upon ActiveReplaceFst destruction; default false means they are instead copied initially.
+    active_replace_fst_.reset(new ActiveReplaceFst<StdArc>(label_fst_pairs, active_replace_options));
     timer.step("setup replace_fst");
-    decode_fst_ = ActiveLookaheadComposeFst(*hcl_fst_, *replace_fst_, disambig_tids_, 1ULL<<25);
+
+    BuildActiveLookaheadComposeFst(*hcl_fst_, *active_replace_fst_, disambig_tids_, 1ULL<<25);
+    // auto active_compose_fst = dynamic_cast<ActiveComposeFst<StdArc>*>(active_decode_fst_->GetFst());
+    // auto got_fst = active_decode_fst_->GetFst();
+    // auto active_compose_fst = dynamic_cast<ActiveComposeFst<StdArc>*>(active_decode_fst_->GetFst());
+    auto active_compose_fst = static_cast<ActiveComposeFst<StdArc>*>(active_decode_fst_->GetFstUnsafe());
+    active_compose_fst->SetNonterminals(rules_words_offset, rules_words_offset + config_->max_num_rules);
+    active_decode_fst_->SetNonterminals(rules_words_offset, rules_words_offset + config_->max_num_rules);
+    decode_fst_ = active_decode_fst_.get();
     timer.step("setup decode_fst");
 }
 
 void LafNNet3OnlineModelWrapper::BuildDecodeFstNaive() {
     InvalidateDecodeFst();
-    ExecutionTimer timer("BuildDecodeFst", -1);
+    ExecutionTimer timer("BuildDecodeFstNaive", -1);
     auto cache_size = config_->decode_fst_cache_size;
 
     std::vector<std::pair<int32, const StdFst*> > label_fst_pairs;
@@ -310,7 +317,7 @@ bool LafNNet3OnlineModelWrapper::InvalidateDecodeFst() {
     if (decode_fst_) {
         delete decode_fst_;
         decode_fst_ = nullptr;
-        replace_fst_.reset();
+        active_replace_fst_.reset();
         return true;
     }
     return false;
@@ -321,12 +328,12 @@ void LafNNet3OnlineModelWrapper::StartDecoding() {
     BaseNNet3OnlineModelWrapper::StartDecoding();
 
     if (!decode_fst_) {
-        // BuildDecodeFst();
+        BuildDecodeFst();
         grammars_activity_changed_ = true;
     }
 
     if (grammars_activity_changed_) {
-        if (replace_fst_) {
+        if (active_replace_fst_) {
             auto rules_words_offset = word_syms_->Find("#nonterm:rule0");
             auto dictation_words_offset = word_syms_->Find("#nonterm:dictation");
             std::set<int32> grammars_activity_by_label;  // Indexed by non-terminal label.
@@ -334,7 +341,14 @@ void LafNNet3OnlineModelWrapper::StartDecoding() {
                 grammars_activity_by_label.insert(rule_number + rules_words_offset);
             if (dictation_fst_)
                 grammars_activity_by_label.insert(dictation_words_offset);  // dictation_fst_ is only enabled if present
-            replace_fst_->UpdateActivity(grammars_activity_by_label);
+
+            active_replace_fst_->UpdateActivity(grammars_activity_by_label);
+            // auto active_compose_fst = dynamic_cast<ActiveComposeFst<StdArc>*>(active_decode_fst_->GetFst());
+            // auto got_fst = active_decode_fst_->GetFst();
+            // auto active_compose_fst = dynamic_cast<ActiveComposeFst<StdArc>*>(active_decode_fst_->GetFst());
+            auto active_compose_fst = static_cast<ActiveComposeFst<StdArc>*>(active_decode_fst_->GetFst());
+            active_compose_fst->UpdateActivity(grammars_activity_by_label);
+            active_decode_fst_->UpdateActivity(grammars_activity_by_label);
         } else {
             BuildDecodeFstNaive();
         }

@@ -190,6 +190,9 @@ class ActiveArcMapFstImpl : public CacheBaseImpl<CacheState<B>, CacheStore> {
     SetArcs(s);
   }
 
+  // Active specialization!!!
+  Fst<A> *GetFstUnsafe() { return const_cast<Fst<A>*>(fst_.get()); }  // Unsafe?
+
  private:
   void Init() {
     SetType("map");
@@ -290,10 +293,13 @@ class ActiveArcMapFst : public ImplToFst<internal::ActiveArcMapFstImpl<A, B, C, 
   using Label = typename Arc::Label;
 
   // Active specialization!!!
+  Fst<A> *GetFstUnsafe() { return GetMutableImpl()->GetFstUnsafe(); }
+
+  // Active specialization!!!
   void SetNonterminals(Label min, Label max) { GetMutableImpl()->GetCacheStore()->SetNonterminals(min, max); }
 
   // Active specialization!!!
-  void UpdateActivity(const std::set<int32>& activity_set) {
+  void UpdateActivity() {
     auto* impl = GetMutableImpl();
     impl->GetCacheStore()->GCNonterminalStates();
   }

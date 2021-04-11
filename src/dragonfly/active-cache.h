@@ -101,7 +101,7 @@ class ActiveCacheStore {
     VLOG(1) << "ActiveCacheStore: Exit GCNonterminalStates: object = " << "(" << this << "), num_deleted = " << num_deleted;
   }
 
-  // Must be called BEFORE creating any states with outgoing nonterminal arcs!
+  // Must be called BEFORE creating any states with outgoing nonterminal arcs! Assumes nonterminal labels are contiguous!
   void SetNonterminals(Label min, Label max) {
     nonterminal_min_ = min; nonterminal_max_ = max;
   }
