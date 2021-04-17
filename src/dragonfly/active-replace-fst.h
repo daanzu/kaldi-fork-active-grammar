@@ -412,7 +412,7 @@ class ActiveReplaceFstImpl
     bool any_nonterminal = false;
     // Expands all arcs leaving the state.
     for (; !aiter.Done(); aiter.Next()) {
-      bool is_nonterminal;
+      bool is_nonterminal = false;
       if (ComputeArc(tuple, aiter.Value(), &arc, &is_nonterminal)) PushArc(s, std::move(arc));
       any_nonterminal = any_nonterminal || is_nonterminal;
     }
@@ -426,6 +426,7 @@ class ActiveReplaceFstImpl
   // Dead code
   void Expand(StateId s, const StateTuple &tuple,
               const ArcIteratorData<Arc> &data) {
+    KALDI_ERR << "Expand got called?!";
     if (tuple.fst_state == kNoStateId) {  // Local FST is empty.
       SetArcs(s);
       return;
@@ -477,9 +478,6 @@ class ActiveReplaceFstImpl
   bool ComputeArc(const StateTuple &tuple, const Arc &arc, Arc *arcp,
                   bool *is_nonterminal = nullptr,
                   uint32 flags = kArcValueFlags) {
-    if (is_nonterminal) {
-      *is_nonterminal = false;
-    }
     if (!EpsilonOnInput(call_label_type_) &&
         (flags == (flags & (kArcILabelValue | kArcWeightValue)))) {
       *arcp = arc;

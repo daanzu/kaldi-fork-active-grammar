@@ -300,8 +300,10 @@ class ActiveArcMapFst : public ImplToFst<internal::ActiveArcMapFstImpl<A, B, C, 
 
   // Active specialization!!!
   void UpdateActivity() {
-    auto* impl = GetMutableImpl();
-    impl->GetCacheStore()->GCNonterminalStates();
+    auto impl = GetMutableImpl();
+    auto store = impl->GetCacheStore();
+    store->Clear();
+    // store->GCNonterminalStates();
   }
 
  protected:

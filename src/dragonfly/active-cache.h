@@ -37,7 +37,7 @@ class ActiveCacheStore {
   }
 
   // Similar to State::AddArc() but updates cache store book-keeping.
-  void AddArc(State *state, const Arc &arc) { store_.AddArc(state, arc); }
+  // void AddArc(State *state, const Arc &arc) { store_.AddArc(state, arc); }
 
   // Similar to State::SetArcs() but updates internal cache size; call only
   // once.
@@ -51,6 +51,8 @@ class ActiveCacheStore {
 
   // Deletes all cached states
   void Clear() {
+    VLOG(1) << "ActiveCacheStore: Clearing: object = " << "(" << this << ")"
+      ", count_states = " << CountStates() << ", cache_size = " << store_.CacheSize() << ", cache_limit = " << store_.CacheLimit();
     store_.Clear();
   }
 
@@ -72,11 +74,28 @@ class ActiveCacheStore {
   }
 
   void GCNonterminalStates() {
-    VLOG(1) << "ActiveCacheStore: Enter GCNonterminalStates: object = " << "(" << this << ")";
-    store_.Reset();
+    VLOG(1) << "ActiveCacheStore: Enter GCNonterminalStates: object = " << "(" << this << ")"
+      ", count_states = " << CountStates() << ", cache_size = " << store_.CacheSize() << ", cache_limit = " << store_.CacheLimit();
     uint32 num_deleted = 0;
+    store_.Reset();
     while (!store_.Done()) {
       auto *state = store_.GetMutableState(store_.Value());
+
+      if (!(state->Flags() & kCacheActiveChecked)) {
+        // KALDI_WARN << "State not checked for nonterminal! " << state;
+        if (!(state->Flags() & kCacheArcs)) {
+          KALDI_WARN << "State does not have cached arcs! " << state;
+        } else {
+          for (auto *arc = state->Arcs(), *end_arcs = arc + state->NumArcs(); arc < end_arcs; ++arc) {
+            if (nonterminal_min_ <= arc->olabel && arc->olabel <= nonterminal_max_) {
+              state->SetFlags(kCacheActiveVolatile, kCacheActiveVolatile);
+              break;
+            }
+            state->SetFlags(kCacheActiveChecked, kCacheActiveChecked);
+          }
+        }
+      }
+
       if (state->Flags() & kCacheActiveVolatile) {
         if (state->RefCount() == 0) {
           // FIXME: we could be smarter about this and only delete states where the activity changed.
@@ -84,6 +103,9 @@ class ActiveCacheStore {
           num_deleted++;
         } else {
           KALDI_WARN << "Nonterminal state not free to GC! " << state;
+          store_.Delete();
+          num_deleted++;
+          // store_.Next();
         }
       } else {
         store_.Next();

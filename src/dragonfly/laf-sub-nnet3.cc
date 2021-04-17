@@ -187,17 +187,12 @@ template <class Arc, class Label>
 void LafNNet3OnlineModelWrapper::BuildActiveLookaheadComposeFst(const Fst<Arc>& ifst1, const Fst<Arc>& ifst2, const std::vector<Label>& to_remove, size_t cache_size) {
     fst::CacheOptions cache_opts_0(false, 0);  // FirstCacheStore
     fst::CacheOptions cache_opts(true, cache_size);
-    // fst::ArcMapFstOptions arcmap_opts(cache_opts);  // TODO: should we set this, or leave the default of no caching?
+    fst::ArcMapFstOptions arcmap_opts(cache_opts);  // TODO: should we set this, or leave the default of no caching?
     // fst::ArcMapFstOptions arcmap_opts(fst::CacheOptions(true, 1<<19));  // TODO: should we set this, or leave the default of no caching?
-    fst::ArcMapFstOptions arcmap_opts(fst::CacheOptions(false, 0));  // TODO: should we set this, or leave the default of no caching?
+    // fst::ArcMapFstOptions arcmap_opts(fst::CacheOptions(false, 0));  // TODO: should we set this, or leave the default of no caching?
     RemoveSomeInputSymbolsMapper<Arc, Label> mapper(to_remove);
-    auto compose_fst = ActiveComposeFst<Arc>(ifst1, ifst2, cache_opts_0);
-    // compose_fst.SetNonterminals(1000000, 10000000);
-    // auto fst = compose_fst->Copy();
-    // active_compose_fst_.reset(&compose_fst);
+    auto compose_fst = ActiveComposeFst<Arc>(ifst1, ifst2, cache_opts);
     auto decode_fst = new ActiveLookaheadFst<Arc, Label>(compose_fst, mapper, arcmap_opts);  // Copies compose_fst.
-    // decode_fst->SetNonterminals(1000000, 10000000);
-    // active_compose_fst_.reset(compose_fst);
     active_decode_fst_.reset(decode_fst);
 }
 
@@ -256,6 +251,7 @@ void LafNNet3OnlineModelWrapper::BuildDecodeFst() {
     // Set up replace_fst.
     ActiveReplaceFstOptions<StdArc> active_replace_options(root_fst_nonterm, REPLACE_LABEL_OUTPUT, REPLACE_LABEL_OUTPUT, word_syms_->Find("#nonterm:end"));
     // active_replace_options.take_ownership = true;  // true means FSTs are destructed upon ActiveReplaceFst destruction; default false means they are instead copied initially.
+    active_replace_options.gc_limit = 1ULL<<25;
     active_replace_fst_.reset(new ActiveReplaceFst<StdArc>(label_fst_pairs, active_replace_options));
     timer.step("setup replace_fst");
 
@@ -326,6 +322,7 @@ void LafNNet3OnlineModelWrapper::StartDecoding() {
 
     if (!decode_fst_) {
         BuildDecodeFst();
+        timer.step("BuildDecodeFst");
         grammars_activity_changed_ = true;
     }
 
@@ -341,9 +338,13 @@ void LafNNet3OnlineModelWrapper::StartDecoding() {
 
             auto active_compose_fst = static_cast<ActiveComposeFst<StdArc>*>(active_decode_fst_->GetFstUnsafe());
             auto active_replace_fst = static_cast<ActiveReplaceFst<StdArc>*>(&active_compose_fst->GetFst2Unsafe());
+            timer.step("grammars_activity_changed: build grammars_activity_by_label");
             active_replace_fst->UpdateActivity(grammars_activity_by_label);
+            timer.step("grammars_activity_changed: active_replace_fst->UpdateActivity");
             active_compose_fst->UpdateActivity();
+            timer.step("grammars_activity_changed: active_compose_fst->UpdateActivity");
             active_decode_fst_->UpdateActivity();
+            timer.step("grammars_activity_changed: active_decode_fst_->UpdateActivity");
         } else {
             BuildDecodeFstNaive();
         }

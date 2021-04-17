@@ -23,8 +23,10 @@ class ActiveComposeFst : public ComposeFst<A, CacheStore> {
   void SetNonterminals(Label min, Label max) { GetMutableImpl()->GetCacheStore()->SetNonterminals(min, max); }
 
   void UpdateActivity() {
-    auto* impl = GetMutableImpl();
-    impl->GetCacheStore()->GCNonterminalStates();
+    auto impl = GetMutableImpl();
+    auto store = impl->GetCacheStore();
+    store->Clear();
+    // store->GCNonterminalStates();
   }
 
  protected:
