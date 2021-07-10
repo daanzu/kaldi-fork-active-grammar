@@ -418,9 +418,7 @@ class ActiveReplaceFstImpl
     }
     SetArcs(s);
 
-    auto cache_store = CacheImpl::GetCacheStore();
-    auto *state = cache_store->GetMutableState(s);
-    cache_store->SetStateActiveVolatility(state, any_nonterminal);
+    if (any_nonterminal) { CacheImpl::GetCacheStore()->SetStateActiveVolatility(s, any_nonterminal); }
   }
 
   // Dead code
@@ -711,14 +709,18 @@ class ActiveReplaceFst
   }
 
   // Active specialization!!!
+  const CacheStore *GetCacheStore() const { return GetImpl()->GetCacheStore(); }
+
+  // Active specialization!!!
   void UpdateActivity(const std::set<int32>& activity_set) {
     auto* impl = GetMutableImpl();
     impl->GetCacheStore()->GCNonterminalStates();
     auto& activity = impl->fst_activity_;
     activity.assign(activity.size(), false);
     // activity[impl->root_] = true;  // Root is always active. Does this matter? I don't think so.
-    for (auto nonterm_index : activity_set)
+    for (const auto nonterm_index : activity_set) {
       activity[impl->GetFstId(nonterm_index)] = true;
+    }
   }
 
  private:

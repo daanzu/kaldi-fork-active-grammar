@@ -191,7 +191,15 @@ void LafNNet3OnlineModelWrapper::BuildActiveLookaheadComposeFst(const Fst<Arc>& 
     // fst::ArcMapFstOptions arcmap_opts(fst::CacheOptions(true, 1<<19));  // TODO: should we set this, or leave the default of no caching?
     // fst::ArcMapFstOptions arcmap_opts(fst::CacheOptions(false, 0));  // TODO: should we set this, or leave the default of no caching?
     RemoveSomeInputSymbolsMapper<Arc, Label> mapper(to_remove);
-    auto compose_fst = ActiveComposeFst<Arc>(ifst1, ifst2, cache_opts);
+    
+    // using M = Matcher<Fst<Arc>>;
+    // using Filter = SequenceComposeFilter<M>;
+    // using FilterState = typename Filter::FilterState;
+    // fst::ComposeFstOptions<Arc, M, Filter,
+    //     GenericComposeStateTable<Arc, FilterState, ActiveComposeStateTuple<typename Arc::StateId, FilterState>>>
+    ActiveComposeFstOptions<Arc> compose_opts(cache_opts);
+    auto compose_fst = ActiveComposeFst<Arc>(ifst1, ifst2, compose_opts);
+
     auto decode_fst = new ActiveLookaheadFst<Arc, Label>(compose_fst, mapper, arcmap_opts);  // Copies compose_fst.
     active_decode_fst_.reset(decode_fst);
 }
@@ -255,7 +263,7 @@ void LafNNet3OnlineModelWrapper::BuildDecodeFst() {
     active_replace_fst_.reset(new ActiveReplaceFst<StdArc>(label_fst_pairs, active_replace_options));
     timer.step("setup replace_fst");
 
-    BuildActiveLookaheadComposeFst(*hcl_fst_, *active_replace_fst_, disambig_tids_, 1ULL<<25);
+    BuildActiveLookaheadComposeFst(*hcl_fst_, *active_replace_fst_, disambig_tids_, 1ULL<<29);
     auto active_compose_fst = static_cast<ActiveComposeFst<StdArc>*>(active_decode_fst_->GetFstUnsafe());
     active_compose_fst->SetNonterminals(rules_words_offset, rules_words_offset + config_->max_num_rules);
     active_decode_fst_->SetNonterminals(rules_words_offset, rules_words_offset + config_->max_num_rules);
@@ -319,15 +327,18 @@ bool LafNNet3OnlineModelWrapper::InvalidateDecodeFst() {
 void LafNNet3OnlineModelWrapper::StartDecoding() {
     ExecutionTimer timer("StartDecoding", 2);
     BaseNNet3OnlineModelWrapper::StartDecoding();
+    FLAGS_v = 1;
 
     if (!decode_fst_) {
-        BuildDecodeFst();
-        timer.step("BuildDecodeFst");
+        // BuildDecodeFst();
+        // timer.step("BuildDecodeFst");
         grammars_activity_changed_ = true;
     }
 
     if (grammars_activity_changed_) {
-        if (active_replace_fst_) {
+        if (active_replace_fst_ || true) {
+            BuildDecodeFst();
+            timer.step("BuildDecodeFst");
             auto rules_words_offset = word_syms_->Find("#nonterm:rule0");
             auto dictation_words_offset = word_syms_->Find("#nonterm:dictation");
             std::set<int32> grammars_activity_by_label;  // Indexed by non-terminal label.
@@ -338,6 +349,9 @@ void LafNNet3OnlineModelWrapper::StartDecoding() {
 
             auto active_compose_fst = static_cast<ActiveComposeFst<StdArc>*>(active_decode_fst_->GetFstUnsafe());
             auto active_replace_fst = static_cast<ActiveReplaceFst<StdArc>*>(&active_compose_fst->GetFst2Unsafe());
+            // DebugWriteFstRaw(active_replace_fst);
+            // DebugWriteFstRaw(active_compose_fst);
+            // DebugWriteFstRaw(active_decode_fst_.get());
             timer.step("grammars_activity_changed: build grammars_activity_by_label");
             active_replace_fst->UpdateActivity(grammars_activity_by_label);
             timer.step("grammars_activity_changed: active_replace_fst->UpdateActivity");
@@ -345,6 +359,9 @@ void LafNNet3OnlineModelWrapper::StartDecoding() {
             timer.step("grammars_activity_changed: active_compose_fst->UpdateActivity");
             active_decode_fst_->UpdateActivity();
             timer.step("grammars_activity_changed: active_decode_fst_->UpdateActivity");
+            // DebugWriteFstRaw(active_replace_fst);
+            // DebugWriteFstRaw(active_compose_fst);
+            // DebugWriteFstRaw(active_decode_fst_.get());
         } else {
             BuildDecodeFstNaive();
         }

@@ -8,6 +8,8 @@ namespace fst {
 constexpr uint32 kCacheActiveChecked = 0x0010;  // Has been checked for volatility.
 constexpr uint32 kCacheActiveVolatile = 0x0020;  // Is a active-volatile state.
 
+constexpr uint32 kActiveCacheSpecialLabel = 2000000;  // Special label indicating a volatile state.
+
 // This class implements
 template <class CacheStore>
 class ActiveCacheStore {
@@ -30,6 +32,8 @@ class ActiveCacheStore {
 
   // Creates state if state is not stored
   State *GetMutableState(StateId s) { return store_.GetMutableState(s); }
+
+  void SetStateActiveVolatility(StateId s, bool activeVolatile) { SetStateActiveVolatility(GetMutableState(s), activeVolatile); }
 
   void SetStateActiveVolatility(State *state, bool activeVolatile) {
     state->SetFlags(kCacheActiveChecked, kCacheActiveChecked);
@@ -73,6 +77,31 @@ class ActiveCacheStore {
     store_.Delete();
   }
 
+  bool IsVolatile(StateId s) const {
+    const auto *state = GetState(s);
+    return state && IsVolatile(state);
+  }
+
+  inline bool IsVolatile(const State *state) const { return (state->Flags() & kCacheActiveVolatile); }
+
+  inline bool IsVolatile1(const State *state) const {
+    for (auto *arc = state->Arcs(), *end_arcs = arc + state->NumArcs(); arc < end_arcs; ++arc) {
+      if (nonterminal_min_ <= arc->olabel && arc->olabel <= nonterminal_max_) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  inline bool IsVolatile2(const State *state) const {
+    for (auto *arc = state->Arcs(), *end_arcs = arc + state->NumArcs(); arc < end_arcs; ++arc) {
+      if (arc->olabel == kActiveCacheSpecialLabel) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   void GCNonterminalStates() {
     VLOG(1) << "ActiveCacheStore: Enter GCNonterminalStates: object = " << "(" << this << ")"
       ", count_states = " << CountStates() << ", cache_size = " << store_.CacheSize() << ", cache_limit = " << store_.CacheLimit();
@@ -81,19 +110,16 @@ class ActiveCacheStore {
     while (!store_.Done()) {
       auto *state = store_.GetMutableState(store_.Value());
 
-      if (!(state->Flags() & kCacheActiveChecked)) {
-        // KALDI_WARN << "State not checked for nonterminal! " << state;
-        if (!(state->Flags() & kCacheArcs)) {
-          KALDI_WARN << "State does not have cached arcs! " << state;
-        } else {
-          for (auto *arc = state->Arcs(), *end_arcs = arc + state->NumArcs(); arc < end_arcs; ++arc) {
-            if (nonterminal_min_ <= arc->olabel && arc->olabel <= nonterminal_max_) {
-              state->SetFlags(kCacheActiveVolatile, kCacheActiveVolatile);
-              break;
-            }
-            state->SetFlags(kCacheActiveChecked, kCacheActiveChecked);
-          }
-        }
+      if (false && !(state->Flags() & kCacheActiveChecked)) {
+        KALDI_WARN << "State not checked for nonterminal! " << state;
+        // if (!(state->Flags() & kCacheArcs)) {
+        //   KALDI_WARN << "State does not have cached arcs! " << state;
+        // } else {
+        //   if (IsVolatile(state)) {
+        //     state->SetFlags(kCacheActiveVolatile, kCacheActiveVolatile);
+        //   }
+        //   state->SetFlags(kCacheActiveChecked, kCacheActiveChecked);
+        // }
       }
 
       if (state->Flags() & kCacheActiveVolatile) {
@@ -123,6 +149,7 @@ class ActiveCacheStore {
   CacheStore store_;       // Underlying store.
   Label nonterminal_min_;  // Defines the range of labels where all are non-terminals.
   Label nonterminal_max_;  // Defines the range of labels where all are non-terminals.
+  // std::unordered_set<StateId> volatile_states_;
 };
 
 template <class Arc>
