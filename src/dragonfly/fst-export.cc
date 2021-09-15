@@ -102,28 +102,39 @@ bool fst__compute_md5(void* fst_vp, char* md5_cp, char* dependencies_seed_md5_cp
 
 bool fst__has_path(void* fst_vp) {
     auto fst = static_cast<StdVectorFst*>(fst_vp);
-    StdVectorFst output_fst;
-    ShortestPath(*fst, &output_fst, 1);
-    RmEpsilon(&output_fst);  // Remove any trash that don't form a path?
-    if (output_fst.Start() == kNoStateId)
-        return false;
-    return true;
+    auto path_src_state = fst->Start();
+    std::deque<StateId> state_queue = { path_src_state };
+    std::unordered_set<StateId> queued_states = { path_src_state };
+    while (!state_queue.empty()) {
+        const auto state = state_queue.front();
+        state_queue.pop_front();
+        if (fst->Final(state) != Weight::Zero())
+            return true;
+        for (ArcIterator<StdFst> aiter(*fst, state); !aiter.Done(); aiter.Next()) {
+            const auto& arc = aiter.Value();
+            if (!queued_states.count(arc.nextstate)) {
+                state_queue.emplace_back(arc.nextstate);
+                queued_states.emplace(arc.nextstate);
+            }
+        }
+    }
+    return false;
 }
 
 bool fst__has_eps_path(void* fst_vp, int32_t path_src_state, int32_t path_dst_state) {
     auto fst = static_cast<StdVectorFst*>(fst_vp);
     std::deque<StateId> state_queue = { path_src_state };
-    std::unordered_set<StateId> queued = { path_src_state };
+    std::unordered_set<StateId> queued_states = { path_src_state };
     while (!state_queue.empty()) {
-        auto state = state_queue.front();
+        const auto state = state_queue.front();
         state_queue.pop_front();
         if (state == path_dst_state)
             return true;
         for (ArcIterator<StdFst> aiter(*fst, state); !aiter.Done(); aiter.Next()) {
-            auto arc = aiter.Value();
-            if (eps_like_ilabels.count(arc.ilabel) && !queued.count(arc.nextstate)) {
+            const auto& arc = aiter.Value();
+            if (eps_like_ilabels.count(arc.ilabel) && !queued_states.count(arc.nextstate)) {
                 state_queue.emplace_back(arc.nextstate);
-                queued.emplace(arc.nextstate);
+                queued_states.emplace(arc.nextstate);
             }
         }
     }
