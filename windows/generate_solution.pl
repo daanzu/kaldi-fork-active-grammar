@@ -22,6 +22,7 @@ use Data::Dumper;
 use Getopt::Long;
 
 my $vsver="vs2017";
+my $cuda_ver = "7.0";
 
 my %ENABLED = (CUDA => 0,
                OPENBLAS => 0,
@@ -30,6 +31,7 @@ my %ENABLED = (CUDA => 0,
 
 GetOptions ("vsver=s" => \$vsver,
             "enable-cuda" => \$ENABLED{CUDA},
+            "cuda-version=s" => \$cuda_ver,
             "enable-openblas" => sub {$ENABLED{OPENBLAS}=1; $ENABLED{MKL}=0;},
             "enable-mkl" => sub {$ENABLED{OPENBLAS}=0; $ENABLED{MKL}=1;},
             "portaudio!" => \$ENABLED{PORTAUDIO},
@@ -97,7 +99,7 @@ my @propsFiles = (
 
 my %optionalProps = (
   PORTAUDIO => "$Bin/portaudio.props",
-	CUDA => "$Bin/cuda_7.0.props"
+	CUDA => "$Bin/cuda_${cuda_ver}.props"
 	);
 
 # see http://www.mztools.com/Articles/2008/MZ2008017.aspx for list of GUIDs for VS solutions
@@ -566,7 +568,7 @@ sub writeProjectFiles {
 ";
   if ($ENABLED{CUDA}) {
   print PROJ
-'    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 7.0.props" />
+'    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA ' . $cuda_ver . '.props" />
 '
   }
   print PROJ
@@ -577,7 +579,7 @@ sub writeProjectFiles {
 ";
   if ($ENABLED{CUDA}) {
   print PROJ
-"    <Import Project=\"..\\cuda_7.0.props\" />
+"    <Import Project=\"..\\cuda_${cuda_ver}.props\" />
 "
   }
   if ($ENABLED{PORTAUDIO}) {
@@ -595,7 +597,7 @@ sub writeProjectFiles {
 ";
   if ($ENABLED{CUDA}) {
   print PROJ
-"    <Import Project=\"..\\cuda_7.0.props\" />
+"    <Import Project=\"..\\cuda_${cuda_ver}.props\" />
 ";
   }
   if ($ENABLED{PORTAUDIO}) {
@@ -613,7 +615,7 @@ sub writeProjectFiles {
 ";
   if ($ENABLED{CUDA}) {
   print PROJ
-"    <Import Project=\"..\\cuda_7.0.props\" />
+"    <Import Project=\"..\\cuda_${cuda_ver}.props\" />
 ";
   }
   if ($ENABLED{PORTAUDIO}) {
@@ -631,7 +633,7 @@ sub writeProjectFiles {
 ";
   if ($ENABLED{CUDA}) {
   print PROJ
-"    <Import Project=\"..\\cuda_7.0.props\" />
+"    <Import Project=\"..\\cuda_${cuda_ver}.props\" />
 ";
   }
   if ($ENABLED{PORTAUDIO}) {
