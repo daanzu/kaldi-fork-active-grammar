@@ -38,19 +38,22 @@ GetOptions ("vsver=s" => \$vsver,
 my %TOOLS=( default=> "14.1",
             vs2015 => "14.0",
             vs2017 => "14.1",
-            vs2019 => "15.0"
+            vs2019 => "15.0",
+            vs2022 => "Current"
             );
 
 my %FORMAT=( default=> "12.00",
              vs2015 => "12.00",
              vs2017 => "12.00",
-             vs2019 => "12.00"
+             vs2019 => "12.00",
+             vs2022 => "12.00"
              );
 
 my %TOOLSET=( default=> "v141",
               vs2015 => "v140",
               vs2017 => "v141",
-              vs2019 => "v142"
+              vs2019 => "v142",
+              vs2022 => "v143"
               );
 
 
@@ -345,7 +348,7 @@ sub writeSolutionFile {
   open(SLN, '>', &{$osPathConversion}($filename));
   print SLN
 "Microsoft Visual Studio Solution File, Format Version $FORMAT{$vsver}
-# Visual Studio 2013
+# Visual Studio $vsver
 ";
   foreach my $projname (sort { $a cmp $b } keys %{$projlist->{ALL}}) {
     if (!exists $projguids->{$projname}) {
