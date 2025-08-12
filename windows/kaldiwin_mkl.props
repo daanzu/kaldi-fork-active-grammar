@@ -14,7 +14,9 @@
     <Link>
       <!-- Both new and old directories -->
       <AdditionalLibraryDirectories>$(MKLDIR)\lib;$(MKLDIR)\lib\intel64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>mkl_intel_thread.lib;mkl_core.lib;mkl_intel_lp64.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>mkl_sequential.lib;mkl_core.lib;mkl_intel_lp64.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <!-- Alternatively, use the below instead for openmp-threaded (not efficient for Kaldi), but then you must also add libiomp5md -->
+      <!-- <AdditionalDependencies>mkl_intel_thread.lib;mkl_core.lib;mkl_intel_lp64.lib;%(AdditionalDependencies)</AdditionalDependencies> -->
     </Link>
   </ItemDefinitionGroup>
 </Project>
