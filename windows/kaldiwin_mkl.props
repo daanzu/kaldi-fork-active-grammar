@@ -14,7 +14,7 @@
     <Link>
       <!-- Both new and old directories -->
       <AdditionalLibraryDirectories>$(MKLDIR)\lib;$(MKLDIR)\lib\intel64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>mkl_rt.lib;mkl_intel_thread.lib;mkl_core.lib;mkl_intel_lp64.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>mkl_intel_thread.lib;mkl_core.lib;mkl_intel_lp64.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
 </Project>
