@@ -81,11 +81,22 @@ else
   openfst_add_CXXFLAGS = -g -O2
 endif
 
+# Add -Wl,-undefined,dynamic_lookup on macOS arm64 to fix building plugin extensions, possibly only on older versions?
+ifeq ($(shell uname -s),Darwin)
+	ifeq ($(shell uname -m),arm64)
+		openfst_add_LDFLAGS = -Wl,-undefined,dynamic_lookup
+	else
+		openfst_add_LDFLAGS =
+	endif
+else
+	openfst_add_LDFLAGS =
+endif
+
 openfst-$(OPENFST_VERSION)/Makefile: openfst-$(OPENFST_VERSION)
 	cd openfst-$(OPENFST_VERSION)/ && \
 	./configure --prefix=`pwd` $(OPENFST_CONFIGURE) CXX="$(CXX)" \
 		CXXFLAGS="$(CXXFLAGS) $(openfst_add_CXXFLAGS)" \
-		LDFLAGS="$(LDFLAGS)" LIBS="-ldl"
+		LDFLAGS="$(LDFLAGS) $(openfst_add_LDFLAGS)" LIBS="-ldl"
 
 openfst-$(OPENFST_VERSION): openfst-$(OPENFST_VERSION).tar.gz
 	tar xozf openfst-$(OPENFST_VERSION).tar.gz
