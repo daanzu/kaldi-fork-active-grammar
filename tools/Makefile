@@ -97,6 +97,10 @@ openfst-$(OPENFST_VERSION)/Makefile: openfst-$(OPENFST_VERSION)
 	./configure --prefix=`pwd` $(OPENFST_CONFIGURE) CXX="$(CXX)" \
 		CXXFLAGS="$(CXXFLAGS) $(openfst_add_CXXFLAGS)" \
 		LDFLAGS="$(LDFLAGS) $(openfst_add_LDFLAGS)" LIBS="-ldl"
+	# Fix compilation error on macOS with Apple clang for OpenFst <1.8.4
+	if [ $(OPENFST_VER_NUM) -lt 10804 ]; then \
+		sed -i.bak 's/table\.s_/table.selector_/g' openfst-$(OPENFST_VERSION)/src/include/fst/bi-table.h ; \
+	fi
 
 openfst-$(OPENFST_VERSION): openfst-$(OPENFST_VERSION).tar.gz
 	tar xozf openfst-$(OPENFST_VERSION).tar.gz
