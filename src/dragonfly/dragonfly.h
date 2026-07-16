@@ -31,19 +31,6 @@
 
 #include <stdint.h>
 
-DRAGONFLY_API void* gmm__init(float beam, int32_t max_active, int32_t min_active, float lattice_beam,
-    char* word_syms_filename_cp, char* fst_in_str_cp, char* config_cp);
-DRAGONFLY_API bool gmm__decode(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize);
-DRAGONFLY_API bool gmm__get_output(void* model_vp, char* output, int32_t output_length, double* likelihood_p);
-
-DRAGONFLY_API void* gmm_otf__init(float beam, int32_t max_active, int32_t min_active, float lattice_beam,
-	char* word_syms_filename_cp, char* config_cp,
-	char* hcl_fst_filename_cp, char** grammar_fst_filenames_cp, int32_t grammar_fst_filenames_len);
-DRAGONFLY_API bool gmm_otf__add_grammar_fst(void* model_vp, char* grammar_fst_filename_cp);
-DRAGONFLY_API bool gmm_otf__decode(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,
-	bool* grammars_activity, int32_t grammars_activity_size);
-DRAGONFLY_API bool gmm_otf__get_output(void* model_vp, char* output, int32_t output_length, double* likelihood_p);
-
 DRAGONFLY_API bool nnet3_base__load_lexicon(void* model_vp, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp);
 DRAGONFLY_API bool nnet3_base__save_adaptation_state(void* model_vp);
 DRAGONFLY_API bool nnet3_base__reset_adaptation_state(void* model_vp);
