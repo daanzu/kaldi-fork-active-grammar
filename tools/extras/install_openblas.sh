@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-OPENBLAS_VERSION=0.3.27
+OPENBLAS_VERSION=0.3.28
 
 WGET=${WGET:-wget}
 
