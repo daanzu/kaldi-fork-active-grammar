@@ -17,6 +17,8 @@
 
 #pragma once
 
+#include <memory>
+
 #include "base/kaldi-common.h"
 #include "util/common-utils.h"
 #include "tree/context-dep.h"
@@ -93,7 +95,7 @@ void from_json(const nlohmann::json& j, AgfCompilerConfig& c) {
 class AgfCompiler {
    public:
     AgfCompiler(const AgfCompilerConfig& config);
-    ~AgfCompiler() { };
+    ~AgfCompiler() = default;
 
     StdVectorFst* CompileGrammar(const StdFst* grammar_fst_in, const AgfCompilerConfig* config = nullptr);
     StdVectorFst* CompileFstText(std::istream& grammar_text);
@@ -103,11 +105,11 @@ class AgfCompiler {
 
     ContextDependency ctx_dep;  // the tree.
     TransitionModel trans_model;
-    VectorFst<StdArc> *lex_fst;
+    std::unique_ptr<VectorFst<StdArc>> lex_fst;
     std::vector<int32> disambig_syms;
     std::vector<int32> phone_syms;
 
-    fst::SymbolTable *word_syms_ = nullptr;
+    std::unique_ptr<fst::SymbolTable> word_syms_;
 };
 
 AgfCompiler::AgfCompiler(const AgfCompilerConfig& config) : config_(config) {
@@ -120,7 +122,7 @@ AgfCompiler::AgfCompiler(const AgfCompilerConfig& config) : config_(config) {
 
     ReadKaldiObject(config_.model_rxfilename, &trans_model);
 
-    lex_fst = fst::ReadFstKaldi(config_.lex_rxfilename);
+    lex_fst.reset(fst::ReadFstKaldi(config_.lex_rxfilename));
 
     if (config_.disambig_rxfilename != "")
       if (!ReadIntegerVectorSimple(config_.disambig_rxfilename, &disambig_syms))
@@ -140,9 +142,11 @@ AgfCompiler::AgfCompiler(const AgfCompilerConfig& config) : config_(config) {
         KALDI_ERR << "Disambiguation symbol " << disambig_syms[i]
                   << " is also a phone.";
 
-    if (!config_.word_syms_filename.empty())
-        if (!(word_syms_ = fst::SymbolTable::ReadText(config_.word_syms_filename)))
+    if (!config_.word_syms_filename.empty()) {
+        word_syms_.reset(fst::SymbolTable::ReadText(config_.word_syms_filename));
+        if (!word_syms_)
             KALDI_ERR << "Could not read symbol table from file " << config_.word_syms_filename;
+    }
 }
 
 StdVectorFst* AgfCompiler::CompileGrammar(const StdFst* grammar_fst_in, const AgfCompilerConfig* config) {
@@ -168,10 +172,12 @@ StdVectorFst* AgfCompiler::CompileGrammar(const StdFst* grammar_fst_in, const Ag
     if (!config->grammar_prepend_nonterm_fst.empty()) {
       VectorFst<StdArc> *nonterm_fst = fst::ReadFstKaldi(config->grammar_prepend_nonterm_fst);
       fst::Concat(*nonterm_fst, grammar_fst);
+      delete nonterm_fst;
     }
     if (!config->grammar_append_nonterm_fst.empty()) {
       VectorFst<StdArc> *nonterm_fst = fst::ReadFstKaldi(config->grammar_append_nonterm_fst);
       fst::Concat(grammar_fst, *nonterm_fst);
+      delete nonterm_fst;
     }
     if (config->grammar_prepend_nonterm > 0) {
       VectorFst<StdArc> nonterm_fst;
@@ -324,7 +330,7 @@ StdVectorFst* AgfCompiler::CompileGrammar(const StdFst* grammar_fst_in, const Ag
 StdVectorFst* AgfCompiler::CompileFstText(std::istream& grammar_text) {
     if (!word_syms_) KALDI_ERR << "word_syms_ empty";
     auto grammar_fstclass = fst::script::CompileFstInternal(grammar_text, "<CompileFstText>", "vector", "standard",
-        word_syms_, word_syms_, nullptr, false, false, false, false, false);
+        word_syms_.get(), word_syms_.get(), nullptr, false, false, false, false, false);
     auto grammar_fst = dynamic_cast<StdVectorFst*>(fst::Convert(*grammar_fstclass->GetFst<StdArc>(), "vector"));
     if (!grammar_fst) KALDI_ERR << "could not convert grammar Fst to StdVectorFst";
     return grammar_fst;
@@ -441,10 +447,12 @@ int CompileGraphAgfMain(int argc, char *argv[]) {
     if (!grammar_prepend_nonterm_fst.empty()) {
       VectorFst<StdArc> *nonterm_fst = fst::ReadFstKaldi(grammar_prepend_nonterm_fst);
       fst::Concat(*nonterm_fst, grammar_fst);
+      delete nonterm_fst;
     }
     if (!grammar_append_nonterm_fst.empty()) {
       VectorFst<StdArc> *nonterm_fst = fst::ReadFstKaldi(grammar_append_nonterm_fst);
       fst::Concat(grammar_fst, *nonterm_fst);
+      delete nonterm_fst;
     }
     if (grammar_prepend_nonterm > 0) {
       VectorFst<StdArc> nonterm_fst;
