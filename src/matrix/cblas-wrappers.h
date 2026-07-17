@@ -382,11 +382,21 @@ inline void mul_elements(
 
 // add clapack here
 #if !defined(HAVE_ATLAS)
+#if defined(LAPACK_FORTRAN_STRLEN_END)
+// Recent OpenBLAS headers expose the hidden lengths of Fortran character
+// arguments in their C declarations.  The lengths are appended to the call
+// on this platform; older BLAS/LAPACK providers do not declare them.
+#define KALDI_LAPACK_STRLEN_1 , 1
+#define KALDI_LAPACK_STRLEN_2 , 1, 1
+#else
+#define KALDI_LAPACK_STRLEN_1
+#define KALDI_LAPACK_STRLEN_2
+#endif
 inline void clapack_Xtptri(KaldiBlasInt *num_rows, float *Mdata, KaldiBlasInt *result) {
-  stptri_(const_cast<char *>("U"), const_cast<char *>("N"), num_rows, Mdata, result);
+  stptri_(const_cast<char *>("U"), const_cast<char *>("N"), num_rows, Mdata, result KALDI_LAPACK_STRLEN_2);
 }
 inline void clapack_Xtptri(KaldiBlasInt *num_rows, double *Mdata, KaldiBlasInt *result) {
-  dtptri_(const_cast<char *>("U"), const_cast<char *>("N"), num_rows, Mdata, result);
+  dtptri_(const_cast<char *>("U"), const_cast<char *>("N"), num_rows, Mdata, result KALDI_LAPACK_STRLEN_2);
 }
 // 
 inline void clapack_Xgetrf2(KaldiBlasInt *num_rows, KaldiBlasInt *num_cols, 
@@ -420,7 +430,7 @@ inline void clapack_Xgesvd(char *v, char *u, KaldiBlasInt *num_cols,
   sgesvd_(v, u,
           num_cols, num_rows, Mdata, stride,
           sv, Vdata, vstride, Udata, ustride, 
-          p_work, l_work, result); 
+          p_work, l_work, result KALDI_LAPACK_STRLEN_2);
 }
 inline void clapack_Xgesvd(char *v, char *u, KaldiBlasInt *num_cols,
                            KaldiBlasInt *num_rows, double *Mdata, KaldiBlasInt *stride,
@@ -430,26 +440,28 @@ inline void clapack_Xgesvd(char *v, char *u, KaldiBlasInt *num_cols,
   dgesvd_(v, u,
           num_cols, num_rows, Mdata, stride,
           sv, Vdata, vstride, Udata, ustride,
-          p_work, l_work, result); 
+          p_work, l_work, result KALDI_LAPACK_STRLEN_2);
 }
 //
 void inline clapack_Xsptri(KaldiBlasInt *num_rows, float *Mdata, 
                            KaldiBlasInt *ipiv, float *work, KaldiBlasInt *result) {
-  ssptri_(const_cast<char *>("U"), num_rows, Mdata, ipiv, work, result);
+  ssptri_(const_cast<char *>("U"), num_rows, Mdata, ipiv, work, result KALDI_LAPACK_STRLEN_1);
 }
 void inline clapack_Xsptri(KaldiBlasInt *num_rows, double *Mdata, 
                            KaldiBlasInt *ipiv, double *work, KaldiBlasInt *result) {
-  dsptri_(const_cast<char *>("U"), num_rows, Mdata, ipiv, work, result);
+  dsptri_(const_cast<char *>("U"), num_rows, Mdata, ipiv, work, result KALDI_LAPACK_STRLEN_1);
 }
 //
 void inline clapack_Xsptrf(KaldiBlasInt *num_rows, float *Mdata,
                            KaldiBlasInt *ipiv, KaldiBlasInt *result) {
-  ssptrf_(const_cast<char *>("U"), num_rows, Mdata, ipiv, result);
+  ssptrf_(const_cast<char *>("U"), num_rows, Mdata, ipiv, result KALDI_LAPACK_STRLEN_1);
 }
 void inline clapack_Xsptrf(KaldiBlasInt *num_rows, double *Mdata,
                            KaldiBlasInt *ipiv, KaldiBlasInt *result) {
-  dsptrf_(const_cast<char *>("U"), num_rows, Mdata, ipiv, result);
+  dsptrf_(const_cast<char *>("U"), num_rows, Mdata, ipiv, result KALDI_LAPACK_STRLEN_1);
 }
+#undef KALDI_LAPACK_STRLEN_1
+#undef KALDI_LAPACK_STRLEN_2
 #else
 inline void clapack_Xgetrf(MatrixIndexT num_rows, MatrixIndexT num_cols,
                            float *Mdata, MatrixIndexT stride, 
