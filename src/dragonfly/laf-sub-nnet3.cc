@@ -45,6 +45,7 @@ using namespace fst;
 LafNNet3OnlineModelWrapper::LafNNet3OnlineModelWrapper(LafNNet3OnlineModelConfig::Ptr config, int32 verbosity)
     : ActiveBaseNNet3OnlineModelWrapper(config, verbosity), config_(config) {
     hcl_fst_ = fst::StdOLabelLookAheadFst::Read(config_->hcl_fst_filename);
+    if (!hcl_fst_) KALDI_ERR << "cannot read hcl_fst file " << config_->hcl_fst_filename;
     if (!ReadIntegerVectorSimple(config_->disambig_tids_filename, &disambig_tids_))
         KALDI_ERR << "cannot read disambig_tids file";
 
@@ -84,6 +85,7 @@ LafNNet3OnlineModelWrapper::LafNNet3OnlineModelWrapper(LafNNet3OnlineModelConfig
 
 LafNNet3OnlineModelWrapper::~LafNNet3OnlineModelWrapper() {
     CleanupDecoder();
+    InvalidateDecodeFst();
     delete hcl_fst_;
     delete word_syms_relabeled_;
     delete dictation_fst_;
@@ -184,28 +186,6 @@ bool LafNNet3OnlineModelWrapper::RemoveGrammarFst(int32 grammar_fst_index) {
 
 // Adapted from src/fstext/fstext-utils-inl.h
 template <class Arc, class Label>
-void LafNNet3OnlineModelWrapper::BuildActiveLookaheadComposeFst(const Fst<Arc>& ifst1, const Fst<Arc>& ifst2, const std::vector<Label>& to_remove, size_t cache_size) {
-    fst::CacheOptions cache_opts_0(false, 0);  // FirstCacheStore
-    fst::CacheOptions cache_opts(true, cache_size);
-    fst::ArcMapFstOptions arcmap_opts(cache_opts);  // TODO: should we set this, or leave the default of no caching?
-    // fst::ArcMapFstOptions arcmap_opts(fst::CacheOptions(true, 1<<19));  // TODO: should we set this, or leave the default of no caching?
-    // fst::ArcMapFstOptions arcmap_opts(fst::CacheOptions(false, 0));  // TODO: should we set this, or leave the default of no caching?
-    RemoveSomeInputSymbolsMapper<Arc, Label> mapper(to_remove);
-    
-    // using M = Matcher<Fst<Arc>>;
-    // using Filter = SequenceComposeFilter<M>;
-    // using FilterState = typename Filter::FilterState;
-    // fst::ComposeFstOptions<Arc, M, Filter,
-    //     GenericComposeStateTable<Arc, FilterState, ActiveComposeStateTuple<typename Arc::StateId, FilterState>>>
-    ActiveComposeFstOptions<Arc> compose_opts(cache_opts);
-    auto compose_fst = ActiveComposeFst<Arc>(ifst1, ifst2, compose_opts);
-
-    auto decode_fst = new ActiveLookaheadFst<Arc, Label>(compose_fst, mapper, arcmap_opts);  // Copies compose_fst.
-    active_decode_fst_.reset(decode_fst);
-}
-
-// Adapted from src/fstext/fstext-utils-inl.h
-template <class Arc, class Label>
 LookaheadFst<Arc, Label>* LookaheadComposeFst(const Fst<Arc>& ifst1, const Fst<Arc>& ifst2, const std::vector<Label>& to_remove, size_t cache_size) {
     fst::CacheOptions cache_opts_0(false, 0);  // FirstCacheStore
     fst::CacheOptions cache_opts(true, cache_size);
@@ -263,10 +243,22 @@ void LafNNet3OnlineModelWrapper::BuildDecodeFst() {
     active_replace_fst_.reset(new ActiveReplaceFst<StdArc>(label_fst_pairs, active_replace_options));
     timer.step("setup replace_fst");
 
-    BuildActiveLookaheadComposeFst(*hcl_fst_, *active_replace_fst_, disambig_tids_, 1ULL<<29);
-    auto active_compose_fst = static_cast<ActiveComposeFst<StdArc>*>(active_decode_fst_->GetFstUnsafe());
-    active_compose_fst->SetNonterminals(rules_words_offset, rules_words_offset + config_->max_num_rules);
-    active_decode_fst_->SetNonterminals(rules_words_offset, rules_words_offset + config_->max_num_rules);
+    // Set up lookahead composition. ActiveComposeFst uses the lookahead
+    // matcher/filter stack unconditionally, so verify hcl_fst_ supports it.
+    // (Args must be base-typed Fst refs, else overload resolution picks the
+    // matcher-pair LookAheadMatchType template.)
+    const StdFst& replace_fst_ref = *active_replace_fst_;
+    if (LookAheadMatchType(*hcl_fst_, replace_fst_ref) != MATCH_OUTPUT)
+        KALDI_ERR << "hcl_fst does not support output-label lookahead composition";
+    active_compose_fst_.reset(new ActiveComposeFst<StdArc>(*hcl_fst_, *active_replace_fst_,
+        CacheOptions(true, cache_size)));
+    timer.step("setup compose_fst");
+
+    // Set up the decode FST: arcmap removing the disambig tids. Copies (sharing
+    // the impl of) active_compose_fst_.
+    RemoveSomeInputSymbolsMapper<StdArc, StdArc::Label> mapper(disambig_tids_);
+    fst::ArcMapFstOptions arcmap_opts(CacheOptions(true, cache_size));
+    active_decode_fst_.reset(new ActiveLookaheadFst<StdArc, StdArc::Label>(*active_compose_fst_, mapper, arcmap_opts));
     decode_fst_ = active_decode_fst_.get();
     timer.step("setup decode_fst");
 }
@@ -302,7 +294,8 @@ void LafNNet3OnlineModelWrapper::BuildDecodeFstNaive() {
         label_fst_pairs.emplace_back(word_syms_->Find("#nonterm:dictation"), dictation_fst_);
 
     ArcSort(&top_fst, StdILabelCompare());
-    label_fst_pairs.emplace_back(top_fst_nonterm, new StdConstFst(top_fst));
+    StdConstFst top_const_fst(top_fst);  // ReplaceFst copies it (sharing the impl).
+    label_fst_pairs.emplace_back(top_fst_nonterm, &top_const_fst);
     timer.step("top_fst");
 
     ReplaceFstOptions<StdArc> replace_options(top_fst_nonterm, REPLACE_LABEL_OUTPUT, REPLACE_LABEL_OUTPUT, word_syms_->Find("#nonterm:end"));
@@ -314,58 +307,56 @@ void LafNNet3OnlineModelWrapper::BuildDecodeFstNaive() {
 }
 
 bool LafNNet3OnlineModelWrapper::InvalidateDecodeFst() {
-    if (DecoderReady(decoder_)) KALDI_ERR << "cannot modify/invalidate GrammarFst in the middle of decoding!";
-    if (decode_fst_) {
-        delete decode_fst_;
-        decode_fst_ = nullptr;
-        active_replace_fst_.reset();
-        return true;
-    }
-    return false;
+    if (DecoderReady(decoder_)) KALDI_ERR << "cannot modify/invalidate decode FST in the middle of decoding!";
+    bool had_decode_fst = (decode_fst_ != nullptr);
+    if (decode_fst_ && decode_fst_ != static_cast<StdFst*>(active_decode_fst_.get()))
+        delete decode_fst_;  // Naive-path decode FST is raw-owned; active-path is owned by active_decode_fst_.
+    decode_fst_ = nullptr;
+    active_decode_fst_.reset();
+    active_compose_fst_.reset();
+    active_replace_fst_.reset();
+    return had_decode_fst;
 }
 
 void LafNNet3OnlineModelWrapper::StartDecoding() {
     ExecutionTimer timer("StartDecoding", 2);
     BaseNNet3OnlineModelWrapper::StartDecoding();
-    FLAGS_v = 1;
 
-    if (!decode_fst_) {
-        // BuildDecodeFst();
-        // timer.step("BuildDecodeFst");
-        grammars_activity_changed_ = true;
-    }
-
-    if (grammars_activity_changed_) {
-        if (active_replace_fst_ || true) {
+    if (config_->decode_fst_naive) {
+        // Baseline: standard ReplaceFst + lookahead composition, fully rebuilt
+        // whenever grammar activity changes (activity is baked into the top FST).
+        if (!decode_fst_ || grammars_activity_changed_) {
+            BuildDecodeFstNaive();
+            timer.step("BuildDecodeFstNaive");
+            grammars_activity_changed_ = false;
+        }
+    } else {
+        if (!decode_fst_) {
             BuildDecodeFst();
             timer.step("BuildDecodeFst");
+            grammars_activity_changed_ = true;  // Fresh FSTs default to all-inactive; activity must be applied below.
+        }
+
+        if (grammars_activity_changed_) {
             auto rules_words_offset = word_syms_->Find("#nonterm:rule0");
-            auto dictation_words_offset = word_syms_->Find("#nonterm:dictation");
             std::set<int32> grammars_activity_by_label;  // Indexed by non-terminal label.
             for (const auto& rule_number : grammars_activity_)
                 grammars_activity_by_label.insert(rule_number + rules_words_offset);
             if (dictation_fst_)
-                grammars_activity_by_label.insert(dictation_words_offset);  // dictation_fst_ is only enabled if present
+                grammars_activity_by_label.insert(word_syms_->Find("#nonterm:dictation"));  // dictation_fst_ is only enabled if present
+            timer.step("build grammars_activity_by_label");
 
-            auto active_compose_fst = static_cast<ActiveComposeFst<StdArc>*>(active_decode_fst_->GetFstUnsafe());
-            auto active_replace_fst = static_cast<ActiveReplaceFst<StdArc>*>(&active_compose_fst->GetFst2Unsafe());
-            // DebugWriteFstRaw(active_replace_fst);
-            // DebugWriteFstRaw(active_compose_fst);
-            // DebugWriteFstRaw(active_decode_fst_.get());
-            timer.step("grammars_activity_changed: build grammars_activity_by_label");
-            active_replace_fst->UpdateActivity(grammars_activity_by_label);
-            timer.step("grammars_activity_changed: active_replace_fst->UpdateActivity");
-            active_compose_fst->UpdateActivity();
-            timer.step("grammars_activity_changed: active_compose_fst->UpdateActivity");
+            // Order matters: the compose-layer invalidation reads the replace-layer
+            // cache's volatility flags and arcs, which the replace-layer GC (in its
+            // UpdateActivity below) deletes.
+            active_compose_fst_->UpdateActivity(*active_replace_fst_, config_->decode_fst_incremental);
+            timer.step("active_compose_fst_->UpdateActivity");
             active_decode_fst_->UpdateActivity();
-            timer.step("grammars_activity_changed: active_decode_fst_->UpdateActivity");
-            // DebugWriteFstRaw(active_replace_fst);
-            // DebugWriteFstRaw(active_compose_fst);
-            // DebugWriteFstRaw(active_decode_fst_.get());
-        } else {
-            BuildDecodeFstNaive();
+            timer.step("active_decode_fst_->UpdateActivity");
+            active_replace_fst_->UpdateActivity(grammars_activity_by_label, config_->decode_fst_incremental);
+            timer.step("active_replace_fst_->UpdateActivity");
+            grammars_activity_changed_ = false;
         }
-        grammars_activity_changed_ = false;
     }
 
     decoder_ = new SingleUtteranceNnet3DecoderTpl<fst::StdFst>(

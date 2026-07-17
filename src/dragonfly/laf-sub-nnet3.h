@@ -57,6 +57,8 @@ struct LafNNet3OnlineModelConfig : public ActiveBaseNNet3OnlineModelConfig {
     std::string word_syms_relabeled_filename;
     int32 rules_words_offset = 1000000;
     size_t decode_fst_cache_size = 1ULL << 30;  // Note: this is used independently for 3 separate Fsts! FIXME: should we adjust this based on size of grammars + dictation fsts?
+    bool decode_fst_incremental = true;  // Incrementally invalidate decode FST caches on grammar activity changes, rather than clearing them entirely (baseline mode, for validating incrementality).
+    bool decode_fst_naive = false;  // Use the naive (non-active) decode FST, fully rebuilt on every grammar activity change; for validating the active framework against known-good behavior.
 
     bool Set(const std::string& name, const nlohmann::json& value) override {
         if (ActiveBaseNNet3OnlineModelConfig::Set(name, value)) { return true; }
@@ -66,6 +68,8 @@ struct LafNNet3OnlineModelConfig : public ActiveBaseNNet3OnlineModelConfig {
         if (name == "word_syms_relabeled_filename") { value.get_to(word_syms_relabeled_filename); return true; }
         if (name == "rules_words_offset") { value.get_to(rules_words_offset); return true; }
         if (name == "decode_fst_cache_size") { value.get_to(decode_fst_cache_size); return true; }
+        if (name == "decode_fst_incremental") { value.get_to(decode_fst_incremental); return true; }
+        if (name == "decode_fst_naive") { value.get_to(decode_fst_naive); return true; }
         return false;
     }
 
@@ -79,6 +83,8 @@ struct LafNNet3OnlineModelConfig : public ActiveBaseNNet3OnlineModelConfig {
         ss << "\n    " << "word_syms_relabeled_filename: " << word_syms_relabeled_filename;
         ss << "\n    " << "rules_words_offset: " << rules_words_offset;
         ss << "\n    " << "decode_fst_cache_size: " << decode_fst_cache_size;
+        ss << "\n    " << "decode_fst_incremental: " << decode_fst_incremental;
+        ss << "\n    " << "decode_fst_naive: " << decode_fst_naive;
         return ss.str();
     }
 };
@@ -116,7 +122,10 @@ class LafNNet3OnlineModelWrapper : public ActiveBaseNNet3OnlineModelWrapper {
         std::unordered_map<StdFst*, std::string> grammar_fsts_name_map_;  // maps grammar_fst -> name; for debugging
         // INVARIANT: same size: grammar_fsts_, grammar_fsts_name_map_
 
-        // Model objects
+        // Model objects. The three "active" FSTs form a stack of lazy FSTs sharing
+        // impls with the copies held inside one another, so cache updates through
+        // these members are seen by the whole stack. decode_fst_ aliases
+        // active_decode_fst_ (active path) or is raw-owned (naive path).
         std::unique_ptr<ActiveReplaceFst<StdArc>> active_replace_fst_;
         std::unique_ptr<ActiveComposeFst<StdArc>> active_compose_fst_;
         std::unique_ptr<ActiveLookaheadFst<StdArc, StdArc::Label>> active_decode_fst_;
@@ -125,9 +134,6 @@ class LafNNet3OnlineModelWrapper : public ActiveBaseNNet3OnlineModelWrapper {
         // Decoder objects
         SingleUtteranceNnet3DecoderTpl<fst::StdFst>* decoder_ = nullptr;  // reinstantiated per utterance
         CombineRuleNontermMapper<CompactLatticeArc>* rule_relabel_mapper_ = nullptr;
-
-        template <class Arc, class Label>
-        void BuildActiveLookaheadComposeFst(const Fst<Arc>& ifst1, const Fst<Arc>& ifst2, const std::vector<Label>& to_remove, size_t cache_size);
 
         void BuildDecodeFst();
         void BuildDecodeFstNaive();

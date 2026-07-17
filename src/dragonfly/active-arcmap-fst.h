@@ -27,7 +27,6 @@ class ActiveArcMapFstImpl : public CacheBaseImpl<CacheState<B>, CacheStore> {
   using FstImpl<B>::SetOutputSymbols;
 
   using CacheBase = CacheBaseImpl<CacheState<B>, CacheStore>;
-  using CacheBase::EmplaceArc;
   using CacheBase::HasArcs;
   using CacheBase::HasFinal;
   using CacheBase::HasStart;
@@ -180,8 +179,8 @@ class ActiveArcMapFstImpl : public CacheBaseImpl<CacheState<B>, CacheStore> {
               (*mapper_)(A(0, 0, fst_->Final(FindIState(s)), kNoStateId));
           if (final_arc.ilabel != 0 || final_arc.olabel != 0 ||
               final_arc.weight != B::Weight::Zero()) {
-            EmplaceArc(s, final_arc.ilabel, final_arc.olabel, final_arc.weight,
-                       superfinal_);
+            PushArc(s, B(final_arc.ilabel, final_arc.olabel, final_arc.weight,
+                         superfinal_));
           }
           break;
         }

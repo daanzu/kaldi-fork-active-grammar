@@ -687,15 +687,13 @@ class ActiveReplaceFst
   }
 
   MatcherBase<Arc> *InitMatcher(MatchType match_type) const override {
-    if ((GetImpl()->ArcIteratorFlags() & kArcNoCache) &&
-        ((match_type == MATCH_INPUT && Properties(kILabelSorted, false)) ||
-         (match_type == MATCH_OUTPUT && Properties(kOLabelSorted, false)))) {
-      return new ActiveReplaceFstMatcher<Arc, StateTable, CacheStore>
-          (this, match_type);
-    } else {
-      VLOG(2) << "Not using replace matcher";
-      return nullptr;
-    }
+    // Active specialization!!! Always fall back to the default matcher
+    // (SortedMatcher over the generic caching ArcIterator) rather than the
+    // non-caching ActiveReplaceFstMatcher. Composition and lookahead must
+    // expand states through the caching path so that every visited state is
+    // cached with its activity-volatility flag set (see Expand()), which the
+    // compose-layer invalidation (ActiveComposeFst::UpdateActivity) depends on.
+    return nullptr;
   }
 
   bool CyclicDependencies() const { return GetImpl()->CyclicDependencies(); }
@@ -709,17 +707,28 @@ class ActiveReplaceFst
   }
 
   // Active specialization!!!
-  const CacheStore *GetCacheStore() const { return GetImpl()->GetCacheStore(); }
+  const CacheStore *GetCacheStore() { return GetMutableImpl()->GetCacheStore(); }
 
-  // Active specialization!!!
-  void UpdateActivity(const std::set<int32>& activity_set) {
+  // Active specialization!!! Sets which sub-FSTs (by nonterminal label) are
+  // active, and garbage-collects cached states whose arcs depend on activity.
+  // If incremental is false, clears the entire cache instead (baseline mode).
+  void UpdateActivity(const std::set<int32>& activity_set, bool incremental = true) {
     auto* impl = GetMutableImpl();
-    impl->GetCacheStore()->GCNonterminalStates();
+    if (incremental) {
+      impl->GetCacheStore()->GCNonterminalStates();
+    } else {
+      impl->GetCacheStore()->Clear();
+    }
     auto& activity = impl->fst_activity_;
     activity.assign(activity.size(), false);
     // activity[impl->root_] = true;  // Root is always active. Does this matter? I don't think so.
-    for (const auto nonterm_index : activity_set) {
-      activity[impl->GetFstId(nonterm_index)] = true;
+    for (const auto nonterm_label : activity_set) {
+      const auto it = impl->nonterminal_hash_.find(nonterm_label);
+      if (it == impl->nonterminal_hash_.end()) {
+        LOG(WARNING) << "ActiveReplaceFst::UpdateActivity: no FST for nonterminal label " << nonterm_label;
+        continue;
+      }
+      activity[it->second] = true;
     }
   }
 
