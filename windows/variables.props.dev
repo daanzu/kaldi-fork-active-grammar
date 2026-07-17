@@ -4,7 +4,8 @@
   <PropertyGroup Label="UserMacros">
     <!-- Change the following paths so they are correct on your machine -->
     <!-- Do not modify anything before this line -->
-    <MKLDIR>C:\Program Files (x86)\IntelSWTools\compilers_and_libraries\windows\mkl\</MKLDIR>
+    <!-- <MKLDIR>C:\Program Files (x86)\IntelSWTools\compilers_and_libraries\windows\mkl\</MKLDIR> -->
+    <MKLDIR>C:\Program Files (x86)\Intel\oneAPI\mkl\latest</MKLDIR>
     <OPENBLASDIR>C:\Users\Yenda\Downloads\kaldi-svn\tools\OpenBLAS-v0.2.14-Win64-int32</OPENBLASDIR>
     <OPENFST>C:\Users\jtrmal\Documents\openfst\</OPENFST>
     <OPENFSTLIB>C:\Users\jtrmal\Documents\openfst\build64</OPENFSTLIB>

@@ -22,6 +22,7 @@ use Data::Dumper;
 use Getopt::Long;
 
 my $vsver="vs2017";
+my $cuda_ver = "7.0";
 
 my %ENABLED = (CUDA => 0,
                OPENBLAS => 0,
@@ -30,6 +31,7 @@ my %ENABLED = (CUDA => 0,
 
 GetOptions ("vsver=s" => \$vsver,
             "enable-cuda" => \$ENABLED{CUDA},
+            "cuda-version=s" => \$cuda_ver,
             "enable-openblas" => sub {$ENABLED{OPENBLAS}=1; $ENABLED{MKL}=0;},
             "enable-mkl" => sub {$ENABLED{OPENBLAS}=0; $ENABLED{MKL}=1;},
             "portaudio!" => \$ENABLED{PORTAUDIO},
@@ -38,19 +40,22 @@ GetOptions ("vsver=s" => \$vsver,
 my %TOOLS=( default=> "14.1",
             vs2015 => "14.0",
             vs2017 => "14.1",
-            vs2019 => "15.0"
+            vs2019 => "15.0",
+            vs2022 => "Current"
             );
 
 my %FORMAT=( default=> "12.00",
              vs2015 => "12.00",
              vs2017 => "12.00",
-             vs2019 => "12.00"
+             vs2019 => "12.00",
+             vs2022 => "12.00"
              );
 
 my %TOOLSET=( default=> "v141",
               vs2015 => "v140",
               vs2017 => "v141",
-              vs2019 => "v142"
+              vs2019 => "v142",
+              vs2022 => "v143"
               );
 
 
@@ -94,7 +99,7 @@ my @propsFiles = (
 
 my %optionalProps = (
   PORTAUDIO => "$Bin/portaudio.props",
-	CUDA => "$Bin/cuda_7.0.props"
+	CUDA => "$Bin/cuda_${cuda_ver}.props"
 	);
 
 # see http://www.mztools.com/Articles/2008/MZ2008017.aspx for list of GUIDs for VS solutions
@@ -345,7 +350,7 @@ sub writeSolutionFile {
   open(SLN, '>', &{$osPathConversion}($filename));
   print SLN
 "Microsoft Visual Studio Solution File, Format Version $FORMAT{$vsver}
-# Visual Studio 2013
+# Visual Studio $vsver
 ";
   foreach my $projname (sort { $a cmp $b } keys %{$projlist->{ALL}}) {
     if (!exists $projguids->{$projname}) {
@@ -563,7 +568,7 @@ sub writeProjectFiles {
 ";
   if ($ENABLED{CUDA}) {
   print PROJ
-'    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 7.0.props" />
+'    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA ' . $cuda_ver . '.props" />
 '
   }
   print PROJ
@@ -574,7 +579,7 @@ sub writeProjectFiles {
 ";
   if ($ENABLED{CUDA}) {
   print PROJ
-"    <Import Project=\"..\\cuda_7.0.props\" />
+"    <Import Project=\"..\\cuda_${cuda_ver}.props\" />
 "
   }
   if ($ENABLED{PORTAUDIO}) {
@@ -592,7 +597,7 @@ sub writeProjectFiles {
 ";
   if ($ENABLED{CUDA}) {
   print PROJ
-"    <Import Project=\"..\\cuda_7.0.props\" />
+"    <Import Project=\"..\\cuda_${cuda_ver}.props\" />
 ";
   }
   if ($ENABLED{PORTAUDIO}) {
@@ -610,7 +615,7 @@ sub writeProjectFiles {
 ";
   if ($ENABLED{CUDA}) {
   print PROJ
-"    <Import Project=\"..\\cuda_7.0.props\" />
+"    <Import Project=\"..\\cuda_${cuda_ver}.props\" />
 ";
   }
   if ($ENABLED{PORTAUDIO}) {
@@ -628,7 +633,7 @@ sub writeProjectFiles {
 ";
   if ($ENABLED{CUDA}) {
   print PROJ
-"    <Import Project=\"..\\cuda_7.0.props\" />
+"    <Import Project=\"..\\cuda_${cuda_ver}.props\" />
 ";
   }
   if ($ENABLED{PORTAUDIO}) {
@@ -677,7 +682,7 @@ sub writeProjectFiles {
     <ClCompile>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <MinimalRebuild>true</MinimalRebuild>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <PrecompiledHeader>
@@ -690,7 +695,7 @@ sub writeProjectFiles {
     <ClCompile>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <MinimalRebuild>true</MinimalRebuild>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <PrecompiledHeader>
@@ -704,6 +709,7 @@ sub writeProjectFiles {
       <Optimization>MaxSpeed</Optimization>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <PrecompiledHeader>
@@ -717,6 +723,7 @@ sub writeProjectFiles {
       <Optimization>MaxSpeed</Optimization>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <PrecompiledHeader>
