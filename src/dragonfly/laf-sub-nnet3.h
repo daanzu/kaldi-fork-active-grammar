@@ -117,7 +117,7 @@ class LafNNet3OnlineModelWrapper : public ActiveBaseNNet3OnlineModelWrapper {
         std::vector<int32> disambig_tids_;
         std::vector<std::pair<StdArc::Label, StdArc::Label>> relabel_ilabels_;  // Lookahead relabel mapping (word-ids -> relabeled-word-ids)
         fst::SymbolTable *word_syms_relabeled_ = nullptr;  // Word symbol table composed with relabeling, allowing compiling directly to relabeled grammar
-        StdConstFst *dictation_fst_ = nullptr;
+        StdFst *dictation_fst_ = nullptr;
         std::unordered_map<int32, StdExpandedFst*> grammar_fsts_;
         std::unordered_map<StdFst*, std::string> grammar_fsts_name_map_;  // maps grammar_fst -> name; for debugging
         // INVARIANT: same size: grammar_fsts_, grammar_fsts_name_map_

@@ -63,18 +63,8 @@ LafNNet3OnlineModelWrapper::LafNNet3OnlineModelWrapper(LafNNet3OnlineModelConfig
             KALDI_ERR << "cannot read word_syms_relabeled_filename";
 
     if (!config_->dictation_fst_filename.empty()) {
-        if (false) {
-            KALDI_WARN << "preparing dictation_fst is inefficient; should be done ahead of time";
-            ExecutionTimer timer("preparing dictation_fst");
-            auto fst = CastOrConvertToVectorFst(ReadFstKaldiGeneric(config_->dictation_fst_filename));
-            // if (relabel_ilabels_.empty()) KALDI_ERR << "relabel_ilabels_ not loaded";
-            // static const std::vector<std::pair<StdArc::Label, StdArc::Label>> olabels;  // Always empty
-            // fst::Relabel(fst, relabel_ilabels_, olabels);
-            // fst::ArcSort(fst, fst::StdILabelCompare());
-            PrepareGrammarFst(fst, true);  // Was this file already relabeled?
-            dictation_fst_ = CastOrConvertToConstFst(fst);
-        } else
-            dictation_fst_ = CastOrConvertToConstFst(ReadFstKaldiGeneric(config_->dictation_fst_filename));
+        // Preserve the serialized FST type. In particular, converting an NGramFst to ConstFst here would discard its specialized matcher.
+        dictation_fst_ = ReadFstKaldiGeneric(config_->dictation_fst_filename);
     } else
         KALDI_WARN << "no dictation grammar";
 
