@@ -35,9 +35,10 @@ using namespace fst;
 
 
 inline ConstFst<StdArc>* CastOrConvertToConstFst(Fst<StdArc>* fst, bool has_ownership = true) {
-    // This version currently supports ConstFst<StdArc> or VectorFst<StdArc>
+    // This version currently supports ConstFst<StdArc>, VectorFst<StdArc>,
+    // or NGramFst<StdArc>.
     std::string real_type = fst->Type();
-    KALDI_ASSERT(real_type == "vector" || real_type == "const");
+    KALDI_ASSERT(real_type == "vector" || real_type == "const" || real_type == "ngram");
     if (real_type == "const") {
         return dynamic_cast<ConstFst<StdArc>*>(fst);
     } else {
