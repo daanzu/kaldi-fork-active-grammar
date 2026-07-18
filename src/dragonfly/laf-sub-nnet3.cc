@@ -30,6 +30,8 @@
 #include "nnet3/nnet-utils.h"
 #include "fst/script/compile.h"
 
+#include <memory>
+
 #include "laf-sub-nnet3.h"
 #include "utils.h"
 #include "kaldi-utils.h"
@@ -531,12 +533,12 @@ bool nnet3_laf__destruct(void* model_vp) {
 int32_t nnet3_laf__add_grammar_fst(void* model_vp, int32_t grammar_fst_index, void* grammar_fst_cp) {
     BEGIN_INTERFACE_CATCH_HANDLER
     auto model = static_cast<LafNNet3OnlineModelWrapper*>(model_vp);
-    auto fst = static_cast<StdVectorFst*>(grammar_fst_cp);
-    // fst->Write("tmp.fst");
+    auto source_fst = static_cast<StdVectorFst*>(grammar_fst_cp);
+    std::unique_ptr<StdVectorFst> prepared_fst(new StdVectorFst(*source_fst));
     bool built_relabeled = true;
-    model->PrepareGrammarFst(fst, !built_relabeled);  // This mutates the fst!
-    // fst->Write("tmp2.fst");
-    grammar_fst_index = model->AddGrammarFst(grammar_fst_index, fst);
+    model->PrepareGrammarFst(prepared_fst.get(), !built_relabeled);
+    grammar_fst_index = model->AddGrammarFst(
+        grammar_fst_index, new StdConstFst(*prepared_fst));
     return grammar_fst_index;
     END_INTERFACE_CATCH_HANDLER(-1)
 }
@@ -553,10 +555,12 @@ int32_t nnet3_laf__add_grammar_fst_text(void* model_vp, int32_t grammar_fst_inde
 bool nnet3_laf__reload_grammar_fst(void* model_vp, int32_t grammar_fst_index, void* grammar_fst_cp) {
     BEGIN_INTERFACE_CATCH_HANDLER
     auto model = static_cast<LafNNet3OnlineModelWrapper*>(model_vp);
-    auto fst = static_cast<StdVectorFst*>(grammar_fst_cp);
+    auto source_fst = static_cast<StdVectorFst*>(grammar_fst_cp);
+    std::unique_ptr<StdVectorFst> prepared_fst(new StdVectorFst(*source_fst));
     bool built_relabeled = true;
-    model->PrepareGrammarFst(fst, !built_relabeled);  // This mutates the fst!
-    bool result = model->ReloadGrammarFst(grammar_fst_index, fst);
+    model->PrepareGrammarFst(prepared_fst.get(), !built_relabeled);
+    bool result = model->ReloadGrammarFst(
+        grammar_fst_index, new StdConstFst(*prepared_fst));
     return result;
     END_INTERFACE_CATCH_HANDLER(false)
 }

@@ -99,10 +99,10 @@ class LafNNet3OnlineModelWrapper : public ActiveBaseNNet3OnlineModelWrapper {
         ~LafNNet3OnlineModelWrapper() override;
 
         void PrepareGrammarFst(fst::StdVectorFst* grammar_fst, bool relabel);
-        int32 AddGrammarFst(int32 grammar_fst_index, fst::StdExpandedFst* grammar_fst, std::string grammar_name = "<unnamed>");  // Does not take ownership of FST!
+        int32 AddGrammarFst(int32 grammar_fst_index, fst::StdExpandedFst* grammar_fst, std::string grammar_name = "<unnamed>");  // Takes ownership of FST.
         int32 AddGrammarFst(int32 grammar_fst_index, std::istream& grammar_text);
         int32 AddGrammarFst(int32 grammar_fst_index, std::string& grammar_fst_filename);
-        bool ReloadGrammarFst(int32 grammar_fst_index, fst::StdExpandedFst* grammar_fst, std::string grammar_name = "<unnamed>");  // Does not take ownership of FST!
+        bool ReloadGrammarFst(int32 grammar_fst_index, fst::StdExpandedFst* grammar_fst, std::string grammar_name = "<unnamed>");  // Takes ownership of FST.
         bool RemoveGrammarFst(int32 grammar_fst_index);
 
         bool Decode(BaseFloat samp_freq, const Vector<BaseFloat>& frames, bool finalize, bool save_adaptation_state = true) override;
