@@ -58,6 +58,7 @@ LafNNet3OnlineModelWrapper::LafNNet3OnlineModelWrapper(LafNNet3OnlineModelConfig
         for (auto line : list) {
             if (line.size() != 2) KALDI_ERR << "badly formatted relabel_ilabels file";
             relabel_ilabels_.emplace_back(line[0], line[1]);
+            unrelabel_ilabels_.emplace(line[1], line[0]);
         }
     }
     if (!config_->word_syms_relabeled_filename.empty())
@@ -67,6 +68,8 @@ LafNNet3OnlineModelWrapper::LafNNet3OnlineModelWrapper(LafNNet3OnlineModelConfig
     if (!config_->dictation_fst_filename.empty()) {
         // Preserve the serialized FST type. In particular, converting an NGramFst to ConstFst here would discard its specialized matcher.
         dictation_fst_ = ReadFstKaldiGeneric(config_->dictation_fst_filename);
+        dictation_fst_outputs_relabeled_ =
+            dictation_fst_->Properties(fst::kAcceptor, true) & fst::kAcceptor;
     } else
         KALDI_WARN << "no dictation grammar";
 
@@ -118,6 +121,25 @@ void LafNNet3OnlineModelWrapper::PrepareGrammarFst(fst::StdVectorFst* grammar_fs
     //     }
     //     timer.step();
     // }
+}
+
+void LafNNet3OnlineModelWrapper::UnrelabelDictationWords(std::vector<int32>* words) const {
+    if (!dictation_fst_outputs_relabeled_) return;
+
+    const int32 dictation_label = word_syms_->Find("#nonterm:dictation");
+    const int32 end_label = word_syms_->Find("#nonterm:end");
+    bool in_dictation = false;
+
+    for (auto& word : *words) {
+        if (word == dictation_label) {
+            in_dictation = true;
+        } else if (word == end_label) {
+            in_dictation = false;
+        } else if (in_dictation) {
+            const auto it = unrelabel_ilabels_.find(word);
+            if (it != unrelabel_ilabels_.end()) word = it->second;
+        }
+    }
 }
 
 int32 LafNNet3OnlineModelWrapper::AddGrammarFst(int32 grammar_fst_index, std::string& grammar_fst_filename) {
@@ -494,6 +516,9 @@ void LafNNet3OnlineModelWrapper::GetDecodedString(std::string& decoded_string, f
     LatticeWeight weight;
     bool ok = GetLinearSymbolSequence(best_path_lat, &alignment, &words, &weight);
     if (!ok) KALDI_ERR << "GetLinearSymbolSequence returned false";
+    // Gr.fst may be an acceptor, so its dictation words retain the relabeled
+    // IDs used for composition. Rule FSTs retain original output labels.
+    UnrelabelDictationWords(&words);
 
     int32 num_frames = alignment.size();
     // int32 num_words = words.size();

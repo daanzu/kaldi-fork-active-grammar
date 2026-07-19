@@ -99,6 +99,7 @@ class LafNNet3OnlineModelWrapper : public ActiveBaseNNet3OnlineModelWrapper {
         ~LafNNet3OnlineModelWrapper() override;
 
         void PrepareGrammarFst(fst::StdVectorFst* grammar_fst, bool relabel);
+        void UnrelabelDictationWords(std::vector<int32>* words) const;
         int32 AddGrammarFst(int32 grammar_fst_index, fst::StdExpandedFst* grammar_fst, std::string grammar_name = "<unnamed>");  // Takes ownership of FST.
         int32 AddGrammarFst(int32 grammar_fst_index, std::istream& grammar_text);
         int32 AddGrammarFst(int32 grammar_fst_index, std::string& grammar_fst_filename);
@@ -116,8 +117,10 @@ class LafNNet3OnlineModelWrapper : public ActiveBaseNNet3OnlineModelWrapper {
         StdFst *hcl_fst_ = nullptr;
         std::vector<int32> disambig_tids_;
         std::vector<std::pair<StdArc::Label, StdArc::Label>> relabel_ilabels_;  // Lookahead relabel mapping (word-ids -> relabeled-word-ids)
+        std::unordered_map<StdArc::Label, StdArc::Label> unrelabel_ilabels_;  // Reverse mapping used for acceptor-style dictation FST output.
         fst::SymbolTable *word_syms_relabeled_ = nullptr;  // Word symbol table composed with relabeling, allowing compiling directly to relabeled grammar
         StdFst *dictation_fst_ = nullptr;
+        bool dictation_fst_outputs_relabeled_ = false;  // NGramFst-style acceptors emit relabeled IDs on their output side.
         std::unordered_map<int32, StdExpandedFst*> grammar_fsts_;
         std::unordered_map<StdFst*, std::string> grammar_fsts_name_map_;  // maps grammar_fst -> name; for debugging
         // INVARIANT: same size: grammar_fsts_, grammar_fsts_name_map_
