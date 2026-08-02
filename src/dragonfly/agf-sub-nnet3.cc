@@ -69,53 +69,51 @@ AgfNNet3OnlineModelWrapper::~AgfNNet3OnlineModelWrapper() {
     delete dictation_fst_;
     delete active_grammar_fst_;
     delete rule_relabel_mapper_;
-    // FIXME: grammar_fsts_ elements memory leak
-    // FIXME: mimic_fsts_ elements memory leak
 }
 
-int32 AgfNNet3OnlineModelWrapper::AddGrammarFst(int32 grammar_fst_index, fst::StdConstFst* grammar_fst, std::string grammar_name) {
+int32 AgfNNet3OnlineModelWrapper::AddGrammarFst(int32 grammar_fst_index, std::unique_ptr<fst::StdConstFst> grammar_fst, std::string grammar_name) {
     InvalidateActiveGrammarFst();
     if (grammar_fst_index >= config_->max_num_rules) KALDI_ERR << "cannot add more than max number of rules";
-    KALDI_VLOG(2) << "adding FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst->NumStates() << " states " << grammar_name;
-    auto ok = grammar_fsts_.insert({grammar_fst_index, grammar_fst}).second;
+    auto grammar_fst_ptr = grammar_fst.get();
+    KALDI_VLOG(2) << "adding FST #" << grammar_fst_index << " @ 0x" << grammar_fst_ptr << " " << grammar_fst_ptr->NumStates() << " states " << grammar_name;
+    auto ok = grammar_fsts_.emplace(grammar_fst_index, std::move(grammar_fst)).second;
     if (!ok) KALDI_ERR << "cannot add grammar to duplicate grammar_fst_index " << grammar_fst_index;
-    grammar_fsts_name_map_[grammar_fst] = grammar_name;
+    grammar_fsts_name_map_[grammar_fst_ptr] = grammar_name;
     mimic_fsts_.erase(grammar_fst_index);
     return grammar_fst_index;
 }
 
 int32 AgfNNet3OnlineModelWrapper::AddGrammarFst(int32 grammar_fst_index, std::string& grammar_fst_filename) {
-    auto grammar_fst = ReadFstFile(grammar_fst_filename);
-    return AddGrammarFst(grammar_fst_index, grammar_fst, grammar_fst_filename);
+    std::unique_ptr<StdConstFst> grammar_fst(ReadFstFile(grammar_fst_filename));
+    return AddGrammarFst(grammar_fst_index, std::move(grammar_fst), grammar_fst_filename);
 }
 
-bool AgfNNet3OnlineModelWrapper::ReloadGrammarFst(int32 grammar_fst_index, fst::StdConstFst* grammar_fst, std::string grammar_name) {
+bool AgfNNet3OnlineModelWrapper::ReloadGrammarFst(int32 grammar_fst_index, std::unique_ptr<fst::StdConstFst> grammar_fst, std::string grammar_name) {
     InvalidateActiveGrammarFst();
-    auto old_grammar_fst = grammar_fsts_.at(grammar_fst_index);
+    auto old_grammar_fst = grammar_fsts_.at(grammar_fst_index).get();
     grammar_fsts_name_map_.erase(old_grammar_fst);
-    delete old_grammar_fst;
 
-    KALDI_VLOG(2) << "reloading FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst->NumStates() << " states " << grammar_name;
-    grammar_fsts_.at(grammar_fst_index) = grammar_fst;
-    grammar_fsts_name_map_[grammar_fst] = grammar_name;
+    auto grammar_fst_ptr = grammar_fst.get();
+    KALDI_VLOG(2) << "reloading FST #" << grammar_fst_index << " @ 0x" << grammar_fst_ptr << " " << grammar_fst_ptr->NumStates() << " states " << grammar_name;
+    grammar_fsts_.at(grammar_fst_index) = std::move(grammar_fst);
+    grammar_fsts_name_map_[grammar_fst_ptr] = grammar_name;
 
     mimic_fsts_.erase(grammar_fst_index);
     return true;
 }
 
 bool AgfNNet3OnlineModelWrapper::ReloadGrammarFst(int32 grammar_fst_index, std::string& grammar_fst_filename) {
-    auto grammar_fst = ReadFstFile(grammar_fst_filename);
-    return ReloadGrammarFst(grammar_fst_index, grammar_fst, grammar_fst_filename);
+    std::unique_ptr<StdConstFst> grammar_fst(ReadFstFile(grammar_fst_filename));
+    return ReloadGrammarFst(grammar_fst_index, std::move(grammar_fst), grammar_fst_filename);
 }
 
 bool AgfNNet3OnlineModelWrapper::RemoveGrammarFst(int32 grammar_fst_index) {
     InvalidateActiveGrammarFst();
-    auto grammar_fst = grammar_fsts_.at(grammar_fst_index);
+    auto grammar_fst = grammar_fsts_.at(grammar_fst_index).get();
     KALDI_VLOG(2) << "removing FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fsts_name_map_.at(grammar_fst);
+    grammar_fsts_name_map_.erase(grammar_fst);
     auto erased = grammar_fsts_.erase(grammar_fst_index);
     if (erased < 1) KALDI_ERR << "cannot find grammar_fst_index " << grammar_fst_index;
-    grammar_fsts_name_map_.erase(grammar_fst);
-    delete grammar_fst;
     mimic_fsts_.erase(grammar_fst_index);
     return true;
 }
@@ -136,9 +134,9 @@ void AgfNNet3OnlineModelWrapper::StartDecoding() {
 
     if (!active_grammar_fst_) {
         std::vector<std::pair<int32, const StdConstFst *> > ifsts;
-        for (auto grammar_fst_pair : grammar_fsts_) {
+        for (const auto& grammar_fst_pair : grammar_fsts_) {
             auto grammar_fst_index = grammar_fst_pair.first;
-            auto grammar_fst = grammar_fst_pair.second;
+            auto grammar_fst = grammar_fst_pair.second.get();
             int32 nonterm_phone = config_->rules_phones_offset + grammar_fst_index;
             ifsts.emplace_back(std::make_pair(nonterm_phone, grammar_fst));
         }
@@ -342,8 +340,8 @@ int32_t nnet3_agf__add_grammar_fst(void* model_vp, int32_t grammar_fst_index, vo
     BEGIN_INTERFACE_CATCH_HANDLER
     auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
     auto fst = static_cast<StdVectorFst*>(grammar_fst_cp);
-    auto const_fst = new StdConstFst(*fst);
-    grammar_fst_index = model->AddGrammarFst(grammar_fst_index, const_fst);
+    std::unique_ptr<StdConstFst> const_fst(new StdConstFst(*fst));
+    grammar_fst_index = model->AddGrammarFst(grammar_fst_index, std::move(const_fst));
     return grammar_fst_index;
     END_INTERFACE_CATCH_HANDLER(-1)
 }
@@ -361,8 +359,8 @@ bool nnet3_agf__reload_grammar_fst(void* model_vp, int32_t grammar_fst_index, vo
     BEGIN_INTERFACE_CATCH_HANDLER
     auto model = static_cast<AgfNNet3OnlineModelWrapper*>(model_vp);
     auto fst = static_cast<StdVectorFst*>(grammar_fst_cp);
-    auto const_fst = new StdConstFst(*fst);  // Newly-created FST, to be owned by the AgfNNet3OnlineModelWrapper, disentangled from the grammar_fst
-    bool result = model->ReloadGrammarFst(grammar_fst_index, const_fst);
+    std::unique_ptr<StdConstFst> const_fst(new StdConstFst(*fst));  // Newly-created FST, owned by the AgfNNet3OnlineModelWrapper and disentangled from grammar_fst.
+    bool result = model->ReloadGrammarFst(grammar_fst_index, std::move(const_fst));
     return result;
     END_INTERFACE_CATCH_HANDLER(false)
 }

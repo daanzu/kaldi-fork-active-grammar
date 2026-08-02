@@ -17,6 +17,8 @@
 
 #pragma once
 
+#include <memory>
+
 #include "feat/wave-reader.h"
 #include "online2/online-feature-pipeline.h"
 #include "online2/online-nnet3-decoding.h"
@@ -83,9 +85,9 @@ class AgfNNet3OnlineModelWrapper : public ActiveBaseNNet3OnlineModelWrapper {
         AgfNNet3OnlineModelWrapper(AgfNNet3OnlineModelConfig::Ptr config, int32 verbosity = DEFAULT_VERBOSITY);
         ~AgfNNet3OnlineModelWrapper() override;
 
-        int32 AddGrammarFst(int32 grammar_fst_index, fst::StdConstFst* grammar_fst, std::string grammar_name = "<unnamed>");  // Does not take ownership of FST!
+        int32 AddGrammarFst(int32 grammar_fst_index, std::unique_ptr<fst::StdConstFst> grammar_fst, std::string grammar_name = "<unnamed>");
         int32 AddGrammarFst(int32 grammar_fst_index, std::string& grammar_fst_filename);
-        bool ReloadGrammarFst(int32 grammar_fst_index, fst::StdConstFst* grammar_fst, std::string grammar_name = "<unnamed>");  // Does not take ownership of FST!
+        bool ReloadGrammarFst(int32 grammar_fst_index, std::unique_ptr<fst::StdConstFst> grammar_fst, std::string grammar_name = "<unnamed>");
         bool ReloadGrammarFst(int32 grammar_fst_index, std::string& grammar_fst_filename);
         bool RemoveGrammarFst(int32 grammar_fst_index);
 
@@ -99,8 +101,8 @@ class AgfNNet3OnlineModelWrapper : public ActiveBaseNNet3OnlineModelWrapper {
         // Model
         StdConstFst *top_fst_ = nullptr;
         StdConstFst *dictation_fst_ = nullptr;
-        std::unordered_map<int32, StdConstFst*> grammar_fsts_;
-        std::unordered_map<StdFst*, std::string> grammar_fsts_name_map_;  // maps grammar_fst -> name; for debugging
+        std::unordered_map<int32, std::unique_ptr<StdConstFst>> grammar_fsts_;
+        std::unordered_map<const StdFst*, std::string> grammar_fsts_name_map_;  // maps grammar_fst -> name; for debugging
         // INVARIANT: same size: grammar_fsts_, grammar_fsts_name_map_
 
         // Model objects

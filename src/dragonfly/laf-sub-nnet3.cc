@@ -144,9 +144,9 @@ void LafNNet3OnlineModelWrapper::UnrelabelDictationWords(std::vector<int32>* wor
 
 int32 LafNNet3OnlineModelWrapper::AddGrammarFst(int32 grammar_fst_index, std::string& grammar_fst_filename) {
     ExecutionTimer timer("AddGrammarFst:loading from file");
-    auto grammar_fst = CastOrConvertToVectorFst(ReadFstKaldiGeneric(grammar_fst_filename));
-    PrepareGrammarFst(grammar_fst, true);  // Was this file already relabeled?
-    return AddGrammarFst(grammar_fst_index, grammar_fst, grammar_fst_filename);
+    std::unique_ptr<StdVectorFst> grammar_fst(CastOrConvertToVectorFst(ReadFstKaldiGeneric(grammar_fst_filename)));
+    PrepareGrammarFst(grammar_fst.get(), true);  // Was this file already relabeled?
+    return AddGrammarFst(grammar_fst_index, std::move(grammar_fst), grammar_fst_filename);
 }
 
 int32 LafNNet3OnlineModelWrapper::AddGrammarFst(int32 grammar_fst_index, std::istream& grammar_text) {
@@ -155,45 +155,45 @@ int32 LafNNet3OnlineModelWrapper::AddGrammarFst(int32 grammar_fst_index, std::is
     auto grammar_fstclass = fst::script::CompileFstInternal(grammar_text, "<AddGrammarFst>", "vector", "standard",
         word_syms_maybe_relabeled, word_syms_, nullptr, false, false, false, false, false);
     timer.step();
-    auto grammar_fst = dynamic_cast<StdVectorFst*>(fst::Convert(*grammar_fstclass->GetFst<StdArc>(), "vector"));
+    std::unique_ptr<StdVectorFst> grammar_fst(dynamic_cast<StdVectorFst*>(fst::Convert(*grammar_fstclass->GetFst<StdArc>(), "vector")));
     if (!grammar_fst) KALDI_ERR << "could not convert grammar Fst to StdVectorFst";
     timer.step();
-    PrepareGrammarFst(grammar_fst, (word_syms_maybe_relabeled != word_syms_relabeled_));
-    return AddGrammarFst(grammar_fst_index, grammar_fst);
+    PrepareGrammarFst(grammar_fst.get(), (word_syms_maybe_relabeled != word_syms_relabeled_));
+    return AddGrammarFst(grammar_fst_index, std::move(grammar_fst));
 }
 
-int32 LafNNet3OnlineModelWrapper::AddGrammarFst(int32 grammar_fst_index, fst::StdExpandedFst* grammar_fst, std::string grammar_name) {
+int32 LafNNet3OnlineModelWrapper::AddGrammarFst(int32 grammar_fst_index, std::unique_ptr<fst::StdExpandedFst> grammar_fst, std::string grammar_name) {
     InvalidateDecodeFst();
     // ExecutionTimer timer("AddGrammarFst:loading");
     if (grammar_fst_index >= config_->max_num_rules) KALDI_ERR << "cannot add more than max number of rules";
-    KALDI_VLOG(2) << "adding FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst->NumStates() << " states " << grammar_name;
-    auto ok = grammar_fsts_.insert({grammar_fst_index, grammar_fst}).second;
+    auto grammar_fst_ptr = grammar_fst.get();
+    KALDI_VLOG(2) << "adding FST #" << grammar_fst_index << " @ 0x" << grammar_fst_ptr << " " << grammar_fst_ptr->NumStates() << " states " << grammar_name;
+    auto ok = grammar_fsts_.emplace(grammar_fst_index, std::move(grammar_fst)).second;
     if (!ok) KALDI_ERR << "cannot add grammar to duplicate grammar_fst_index " << grammar_fst_index;
-    grammar_fsts_name_map_[grammar_fst] = grammar_name;
+    grammar_fsts_name_map_[grammar_fst_ptr] = grammar_name;
     return grammar_fst_index;
 }
 
-bool LafNNet3OnlineModelWrapper::ReloadGrammarFst(int32 grammar_fst_index, fst::StdExpandedFst* grammar_fst, std::string grammar_name) {
+bool LafNNet3OnlineModelWrapper::ReloadGrammarFst(int32 grammar_fst_index, std::unique_ptr<fst::StdExpandedFst> grammar_fst, std::string grammar_name) {
     InvalidateDecodeFst();
-    auto old_grammar_fst = grammar_fsts_.at(grammar_fst_index);
+    auto old_grammar_fst = grammar_fsts_.at(grammar_fst_index).get();
     grammar_fsts_name_map_.erase(old_grammar_fst);
-    delete old_grammar_fst;
 
-    KALDI_VLOG(2) << "reloading FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fst->NumStates() << " states " << grammar_name;
-    grammar_fsts_.at(grammar_fst_index) = grammar_fst;
-    grammar_fsts_name_map_[grammar_fst] = grammar_name;
+    auto grammar_fst_ptr = grammar_fst.get();
+    KALDI_VLOG(2) << "reloading FST #" << grammar_fst_index << " @ 0x" << grammar_fst_ptr << " " << grammar_fst_ptr->NumStates() << " states " << grammar_name;
+    grammar_fsts_.at(grammar_fst_index) = std::move(grammar_fst);
+    grammar_fsts_name_map_[grammar_fst_ptr] = grammar_name;
 
     return true;
 }
 
 bool LafNNet3OnlineModelWrapper::RemoveGrammarFst(int32 grammar_fst_index) {
     InvalidateDecodeFst();
-    auto grammar_fst = grammar_fsts_.at(grammar_fst_index);
+    auto grammar_fst = grammar_fsts_.at(grammar_fst_index).get();
     KALDI_VLOG(2) << "removing FST #" << grammar_fst_index << " @ 0x" << grammar_fst << " " << grammar_fsts_name_map_.at(grammar_fst);
+    grammar_fsts_name_map_.erase(grammar_fst);
     auto erased = grammar_fsts_.erase(grammar_fst_index);
     if (erased < 1) KALDI_ERR << "cannot find grammar_fst_index " << grammar_fst_index;
-    grammar_fsts_name_map_.erase(grammar_fst);
-    delete grammar_fst;
     mimic_fsts_.erase(grammar_fst_index);
     return true;
 }
@@ -224,7 +224,7 @@ void LafNNet3OnlineModelWrapper::BuildDecodeFst() {
 
     // Set up grammar FSTs.
     for (const auto& it : grammar_fsts_)
-        label_fst_pairs.emplace_back(rules_words_offset + it.first, it.second);
+        label_fst_pairs.emplace_back(rules_words_offset + it.first, it.second.get());
     if (dictation_fst_)
         label_fst_pairs.emplace_back(dictation_words_offset, dictation_fst_);
     timer.step("setup grammars");
@@ -303,7 +303,7 @@ void LafNNet3OnlineModelWrapper::BuildDecodeFstNaive() {
         top_fst.AddArc(start_state, StdArc(0, (rules_words_offset + grammar_fst_index), 0.0, final_state));
     if (grammar_fsts_.size() > config_->max_num_rules) KALDI_ERR << "more grammars than max number";
     for (const auto& it : grammar_fsts_)
-        label_fst_pairs.emplace_back((rules_words_offset + it.first), it.second);
+        label_fst_pairs.emplace_back((rules_words_offset + it.first), it.second.get());
     if (dictation_fst_ != nullptr)
         label_fst_pairs.emplace_back(word_syms_->Find("#nonterm:dictation"), dictation_fst_);
 
@@ -562,8 +562,8 @@ int32_t nnet3_laf__add_grammar_fst(void* model_vp, int32_t grammar_fst_index, vo
     std::unique_ptr<StdVectorFst> prepared_fst(new StdVectorFst(*source_fst));
     bool built_relabeled = true;
     model->PrepareGrammarFst(prepared_fst.get(), !built_relabeled);
-    grammar_fst_index = model->AddGrammarFst(
-        grammar_fst_index, new StdConstFst(*prepared_fst));
+    std::unique_ptr<StdExpandedFst> grammar_fst(new StdConstFst(*prepared_fst));
+    grammar_fst_index = model->AddGrammarFst(grammar_fst_index, std::move(grammar_fst));
     return grammar_fst_index;
     END_INTERFACE_CATCH_HANDLER(-1)
 }
@@ -584,8 +584,8 @@ bool nnet3_laf__reload_grammar_fst(void* model_vp, int32_t grammar_fst_index, vo
     std::unique_ptr<StdVectorFst> prepared_fst(new StdVectorFst(*source_fst));
     bool built_relabeled = true;
     model->PrepareGrammarFst(prepared_fst.get(), !built_relabeled);
-    bool result = model->ReloadGrammarFst(
-        grammar_fst_index, new StdConstFst(*prepared_fst));
+    std::unique_ptr<StdExpandedFst> grammar_fst(new StdConstFst(*prepared_fst));
+    bool result = model->ReloadGrammarFst(grammar_fst_index, std::move(grammar_fst));
     return result;
     END_INTERFACE_CATCH_HANDLER(false)
 }
