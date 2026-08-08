@@ -77,6 +77,28 @@ bool fst__add_arc(void* fst_vp, int32_t src_state_id, int32_t dst_state_id, int3
     return true;
 }
 
+bool fst__add_arcs(void* fst_vp, int32_t num_arcs, const int32_t src_state_ids_cp[], const int32_t dst_state_ids_cp[], const int32_t ilabels_cp[], const int32_t olabels_cp[], const float weights_cp[]) {
+    if (fst_vp == nullptr || num_arcs < 0)
+        return false;
+    if (num_arcs == 0)
+        return true;
+    if (src_state_ids_cp == nullptr || dst_state_ids_cp == nullptr || ilabels_cp == nullptr || olabels_cp == nullptr || weights_cp == nullptr)
+        return false;
+
+    auto fst = static_cast<StdVectorFst*>(fst_vp);
+    const auto num_states = fst->NumStates();
+    for (int32_t i = 0; i < num_arcs; ++i) {
+        if (src_state_ids_cp[i] < 0 || src_state_ids_cp[i] >= num_states ||
+                dst_state_ids_cp[i] < 0 || dst_state_ids_cp[i] >= num_states)
+            return false;
+    }
+    for (int32_t i = 0; i < num_arcs; ++i) {
+        fst->AddArc(src_state_ids_cp[i], StdArc(
+            ilabels_cp[i], olabels_cp[i], weights_cp[i], dst_state_ids_cp[i]));
+    }
+    return true;
+}
+
 bool fst__compute_md5(void* fst_vp, char* md5_cp, const char* dependencies_seed_md5_cp) {
     // ExecutionTimer timer("fst__compute_md5", -2);
     auto fst = static_cast<StdVectorFst*>(fst_vp);
