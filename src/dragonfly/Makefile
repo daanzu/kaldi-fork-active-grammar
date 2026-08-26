@@ -4,8 +4,12 @@ all:
 
 EXTRA_CXXFLAGS = -Wno-sign-compare
 include ../kaldi.mk
-EXTRA_LDLIBS = $(subst libfst,libfstscript,$(OPENFSTLIBS)) \
-               -Wl,--no-as-needed $(wildcard $(dir $(OPENFSTLIBS))libfstngram.so*) -Wl,--as-needed
+EXTRA_LDLIBS = $(subst libfst,libfstscript,$(OPENFSTLIBS))
+ifeq ($(shell uname),Linux)
+EXTRA_LDLIBS += -Wl,--no-as-needed $(wildcard $(dir $(OPENFSTLIBS))libfstngram.so*) -Wl,--as-needed
+else ifeq ($(shell uname),Darwin)
+EXTRA_LDLIBS += $(foreach lib,$(wildcard $(dir $(OPENFSTLIBS))libfstngram.dylib*),-Wl,-needed_library,$(lib))
+endif
 
 TESTFILES =
 
