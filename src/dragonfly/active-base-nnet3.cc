@@ -203,7 +203,7 @@ bool nnet3_active_base__set_mimic_dictation_fst_file(void* model_vp, const char*
 }
 
 bool nnet3_active_base__mimic(void* model_vp, const char* input_cp, int32_t* grammars_activity_cp, uint32_t grammars_activity_cp_size,
-    int32_t grammar_fst_index, char* output_cp, int32_t output_max_length) {
+    int32_t grammar_fst_index, char* output_cp, int32_t output_max_length, int32_t* output_required_length_p) {
     BEGIN_INTERFACE_CATCH_HANDLER
     auto model = static_cast<ActiveBaseNNet3OnlineModelWrapper*>(model_vp);
     if (grammars_activity_cp) {
@@ -216,6 +216,7 @@ bool nnet3_active_base__mimic(void* model_vp, const char* input_cp, int32_t* gra
     auto output_p = (output_cp != nullptr) ? &output : nullptr;
     auto result = (grammar_fst_index == -1) ? model->Mimic(input, output_p) : model->MimicGrammar(input, output_p, grammar_fst_index);
 
+    *output_required_length_p = result && output_p ? static_cast<int32>(output.size() + 1) : 0;
     if (output_p) {
         if (output_max_length < 1) {
             KALDI_WARN << "nnet3_active_base__mimic: output buffer length must be positive";

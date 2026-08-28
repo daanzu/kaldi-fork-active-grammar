@@ -47,7 +47,7 @@ DRAGONFLY_API bool nnet3_plain__decode(void* model_vp, float samp_freq, int32_t 
 DRAGONFLY_API bool nnet3_active_base__set_mimic_grammar_fst(void* model_vp, int32_t grammar_fst_index, void* grammar_fst_cp);
 DRAGONFLY_API bool nnet3_active_base__set_mimic_dictation_fst_file(void* model_vp, const char* grammar_fst_filename_cp);
 DRAGONFLY_API bool nnet3_active_base__mimic(void* model_vp, const char* input_cp, int32_t* grammars_activity_cp, uint32_t grammars_activity_cp_size,
-    int32_t grammar_fst_index, char* output_cp, int32_t output_max_length);
+    int32_t grammar_fst_index, char* output_cp, int32_t output_max_length, int32_t* output_required_length_p);
 
 DRAGONFLY_API void* nnet3_agf__construct(char* model_dir_cp, char* config_str_cp, int32_t verbosity);
 DRAGONFLY_API bool nnet3_agf__destruct(void* model_vp);
