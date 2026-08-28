@@ -217,10 +217,18 @@ bool nnet3_active_base__mimic(void* model_vp, const char* input_cp, int32_t* gra
     auto result = (grammar_fst_index == -1) ? model->Mimic(input, output_p) : model->MimicGrammar(input, output_p, grammar_fst_index);
 
     if (output_p) {
+        if (output_max_length < 1) {
+            KALDI_WARN << "nnet3_active_base__mimic: output buffer length must be positive";
+            return false;
+        }
+        if (output.size() >= static_cast<size_t>(output_max_length)) {
+            KALDI_WARN << "nnet3_active_base__mimic: output does not fit in output_max_length ("
+                        << output.size() << " bytes required, " << output_max_length << " available)";
+            output_cp[0] = 0;
+            return false;
+        }
         strncpy(output_cp, output.c_str(), output_max_length);
         output_cp[output_max_length - 1] = 0;
-        if (output.size() >= output_max_length)
-            KALDI_WARN << "nnet3_active_base__mimic: output_max_length-1 < " << output.size();
     }
     return result;
     END_INTERFACE_CATCH_HANDLER(false)
