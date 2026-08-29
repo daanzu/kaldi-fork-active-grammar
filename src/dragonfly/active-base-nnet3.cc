@@ -216,7 +216,9 @@ bool nnet3_active_base__mimic(void* model_vp, const char* input_cp, int32_t* gra
     auto output_p = (output_cp != nullptr) ? &output : nullptr;
     auto result = (grammar_fst_index == -1) ? model->Mimic(input, output_p) : model->MimicGrammar(input, output_p, grammar_fst_index);
 
-    *output_required_length_p = result && output_p ? static_cast<int32>(output.size() + 1) : 0;
+    if (output_required_length_p) {
+        *output_required_length_p = result && output_p ? static_cast<int32>(output.size() + 1) : 0;
+    }
     if (output_p) {
         if (output_max_length < 1) {
             KALDI_WARN << "nnet3_active_base__mimic: output buffer length must be positive";
