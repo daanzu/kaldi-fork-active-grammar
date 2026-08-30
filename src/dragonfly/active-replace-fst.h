@@ -1084,6 +1084,20 @@ class ActiveReplaceFstMatcher : public MatcherBase<Arc> {
   // MultiEpsilonMatcher to search for possible matches of non-terminals. If the
   // component FST
   // reaches a final state we also need to add the exiting final arc.
+  // Unlike stock ReplaceFst, ActiveReplaceFst deletes arcs into nonterminals
+  // that are currently inactive: ComputeArc() returns false and leaves the
+  // output arc untouched. Expand() honours that by not pushing the arc, so a
+  // matcher has to honour it by stepping over the underlying component arc.
+  // Positions the underlying matcher on the next arc that survives ComputeArc,
+  // leaving it in arc_; returns false if none does.
+  bool SkipInactiveArcs() {
+    while (!current_matcher_->Done()) {
+      if (impl_->ComputeArc(tuple_, current_matcher_->Value(), &arc_)) return true;
+      current_matcher_->Next();
+    }
+    return false;
+  }
+
   bool Find(Label label) final {
     bool found = false;
     label_ = label;
@@ -1093,12 +1107,15 @@ class ActiveReplaceFstMatcher : public MatcherBase<Arc> {
         current_loop_ = true;
         found = true;
       }
-      // Searches for matching multi-epsilons.
+      // Searches for matching multi-epsilons. Nonterminal arcs are reached
+      // through here (InitMatchers registers every nonterminal as a
+      // multi-epsilon label), so this is where inactive ones must be skipped.
       final_arc_ = impl_->ComputeFinalArc(tuple_, nullptr);
-      found = current_matcher_->Find(kNoLabel) || final_arc_ || found;
+      const bool component = current_matcher_->Find(kNoLabel) && SkipInactiveArcs();
+      found = component || final_arc_ || found;
     } else {
       // Searches on a sub machine directly using sub machine matcher.
-      found = current_matcher_->Find(label_);
+      found = current_matcher_->Find(label_) && SkipInactiveArcs();
     }
     return found;
   }
@@ -1110,11 +1127,11 @@ class ActiveReplaceFstMatcher : public MatcherBase<Arc> {
   const Arc &Value() const final {
     if (current_loop_) return loop_;
     if (final_arc_) {
-      impl_->ComputeFinalArc(tuple_, &arc_);
-      return arc_;
+      // Separate storage: arc_ holds the component arc that SkipInactiveArcs()
+      // validated, and is still needed once the final arc has been consumed.
+      impl_->ComputeFinalArc(tuple_, &final_arc_value_);
+      return final_arc_value_;
     }
-    const auto &component_arc = current_matcher_->Value();
-    impl_->ComputeArc(tuple_, component_arc, &arc_);
     return arc_;
   }
 
@@ -1128,6 +1145,7 @@ class ActiveReplaceFstMatcher : public MatcherBase<Arc> {
       return;
     }
     current_matcher_->Next();
+    SkipInactiveArcs();
   }
 
   ssize_t Priority(StateId s) final { return fst_.NumArcs(s); }
@@ -1145,7 +1163,8 @@ class ActiveReplaceFstMatcher : public MatcherBase<Arc> {
   mutable bool current_loop_;  // Current arc is the implicit loop.
   mutable bool final_arc_;     // Current arc for exiting recursion.
   mutable StateTuple tuple_;   // Tuple corresponding to state_.
-  mutable Arc arc_;
+  mutable Arc arc_;             // Current component arc, validated by SkipInactiveArcs().
+  mutable Arc final_arc_value_; // Current exit-recursion arc.
   Arc loop_;
 
   ActiveReplaceFstMatcher &operator=(const ActiveReplaceFstMatcher &) = delete;
