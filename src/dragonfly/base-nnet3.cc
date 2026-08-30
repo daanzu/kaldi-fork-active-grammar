@@ -64,8 +64,8 @@ BaseNNet3OnlineModelWrapper::BaseNNet3OnlineModelWrapper(BaseNNet3OnlineModelCon
         ExecutionTimer timer("testing output latency");
         std::cerr << "[testing output latency][testing output latency][testing output latency]" << endl;
     }
-    if (true && verbosity >= 2)
-        FLAGS_v = 1;  // Set openfst logging verbosity
+    // OpenFst logs through its own FLAGS_v, not Kaldi's verbosity, so the two have to be kept in step.
+    if (verbosity > 0) FLAGS_v = verbosity;
 
     ExecutionTimer timer("Initialization/loading");
 
