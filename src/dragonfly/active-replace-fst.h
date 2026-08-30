@@ -689,10 +689,25 @@ class ActiveReplaceFst
   MatcherBase<Arc> *InitMatcher(MatchType match_type) const override {
     // Active specialization!!! Always fall back to the default matcher
     // (SortedMatcher over the generic caching ArcIterator) rather than the
-    // non-caching ActiveReplaceFstMatcher. Composition and lookahead must
-    // expand states through the caching path so that every visited state is
-    // cached with its activity-volatility flag set (see Expand()), which the
-    // compose-layer invalidation (ActiveComposeFst::UpdateActivity) depends on.
+    // non-caching ActiveReplaceFstMatcher. There are two independent reasons,
+    // and the second one is easy to miss:
+    //
+    // 1. Composition and lookahead must expand states through the caching path
+    //    so that every visited state is cached with its activity-volatility
+    //    flag set (see Expand()), which the compose-layer invalidation
+    //    (ActiveComposeFst::UpdateActivity) currently depends on.
+    //
+    // 2. Restoring the matcher does not pay. Removing reason 1 -- for instance
+    //    by deriving volatility from graph structure rather than from cache
+    //    contents -- is therefore not on its own grounds to enable it.
+    //    Replace states are expanded and cached by
+    //    AltSequenceComposeFilter::SetState(), which evaluates NumArcs,
+    //    NumInputEpsilons and Final on the fst2 state before any matching
+    //    happens, so no choice of matcher avoids the caching that reason 1
+    //    describes. Measured: latency and resident set unchanged. And because
+    //    InitMatchers() is O(sub-FSTs x nonterminals), enabling it alongside
+    //    pre-registered rule slots costs 57 s and 10.2 GiB at startup.
+    //    See kaldi-active-grammar/docs/architectural-decisions.md, 2026-08-30.
     return nullptr;
   }
 
