@@ -60,7 +60,7 @@ BaseNNet3OnlineModelWrapper::BaseNNet3OnlineModelWrapper(BaseNNet3OnlineModelCon
 
     KALDI_LOG << config_->ToString();
 
-    if (true && verbosity >= 1) {
+    if (false && verbosity >= 1) {
         ExecutionTimer timer("testing output latency");
         std::cerr << "[testing output latency][testing output latency][testing output latency]" << endl;
     }
@@ -158,7 +158,7 @@ BaseNNet3OnlineModelWrapper::BaseNNet3OnlineModelWrapper(BaseNNet3OnlineModelCon
         if (config_->orig_grammar_filename.empty()) KALDI_ERR << "orig_grammar_filename not set";
         if (config_->rnnlm_nnet_filename.empty()) KALDI_ERR << "rnnlm_nnet_filename not set";
         if (config_->rnnlm_word_embed_filename.empty()) KALDI_ERR << "rnnlm_word_embed_filename not set";
-        
+
         VectorFst<StdArc> *lm_to_subtract_fst = ReadAndPrepareLmFst(config_->model_dir + "/" + config_->orig_grammar_filename);  // FIXME: manage this and delete it, and share
         BackoffDeterministicOnDemandFst<StdArc> *lm_to_subtract_det_backoff = new BackoffDeterministicOnDemandFst<StdArc>(*lm_to_subtract_fst);
         lm_to_subtract_det_scale_ = new ScaleDeterministicOnDemandFst(-rnnlm_scale_, lm_to_subtract_det_backoff);
@@ -173,7 +173,7 @@ BaseNNet3OnlineModelWrapper::BaseNNet3OnlineModelWrapper(BaseNNet3OnlineModelCon
         rnnlm_max_ngram_order_ = 4;
     } else if (!config_->rnnlm_nnet_filename.empty() || !config_->rnnlm_word_embed_filename.empty())
         KALDI_ERR << "enable_rnnlm_ is false, but some rnnlm options are set";
-    
+
     if (enable_carpa_ && enable_rnnlm_)
         KALDI_WARN << "are you sure you want to enable both CARPA and RNNLM rescoring?";
 }
