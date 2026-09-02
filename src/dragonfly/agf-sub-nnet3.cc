@@ -131,6 +131,7 @@ bool AgfNNet3OnlineModelWrapper::InvalidateActiveGrammarFst() {
 void AgfNNet3OnlineModelWrapper::StartDecoding() {
     ExecutionTimer timer("StartDecoding", 2);
     ActiveBaseNNet3OnlineModelWrapper::StartDecoding();
+    KALDI_ASSERT(decoder_ == nullptr);
 
     if (!active_grammar_fst_) {
         std::vector<std::pair<int32, const StdConstFst *> > ifsts;

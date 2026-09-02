@@ -140,6 +140,7 @@ class LafNNet3OnlineModelWrapper : public ActiveBaseNNet3OnlineModelWrapper {
         SingleUtteranceNnet3DecoderTpl<fst::StdFst>* decoder_ = nullptr;  // reinstantiated per utterance
         CombineRuleNontermMapper<CompactLatticeArc>* rule_relabel_mapper_ = nullptr;
 
+        bool IsUtteranceInProgress() const override { return DecoderReady(decoder_); }
         void BuildDecodeFst();
         void BuildDecodeFstNaive();
         bool InvalidateDecodeFst();

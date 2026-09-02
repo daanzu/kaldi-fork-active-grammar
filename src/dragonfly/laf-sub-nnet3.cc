@@ -335,6 +335,7 @@ bool LafNNet3OnlineModelWrapper::InvalidateDecodeFst() {
 void LafNNet3OnlineModelWrapper::StartDecoding() {
     ExecutionTimer timer("StartDecoding", 2);
     BaseNNet3OnlineModelWrapper::StartDecoding();
+    KALDI_ASSERT(decoder_ == nullptr);
 
     if (config_->decode_fst_naive) {
         // Baseline: standard ReplaceFst + lookahead composition, fully rebuilt

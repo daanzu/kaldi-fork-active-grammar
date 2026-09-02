@@ -78,9 +78,14 @@ class ActiveBaseNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
         ActiveBaseNNet3OnlineModelWrapper(ActiveBaseNNet3OnlineModelConfig::Ptr config, int32 verbosity = DEFAULT_VERBOSITY);
         ~ActiveBaseNNet3OnlineModelWrapper() override;
 
-        bool SetActiveGrammars(std::set<int32>& grammars_activity) {
+        // Activity is fixed for the lifetime of an utterance.  Repeating the
+        // same set is a harmless no-op, but changing it while a decoder is live
+        // would mutate the decoding graph underneath that decoder.
+        bool SetActiveGrammars(const std::set<int32>& grammars_activity) {
             if (grammars_activity_ != grammars_activity) {
-                grammars_activity_.swap(grammars_activity);
+                if (IsUtteranceInProgress())
+                    KALDI_ERR << "cannot change grammar activity in the middle of decoding!";
+                grammars_activity_ = grammars_activity;
                 grammars_activity_changed_ = true;
                 return true;
             }
@@ -96,6 +101,10 @@ class ActiveBaseNNet3OnlineModelWrapper : public BaseNNet3OnlineModelWrapper {
         }
 
     protected:
+
+        // Implemented by each backend because decoder_ has a backend-specific
+        // template type.  Used to enforce utterance-scoped grammar activity.
+        virtual bool IsUtteranceInProgress() const = 0;
 
         ActiveBaseNNet3OnlineModelConfig::Ptr config_;
 

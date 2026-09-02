@@ -215,6 +215,11 @@ class ActiveGrammarFst {
 
   // Update activity of ifsts, with given current activity (of each ifst in
   // order). Return whether any changed.
+  //
+  // This mutates cached expanded states and may delete their arc storage.  The
+  // caller must keep activity fixed for an entire utterance and call this only
+  // while no decoder or ArcIterator is using this FST.  Calls to this method
+  // must also be externally serialized with all other access to this FST.
   bool UpdateActivity(const std::vector<bool>& activity) {
     KALDI_ASSERT(ifsts_activity_.size() == activity.size());
     KALDI_ASSERT(ifsts_activity_.size() == ifsts_.size());
@@ -249,7 +254,9 @@ class ActiveGrammarFst {
   }
 
   // Update activity of ifsts, with given current activity (set of nonterm
-  // numbers that are active). Return whether any changed.
+  // numbers that are active). Return whether any changed.  This has the same
+  // between-utterances and external-serialization requirements as the vector
+  // overload above.
   bool UpdateActivity(const std::set<int32>& activity_set) {
     std::vector<bool> activity(ifsts_activity_.size(), false);
     for (auto nonterm_index : activity_set)
