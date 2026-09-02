@@ -228,6 +228,10 @@ void ActiveGrammarFstTest::TestNestedCallAndReturnActivity() {
   KALDI_ASSERT(child_return->dest_ifst_index == 0);
   KALDI_ASSERT(top_parent_call->nonterminal == parent_nonterminal);
   KALDI_ASSERT(child_return->nonterminal == nonterm_end);
+  KALDI_ASSERT(grammar.IsUserDefinedCall(*top_parent_call));
+  KALDI_ASSERT(grammar.IsUserDefinedCall(*parent_child_call));
+  KALDI_ASSERT(!grammar.IsUserDefinedCall(*parent_return));
+  KALDI_ASSERT(!grammar.IsUserDefinedCall(*child_return));
 
   const ExpandedStateSnapshot parent_return_before = Snapshot(*parent_return);
   const ExpandedStateSnapshot child_return_before = Snapshot(*child_return);

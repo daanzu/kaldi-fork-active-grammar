@@ -229,11 +229,17 @@ class ActiveGrammarFst {
       // Only clear top_fst_'s expanded_states for nonterms/ifsts whose activity changed
       FstInstance &top_fst_instance = instances_[0];
 
-      // Cannot use range-based for loop because we need to change iteration depending.
-      for (auto iter = top_fst_instance.expanded_states.begin(), end = top_fst_instance.expanded_states.end(); iter != end; ) {
+      // Cannot use a range-based loop because inactive partial call
+      // boundaries are erased when their destination becomes active.
+      for (auto iter = top_fst_instance.expanded_states.begin(),
+                end = top_fst_instance.expanded_states.end(); iter != end; ) {
         ExpandedState *expanded_state = iter->second;
-        int32 i = expanded_state->dest_ifst_index;
+        if (!IsUserDefinedCall(*expanded_state)) {
+          ++iter;
+          continue;
+        }
 
+        int32 i = expanded_state->dest_ifst_index;
         if ((i != -1) && (ifsts_activity_[i] != activity[i])) {
           KALDI_ASSERT(expanded_state->active == ifsts_activity_[i]);
           if (expanded_state->dest_fst_instance == -1) {
@@ -330,6 +336,11 @@ class ActiveGrammarFst {
 
   inline int32 GetPhoneSymbolFor(enum NonterminalValues n) {
     return nonterm_phones_offset_ + static_cast<int32>(n);
+  }
+
+  inline bool IsUserDefinedCall(const ExpandedState &expanded_state) {
+    return expanded_state.nonterminal >=
+        GetPhoneSymbolFor(kNontermUserDefined);
   }
   /**
      Decodes an ilabel into a pair (nonterminal, left_context_phone).  Crashes
