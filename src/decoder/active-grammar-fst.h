@@ -85,6 +85,7 @@ struct ActiveGrammarFstArc {
 #define KALDI_GRAMMAR_FST_SPECIAL_WEIGHT 4096.0
 
 class ActiveGrammarFst;
+class ActiveGrammarFstTest;
 
 // Declare that we'll be overriding class ArcIterator for class ActiveGrammarFst.
 // This wouldn't work if we were fully using the OpenFst framework,
@@ -264,6 +265,7 @@ class ActiveGrammarFst {
   struct ExpandedState;
 
   friend class ArcIterator<ActiveGrammarFst>;
+  friend class ActiveGrammarFstTest;
 
   // sets up nonterminal_map_.
   void InitNonterminalMap();
