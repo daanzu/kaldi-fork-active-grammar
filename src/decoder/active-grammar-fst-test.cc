@@ -251,9 +251,8 @@ void ActiveGrammarFstTest::TestNestedCallAndReturnActivity() {
   AssertReturnUnchanged(*parent_return, nonterm_end, parent_return_before);
   AssertReturnUnchanged(*child_return, nonterm_end, child_return_before);
 
-  // This assertion fails with the current instance-0-only implementation.
-  // A naive all-instance sweep would fix this call but fail the return checks
-  // above; a structurally filtered all-instance update must satisfy both.
+  // The filtered all-instance update must change this nested call while
+  // leaving the cached return boundaries untouched.
   activity[1] = false;
   KALDI_ASSERT(grammar.UpdateActivity(activity));
   KALDI_ASSERT(!parent_child_call->active);
