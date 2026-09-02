@@ -150,13 +150,14 @@ class ActiveGrammarFst {
               represent the phonetic left-context that we enter, and leave, the
               sub-graph with respectively.
      @param [in] ifsts   ifsts is a list of pairs (nonterminal-symbol,
-              the HCLG.fst corresponding to that symbol).  The nonterminal
-              symbols must be among the user-specified nonterminals in
-              phones.txt, i.e. the things with names like "#nonterm:foo" and
-              "#nonterm:bar" in phones.txt.  Also no nonterminal may appear more
-              than once in 'fsts'.  ifsts may be empty, even though that doesn't
-              make much sense.  This function does not take ownership of
-              these pointers (i.e. it will not delete them when it is destroyed).
+              the HCLG.fst corresponding to that symbol).  Each FST must have at
+              least one state.  The nonterminal symbols must be among the
+              user-specified nonterminals in phones.txt, i.e. the things with
+              names like "#nonterm:foo" and "#nonterm:bar" in phones.txt.  Also
+              no nonterminal may appear more than once in 'fsts'.  ifsts may be
+              empty, even though that doesn't make much sense.  This function
+              does not take ownership of these pointers (i.e. it will not delete
+              them when it is destroyed).
     */
   ActiveGrammarFst(
       int32 nonterm_phones_offset,
@@ -283,9 +284,9 @@ class ActiveGrammarFst {
   // takes time O(number of left-context phones), which is quite small, but we'd
   // like to avoid that if possible.
   //
-  // This function returns true if it successfully initialized the
-  // entry_arcs_[i]; and false if it left it empty because
-  bool InitEntryArcs(int32 i);
+  // Zero-state rule FSTs are rejected during initialization, so this always
+  // initializes entry_arcs_[i] or reports malformed entry arcs.
+  void InitEntryArcs(int32 i);
 
   // sets up instances_ with the top-level instance.
   void InitInstances();

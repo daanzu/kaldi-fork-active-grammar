@@ -11,6 +11,7 @@ namespace fst {
 
 class ActiveGrammarFstTest {
  public:
+  static void TestRejectsZeroStateIfst();
   static void TestNestedCallAndReturnActivity();
 
  private:
@@ -86,6 +87,33 @@ class ActiveGrammarFstTest {
     }
   }
 };
+
+void ActiveGrammarFstTest::TestRejectsZeroStateIfst() {
+  const int32 nonterm_phones_offset = 100;
+  const int32 nonterminal =
+      nonterm_phones_offset + kNontermUserDefined;
+  const TropicalWeight one = TropicalWeight::One();
+
+  VectorFst<StdArc> top;
+  StdArc::StateId top_state = top.AddState();
+  top.SetStart(top_state);
+  top.SetFinal(top_state, one);
+
+  VectorFst<StdArc> empty_ifst;
+  ConstFst<StdArc> top_const(top), empty_ifst_const(empty_ifst);
+  std::vector<std::pair<int32, const ConstFst<StdArc> *> > ifsts;
+  ifsts.push_back(std::make_pair(nonterminal, &empty_ifst_const));
+
+  bool rejected = false;
+  try {
+    ActiveGrammarFst grammar(nonterm_phones_offset, top_const, ifsts);
+  } catch (const kaldi::KaldiFatalError &error) {
+    rejected = true;
+    KALDI_ASSERT(std::string(error.KaldiMessage()).find(
+        "zero-state rule FSTs are not supported") != std::string::npos);
+  }
+  KALDI_ASSERT(rejected);
+}
 
 void ActiveGrammarFstTest::TestNestedCallAndReturnActivity() {
   const int32 nonterm_phones_offset = 100;
@@ -238,6 +266,7 @@ void ActiveGrammarFstTest::TestNestedCallAndReturnActivity() {
 }  // namespace fst
 
 int main() {
+  fst::ActiveGrammarFstTest::TestRejectsZeroStateIfst();
   fst::ActiveGrammarFstTest::TestNestedCallAndReturnActivity();
   KALDI_LOG << "ActiveGrammarFst tests succeeded.";
   return 0;

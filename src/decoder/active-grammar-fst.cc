@@ -130,20 +130,21 @@ void ActiveGrammarFst::InitNonterminalMap() {
       KALDI_ERR << "Nonterminal symbol " << nonterminal
                 << " in input pairs, was expected to be >= "
                 << GetPhoneSymbolFor(kNontermUserDefined);
+    if (ifsts_[i].second->NumStates() == 0)
+      KALDI_ERR << "FST for nonterminal " << nonterminal
+                << " has no states; zero-state rule FSTs are not supported.";
     nonterminal_map_[nonterminal] = static_cast<int32>(i);
   }
 }
 
 
-bool ActiveGrammarFst::InitEntryArcs(int32 i) {
+void ActiveGrammarFst::InitEntryArcs(int32 i) {
   KALDI_ASSERT(static_cast<size_t>(i) < ifsts_.size());
   const ConstFst<StdArc> &fst = *(ifsts_[i].second);
-  if (fst.NumStates() == 0)
-    return false;  /* this was the empty FST. */
+  KALDI_ASSERT(fst.NumStates() != 0);
   InitEntryOrReentryArcs(fst, fst.Start(),
                          GetPhoneSymbolFor(kNontermBegin),
                          &(entry_arcs_[i]));
-  return true;
 }
 
 void ActiveGrammarFst::InitInstances() {
@@ -366,9 +367,8 @@ ActiveGrammarFst::ExpandedState *ActiveGrammarFst::ExpandStateUserDefined(
 
     auto nonterminal_map_iter = nonterminal_map_.find(nonterminal);
     if ((nonterminal_map_iter == nonterminal_map_.end())
-        || (!ifsts_activity_.at(nonterminal_map_iter->second))
-        || (ifsts_.at(nonterminal_map_iter->second).second->NumStates() == 0)) {
-      // The ifst/nonterminal is not here/included/loaded, or not active, or empty of states (and must be ignored)
+        || (!ifsts_activity_.at(nonterminal_map_iter->second))) {
+      // The ifst/nonterminal is not loaded or is not active and must be ignored.
       ans->active = false;
       ans->dest_ifst_index = (nonterminal_map_iter == nonterminal_map_.end()) ? -1 : nonterminal_map_iter->second;
       ans->nonterminal = nonterminal;
@@ -397,12 +397,8 @@ ActiveGrammarFst::ExpandedState *ActiveGrammarFst::ExpandStateUserDefined(
     const ConstFst<StdArc> &child_fst = *(child_instance.fst);
     int32 child_ifst_index = child_instance.ifst_index;
     std::unordered_map<int32, int32> &entry_arcs = entry_arcs_[child_ifst_index];
-    if (entry_arcs.empty()) {
-      if (!InitEntryArcs(child_ifst_index)) {
-        // This child-FST was the empty FST.  There are no arcs to expand.
-        continue;
-      }
-    }
+    if (entry_arcs.empty())
+      InitEntryArcs(child_ifst_index);
     // for explanation of cost_correction, see documentation for CombineArcs().
     float num_entry_arcs = entry_arcs.size(),
         cost_correction = -log(num_entry_arcs);
