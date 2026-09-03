@@ -52,8 +52,12 @@ AgfNNet3OnlineModelWrapper::AgfNNet3OnlineModelWrapper(AgfNNet3OnlineModelConfig
         top_fst_ = dynamic_cast<StdConstFst*>(ReadFstKaldiGeneric(config_->top_fst_filename));
     KALDI_VLOG(2) << "top_fst @ 0x" << top_fst_ << " " << top_fst_->NumStates() << " states";
 
-    if (!config_->dictation_fst_filename.empty())
+    if (!config_->dictation_fst_filename.empty()) {
         dictation_fst_ = ReadFstFile(config_->dictation_fst_filename);
+        if (dictation_fst_->NumStates() == 0)
+            KALDI_ERR << "Dictation FST " << config_->dictation_fst_filename
+                      << " has no states; zero-state FSTs are not supported.";
+    }
 
     auto first_rule_sym = word_syms_->Find("#nonterm:rule0"),
         last_rule_sym = first_rule_sym + config_->max_num_rules - 1;
@@ -72,8 +76,11 @@ AgfNNet3OnlineModelWrapper::~AgfNNet3OnlineModelWrapper() {
 }
 
 int32 AgfNNet3OnlineModelWrapper::AddGrammarFst(int32 grammar_fst_index, std::unique_ptr<fst::StdConstFst> grammar_fst, std::string grammar_name) {
-    InvalidateActiveGrammarFst();
     if (grammar_fst_index >= config_->max_num_rules) KALDI_ERR << "cannot add more than max number of rules";
+    if (grammar_fst->NumStates() == 0)
+        KALDI_ERR << "Grammar FST #" << grammar_fst_index << " " << grammar_name
+                  << " has no states; zero-state rule FSTs are not supported.";
+    InvalidateActiveGrammarFst();
     auto grammar_fst_ptr = grammar_fst.get();
     KALDI_VLOG(2) << "adding FST #" << grammar_fst_index << " @ 0x" << grammar_fst_ptr << " " << grammar_fst_ptr->NumStates() << " states " << grammar_name;
     auto ok = grammar_fsts_.emplace(grammar_fst_index, std::move(grammar_fst)).second;
@@ -89,6 +96,9 @@ int32 AgfNNet3OnlineModelWrapper::AddGrammarFst(int32 grammar_fst_index, std::st
 }
 
 bool AgfNNet3OnlineModelWrapper::ReloadGrammarFst(int32 grammar_fst_index, std::unique_ptr<fst::StdConstFst> grammar_fst, std::string grammar_name) {
+    if (grammar_fst->NumStates() == 0)
+        KALDI_ERR << "Grammar FST #" << grammar_fst_index << " " << grammar_name
+                  << " has no states; zero-state rule FSTs are not supported.";
     InvalidateActiveGrammarFst();
     auto old_grammar_fst = grammar_fsts_.at(grammar_fst_index).get();
     grammar_fsts_name_map_.erase(old_grammar_fst);
