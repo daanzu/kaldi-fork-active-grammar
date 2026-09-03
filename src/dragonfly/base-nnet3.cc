@@ -218,10 +218,10 @@ bool BaseNNet3OnlineModelWrapper::LoadLexicon(std::string& word_syms_filename, s
 }
 
 StdConstFst* BaseNNet3OnlineModelWrapper::ReadFstFile(std::string filename) {
-    if (filename.compare(filename.length() - 4, 4, ".txt") == 0) {
+    if (filename.length() >= 4 &&
+        filename.compare(filename.length() - 4, 4, ".txt") == 0) {
         // TODO?: fstdeterminize | fstminimize | fstrmepsilon | fstarcsort --sort_type=ilabel
-        KALDI_WARN << "cannot read text fst file " << filename;
-        return nullptr;
+        KALDI_ERR << "cannot read text fst file " << filename;
     } else {
         auto fst = dynamic_cast<StdConstFst*>(ReadFstKaldiGeneric(filename));
         if (!fst) KALDI_ERR << "could not load as StdConstFst";
